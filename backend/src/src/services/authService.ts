@@ -1,0 +1,266 @@
+/**
+ * Authentication Module
+ * Handles user registration, login, and JWT token management
+ */
+
+import jwt from 'jsonwebtoken';
+import bcryptjs from 'bcryptjs';
+import { getOne, insert, update } from '../helpers/database.js';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your_secret_key';
+const JWT_EXPIRE = process.env.JWT_EXPIRE || '7d';
+
+interface UserCredentials {
+  email: string;
+  password: string;
+  name?: string;
+}
+
+interface JWTPayload {
+  id: number;
+  email: string;
+  iat?: number;
+  exp?: number;
+}
+
+/**
+ * Hash password
+ * @param password Plain text password
+ * @returns Promise with hashed password
+ */
+export const hashPassword = async (password: string): Promise<string> => {
+  const salt = await bcryptjs.genSalt(10);
+  return bcryptjs.hash(password, salt);
+};
+
+/**
+ * Compare password with hash
+ * @param password Plain text password
+ * @param hash Hashed password
+ * @returns Promise with boolean
+ */
+export const comparePassword = async (
+  password: string,
+  hash: string
+): Promise<boolean> => {
+  return bcryptjs.compare(password, hash);
+};
+
+/**
+ * Generate JWT token
+ * @param payload Token payload
+ * @returns JWT token string
+ */
+export const generateToken = (payload: JWTPayload): string => {
+  return jwt.sign(payload as any, JWT_SECRET as any, {
+    expiresIn: JWT_EXPIRE,
+  } as any);
+};
+
+/**
+ * Verify JWT token
+ * @param token JWT token string
+ * @returns Decoded payload or null
+ */
+export const verifyToken = (token: string): JWTPayload | null => {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
+    return decoded;
+  } catch (error) {
+    console.error('Token Verification Error:', error);
+    return null;
+  }
+};
+
+/**
+ * Register new user
+ * @param credentials User credentials (email, password, name)
+ * @returns Promise with created user
+ */
+export const registerUser = async (credentials: UserCredentials) => {
+  try {
+    // Check if user exists
+    const existingUser = await getOne(
+      'SELECT id FROM users WHERE email = $1',
+      [credentials.email]
+    );
+
+    if (existingUser) {
+      throw new Error('User already exists with this email');
+    }
+
+    // Hash password
+    const hashedPassword = await hashPassword(credentials.password);
+
+    // Create user
+    const user = await insert('users', {
+      email: credentials.email,
+      password: hashedPassword,
+      name: credentials.name || 'Unknown User',
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+
+    // Remove password from response
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
+  } catch (error) {
+    console.error('User Registration Error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Login user
+ * @param email User email
+ * @param password User password
+ * @returns Promise with user and token
+ */
+export const loginUser = async (email: string, password: string) => {
+  try {
+    // Find user
+    const user = await getOne('SELECT * FROM users WHERE email = $1', [email]);
+
+    if (!user) {
+      throw new Error('Invalid email or password');
+    }
+
+    // Compare password
+    const isPasswordValid = await comparePassword(password, user.password);
+
+    if (!isPasswordValid) {
+      throw new Error('Invalid email or password');
+    }
+
+    // Generate token
+    const token = generateToken({
+      id: user.id,
+      email: user.email,
+    });
+
+    // Remove password from response
+    const { password: _, ...userWithoutPassword } = user;
+    return {
+      user: userWithoutPassword,
+      token,
+    };
+  } catch (error) {
+    console.error('User Login Error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get user by ID
+ * @param userId User ID
+ * @returns Promise with user
+ */
+export const getUserById = async (userId: number) => {
+  try {
+    const user = await getOne('SELECT * FROM users WHERE id = $1', [userId]);
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
+  } catch (error) {
+    console.error('Get User By ID Error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update user
+ * @param userId User ID
+ * @param updates User data to update
+ * @returns Promise with updated user
+ */
+export const updateUser = async (
+  userId: number,
+  updates: Record<string, any>
+) => {
+  try {
+    const { password, ...updateData } = updates;
+
+    const updatedUser = await update(
+      'users',
+      {
+        ...updateData,
+        updated_at: new Date(),
+      },
+      'id = $1',
+      [userId]
+    );
+
+    if (!updatedUser) {
+      throw new Error('User not found');
+    }
+
+    const { password: _, ...userWithoutPassword } = updatedUser;
+    return userWithoutPassword;
+  } catch (error) {
+    console.error('Update User Error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Change password
+ * @param userId User ID
+ * @param oldPassword Current password
+ * @param newPassword New password
+ * @returns Promise with success message
+ */
+export const changePassword = async (
+  userId: number,
+  oldPassword: string,
+  newPassword: string
+) => {
+  try {
+    const user = await getOne('SELECT * FROM users WHERE id = $1', [userId]);
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Verify old password
+    const isPasswordValid = await comparePassword(oldPassword, user.password);
+
+    if (!isPasswordValid) {
+      throw new Error('Current password is incorrect');
+    }
+
+    // Hash new password
+    const hashedPassword = await hashPassword(newPassword);
+
+    // Update password
+    await update(
+      'users',
+      {
+        password: hashedPassword,
+        updated_at: new Date(),
+      },
+      'id = $1',
+      [userId]
+    );
+
+    return { message: 'Password changed successfully' };
+  } catch (error) {
+    console.error('Change Password Error:', error);
+    throw error;
+  }
+};
+
+export default {
+  hashPassword,
+  comparePassword,
+  generateToken,
+  verifyToken,
+  registerUser,
+  loginUser,
+  getUserById,
+  updateUser,
+  changePassword,
+};

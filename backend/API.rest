@@ -1,0 +1,66 @@
+@baseUrl = http://localhost:5000
+@email = test@example.com
+@password = Test123456!
+
+### 1. Health Check
+GET {{baseUrl}}/
+
+###
+
+### 2. Detailed Health Status
+GET {{baseUrl}}/health
+
+###
+
+### 3. User Registration
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "name": "Test User"
+}
+
+###
+
+### 4. User Login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+###
+
+### 5. Get Profile (Requires Token)
+GET {{baseUrl}}/api/auth/profile
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+### 6. Update Profile (Requires Token)
+PUT {{baseUrl}}/api/auth/profile
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "name": "Updated Name",
+  "email": "newemail@example.com"
+}
+
+###
+
+### 7. Change Password (Requires Token)
+POST {{baseUrl}}/api/auth/change-password
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "oldPassword": "{{password}}",
+  "newPassword": "NewPassword123!"
+}
+
+###
