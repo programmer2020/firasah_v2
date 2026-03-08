@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/Sidebar';
 
 export const Dashboard = () => {
   const navigate = useNavigate();
@@ -36,24 +37,17 @@ export const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Sidebar */}
+      <Sidebar />
+
       {/* Header */}
-      <header className="bg-gradient-to-r from-brand-600 to-brand-600 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link to="/dashboard" className="text-3xl font-outfit font-bold hover:opacity-90">
+      <header className="fixed top-0 right-0 left-0 bg-gradient-to-r from-brand-600 to-brand-600 text-white shadow-lg z-30">
+        <div className="px-4 py-4 flex items-center justify-between">
+          <Link to="/dashboard" className="text-2xl md:text-3xl font-outfit font-bold hover:opacity-90">
             Firasah AI
           </Link>
           
-          <nav className="hidden md:flex gap-8">
-            {navigationItems.map((item) => (
-              <Link
-                key={item.label}
-                to={item.href}
-                className="text-sm font-medium hover:text-brand-100 transition-colors"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          <nav className="hidden md:flex gap-8"></nav>
 
           <div className="relative">
             <button
@@ -84,49 +78,51 @@ export const Dashboard = () => {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-12">
-        <div className="mb-8">
-          <h1 className="text-4xl font-outfit font-bold text-gray-900 dark:text-white mb-2">
-            Welcome, {user?.name}!
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 text-lg">
-            Firasah AI - School Management Dashboard
-          </p>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          {stats.map((stat) => (
-            <Link
-              key={stat.title}
-              to={stat.link}
-              className={`${stat.color} p-6 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105`}
-            >
-              <h3 className="text-lg font-semibold mb-4">{stat.title}</h3>
-              <p className="text-3xl font-bold">-</p>
-              <p className="text-sm mt-2 opacity-75">Manage {stat.title.toLowerCase()}</p>
-            </Link>
-          ))}
-        </div>
-
-        {/* Quick Actions */}
-        <section className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
-          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Quick Actions</h2>
-          <div className="flex flex-wrap gap-4">
-            <button className="px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md hover:shadow-lg">
-              Add New School
-            </button>
-            <button className="px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md hover:shadow-lg">
-              Add Teacher
-            </button>
-            <button className="px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md hover:shadow-lg">
-              Create Class
-            </button>
-            <button className="px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md hover:shadow-lg">
-              Add Subject
-            </button>
+      <main className="pt-24 pl-64 transition-all duration-300">
+        <div className="max-w-7xl mx-auto px-4 py-12">
+          <div className="mb-8">
+            <h1 className="text-4xl font-outfit font-bold text-gray-900 dark:text-white mb-2">
+              Welcome, {user?.name}!
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 text-lg">
+              Firasah AI - School Management Dashboard
+            </p>
           </div>
-        </section>
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            {stats.map((stat) => (
+              <Link
+                key={stat.title}
+                to={stat.link}
+                className={`${stat.color} p-6 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105`}
+              >
+                <h3 className="text-lg font-semibold mb-4">{stat.title}</h3>
+                <p className="text-3xl font-bold">-</p>
+                <p className="text-sm mt-2 opacity-75">Manage {stat.title.toLowerCase()}</p>
+              </Link>
+            ))}
+          </div>
+
+          {/* Quick Actions */}
+          <section className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Quick Actions</h2>
+            <div className="flex flex-wrap gap-4">
+              <button className="px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md hover:shadow-lg">
+                Add New School
+              </button>
+              <button className="px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md hover:shadow-lg">
+                Add Teacher
+              </button>
+              <button className="px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md hover:shadow-lg">
+                Create Class
+              </button>
+              <button className="px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md hover:shadow-lg">
+                Add Subject
+              </button>
+            </div>
+          </section>
+        </div>
       </main>
     </div>
   );

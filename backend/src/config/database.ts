@@ -10,6 +10,8 @@ const pool = new Pool({
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'firasah_ai_db',
+  // UTF-8 Encoding for Arabic and other languages
+  client_encoding: 'UTF8',
 });
 
 pool.on('error', (err) => {

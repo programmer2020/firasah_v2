@@ -1,0 +1,129 @@
+/* Audio Upload Page Styles */
+
+.audio-upload-area {
+  width: 100%;
+}
+
+/* File Input Custom Styling */
+input[type='file'] {
+  cursor: pointer;
+}
+
+input[type='file']:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Drag and Drop States */
+.audio-upload-area input:hover:not(:disabled) + .border-dashed {
+  border-color: #2563eb;
+  background-color: #f0f7ff;
+}
+
+.audio-upload-area input:focus:not(:disabled) + .border-dashed {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  border-color: #2563eb;
+}
+
+/* Dark Mode */
+@media (prefers-color-scheme: dark) {
+  .audio-upload-area input:hover:not(:disabled) + .border-dashed {
+    background-color: rgba(37, 99, 235, 0.1);
+  }
+}
+
+/* Progress Bar Animation */
+@keyframes progress {
+  0% {
+    background-position: 0% 0%;
+  }
+  100% {
+    background-position: 100% 0%;
+  }
+}
+
+/* Upload Area Hover Effect */
+.audio-upload-area input[type='file'] ~ div:hover {
+  transform: scale(1.01);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .audio-upload-area {
+    padding: 1rem 0;
+  }
+}
+
+/* Loading State */
+.uploading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Success Message Animation */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bg-success-50 {
+  animation: slideIn 0.3s ease-out;
+}
+
+.bg-error-50 {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* File Info Grid */
+.file-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.file-info-item {
+  padding: 1rem;
+  background-color: #f9fafb;
+  border-radius: 0.5rem;
+  border-left: 3px solid #2563eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  .file-info-item {
+    background-color: #1f2937;
+    border-left-color: #3b82f6;
+  }
+}
+
+/* Button Styles */
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+button:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Icon Animation */
+svg {
+  transition: all 0.3s ease;
+}
+
+button:not(:disabled):hover svg {
+  transform: scale(1.05);
+}

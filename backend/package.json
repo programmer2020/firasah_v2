@@ -6,8 +6,10 @@
   "type": "module",
   "scripts": {
     "start": "node dist/index.js",
-    "dev": "node --watch src/index.js",
-    "build": "tsc",    "seed": "node --loader ts-node/esm seed.ts",    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "npm run build && node dist/index.js",
+    "build": "tsc",
+    "seed": "node --loader ts-node/esm seed.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
     "nodejs",
@@ -26,6 +28,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
+    "@types/multer": "^2.1.0",
     "@types/swagger-ui-express": "^4.1.8",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
@@ -33,6 +36,7 @@
     "express": "^5.2.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1",
     "pg": "^8.20.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"

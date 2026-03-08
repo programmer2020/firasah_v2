@@ -2,12 +2,13 @@ import axios from 'axios';
 
 const API_BASE_URL = 'http://localhost:5000/api';
 
-// Create axios instance with default config
+// Create axios instance with default config and UTF-8 encoding
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-    'Content-Type': 'application/json',
+    'Content-Type': 'application/json; charset=utf-8',
   },
+  responseType: 'json',
 });
 
 // Add token to every request

@@ -31,9 +31,30 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
  * Middleware Setup
  */
 app.use(helmet()); // Security headers
+
+// UTF-8 Encoding headers middleware
+app.use((req: Request, res: Response, next) => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Accept-Charset', 'utf-8');
+  next();
+});
+
+// Configure CORS for development and production
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:3000',
+  'http://localhost:8080',
+  process.env.CORS_ORIGIN || '',
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.CORS_ORIGIN || '*'
+    : allowedOrigins,
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.use(express.json({ limit: '10mb' })); // Parse JSON bodies with size limit
 app.use(express.urlencoded({ extended: true, limit: '10mb' })); // Parse URL-encoded bodies
@@ -76,13 +97,14 @@ app.use('/api/evidences', evidencesRoutes);
 app.use('/api/evaluations', evaluationsRoutes);
 
 /**
- * 404 Not Found Handler
+ * 404 Handler - API endpoint not found
  */
 app.use((req: Request, res: Response) => {
   res.status(404).json({
     success: false,
-    message: 'Endpoint not found',
+    message: 'API endpoint not found',
     path: req.path,
+    method: req.method,
   });
 });
 
