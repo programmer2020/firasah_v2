@@ -41,6 +41,11 @@ export const Sidebar = () => {
       href: '/audio-upload',
       icon: '🎙️',
     },
+    {
+      label: 'الجدول الدراسي',
+      href: '/schedule',
+      icon: '📅',
+    },
   ];
 
   const isActive = (href) => location.pathname === href;

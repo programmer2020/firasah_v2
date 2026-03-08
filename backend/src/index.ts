@@ -16,6 +16,7 @@ import soundFilesRoutes from './routes/soundFilesRoutes.js';
 import kpisRoutes from './routes/kpisRoutes.js';
 import evidencesRoutes from './routes/evidencesRoutes.js';
 import evaluationsRoutes from './routes/evaluationsRoutes.js';
+import scheduleRoutes from './routes/scheduleRoutes.js';
 
 // Import middleware
 import { errorHandler } from './middleware/auth.js';
@@ -95,6 +96,7 @@ app.use('/api/sound-files', soundFilesRoutes);
 app.use('/api/kpis', kpisRoutes);
 app.use('/api/evidences', evidencesRoutes);
 app.use('/api/evaluations', evaluationsRoutes);
+app.use('/api/schedule', scheduleRoutes);
 
 /**
  * 404 Handler - API endpoint not found

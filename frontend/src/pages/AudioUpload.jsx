@@ -12,7 +12,7 @@ export const AudioUpload = () => {
   const [error, setError] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
 
-  const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200 MB in bytes
+  const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2 GB in bytes
   const ALLOWED_AUDIO_TYPES = [
     'audio/mpeg',
     'audio/wav',
@@ -20,6 +20,14 @@ export const AudioUpload = () => {
     'audio/mp4',
     'audio/webm',
   ];
+  const ALLOWED_VIDEO_TYPES = [
+    'video/mp4',
+    'video/webm',
+    'video/quicktime',
+    'video/x-msvideo',
+    'video/x-matroska',
+  ];
+  const ALLOWED_TYPES = [...ALLOWED_AUDIO_TYPES, ...ALLOWED_VIDEO_TYPES];
 
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
@@ -32,13 +40,13 @@ export const AudioUpload = () => {
     }
 
     // Validate file type
-    if (!ALLOWED_AUDIO_TYPES.includes(file.type)) {
-      setError(`نوع الملف غير مدعوم. الأنواع المدعومة: MP3, WAV, OGG, MP4, WebM`);
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setError(`نوع الملف غير مدعوم. الأنواع المدعومة: MP3, WAV, OGG, MP4, WebM, MOV, AVI, MKV`);
       setSelectedFile(null);
       return;
     }
 
-    // Validate file size (200 MB max)
+    // Validate file size (500 MB max)
     if (file.size > MAX_FILE_SIZE) {
       const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
       const maxMB = MAX_FILE_SIZE / (1024 * 1024);
@@ -131,10 +139,10 @@ export const AudioUpload = () => {
         {/* Page Title */}
         <div className="mb-8">
           <h1 className="text-3xl font-outfit font-bold text-gray-900 dark:text-white mb-2">
-            تحميل الملفات الصوتية
+            تحميل الملفات الصوتية والمرئية
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            قم بتحميل الملفات الصوتية بصيغ مختلفة (MP3, WAV, OGG, MP4, WebM)
+            قم بتحميل الملفات الصوتية أو المرئية بصيغ مختلفة (MP3, WAV, OGG, MP4, WebM, MOV, AVI, MKV)
           </p>
         </div>
 
@@ -160,7 +168,7 @@ export const AudioUpload = () => {
               <input
                 id="audioInput"
                 type="file"
-                accept="audio/*"
+                accept="audio/*,video/*"
                 onChange={handleFileSelect}
                 disabled={uploading}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -192,7 +200,7 @@ export const AudioUpload = () => {
                   اضغط هنا أو اسحب الملف
                 </p>
                 <p className="text-gray-500 dark:text-gray-400 text-sm">
-                  الحد الأقصى لحجم الملف: 200 MB
+                  الحد الأقصى لحجم الملف: 2 GB
                 </p>
               </div>
             </div>

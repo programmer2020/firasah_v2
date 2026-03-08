@@ -15,6 +15,7 @@ import {
   deleteSoundFile,
   getSoundFilesByCreator,
 } from '../services/soundFilesService.js';
+import { transcribeAndSave, convertVideoToAudio, getSpeechByFileId } from '../services/speechService.js';
 
 // Configure multer for audio uploads
 const uploadDir = path.join(process.cwd(), 'uploads', 'audio');
@@ -44,19 +45,21 @@ const storage = multer.diskStorage({
   },
 });
 
+const AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/webm'];
+const VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska'];
+
 const fileFilter = (req: any, file: any, cb: any) => {
-  const ALLOWED_TYPES = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/webm'];
-  if (ALLOWED_TYPES.includes(file.mimetype)) {
+  if (AUDIO_TYPES.includes(file.mimetype) || VIDEO_TYPES.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid audio file type'), false);
+    cb(new Error('Invalid file type. Supported: audio (mp3, wav, ogg, m4a, webm) and video (mp4, webm, mov, avi, mkv)'), false);
   }
 };
 
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 200 * 1024 * 1024 }, // 200 MB
+  limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // 2 GB
 });
 
 const router = Router();
@@ -97,6 +100,18 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
     }
 
     const userId = (req as any).user?.userId || 'anonymous';
+    const classId = (req.body as any).class_id ? Number((req.body as any).class_id) : undefined;
+    const dayOfWeek = (req.body as any).day_of_week || undefined;
+    const slotDate = (req.body as any).slot_date || undefined;
+
+    // If video, convert to audio first
+    const isVideo = VIDEO_TYPES.includes(req.file.mimetype);
+    let audioPath = req.file.path;
+    if (isVideo) {
+      console.log(`[Upload] Video detected (${req.file.mimetype}), converting to audio...`);
+      audioPath = await convertVideoToAudio(req.file.path);
+      console.log(`[Upload] Audio extracted: ${audioPath}`);
+    }
     
     // Create relative path for storage
     const relativePath = path.relative(process.cwd(), req.file.path);
@@ -111,9 +126,20 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       note: (req.body as any).note || null,
     });
 
+    // Transcribe audio in background (split by time slots if class_id & day provided)
+    transcribeAndSave(soundFile.file_id, audioPath, classId, dayOfWeek, slotDate)
+      .then((speeches) => {
+        console.log(`Transcription completed for file ${soundFile.file_id}: ${speeches.length} segment(s)`);
+      })
+      .catch((err) => {
+        console.error(`Transcription failed for file ${soundFile.file_id}:`, err);
+      });
+
     res.status(201).json({
       success: true,
-      message: 'Audio file uploaded successfully',
+      message: classId && dayOfWeek
+        ? `Audio uploaded. Splitting into segments by time slots and transcribing in background.`
+        : 'Audio file uploaded successfully. Transcription is processing in background.',
       data: soundFile,
     });
   } catch (error) {
@@ -416,6 +442,61 @@ router.get('/creator/:createdBy', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: error instanceof Error ? error.message : 'Failed to retrieve sound files',
+    });
+  }
+});
+
+/**
+ * POST /api/sound-files/:id/retranscribe
+ * Re-transcribe a previously uploaded file (e.g., after a failed transcription)
+ */
+router.post('/:id/retranscribe', async (req: Request, res: Response) => {
+  try {
+    const fileId = parseInt(req.params.id as string);
+    const soundFile = await getSoundFileById(fileId);
+    if (!soundFile) {
+      return res.status(404).json({ success: false, message: 'Sound file not found' });
+    }
+
+    // Check if speech records already exist
+    const existing = await getSpeechByFileId(fileId);
+    if (existing.length > 0) {
+      return res.status(400).json({ success: false, message: 'Transcription already exists. Delete existing speech records first.' });
+    }
+
+    const classId = req.body.class_id ? Number(req.body.class_id) : undefined;
+    const dayOfWeek = req.body.day_of_week || undefined;
+    const slotDate = req.body.slot_date || undefined;
+
+    // Resolve file path
+    let audioPath = path.isAbsolute(soundFile.filepath)
+      ? soundFile.filepath
+      : path.join(process.cwd(), soundFile.filepath);
+
+    // If video, convert to audio
+    const videoExts = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
+    if (videoExts.includes(path.extname(audioPath).toLowerCase())) {
+      const mp3Path = audioPath.replace(path.extname(audioPath), '.mp3');
+      if (fs.existsSync(mp3Path)) {
+        audioPath = mp3Path;
+      } else {
+        audioPath = await convertVideoToAudio(audioPath);
+      }
+    }
+
+    // Transcribe in background
+    transcribeAndSave(fileId, audioPath, classId, dayOfWeek, slotDate)
+      .then((speeches) => console.log(`Re-transcription completed for file ${fileId}: ${speeches.length} segment(s)`))
+      .catch((err) => console.error(`Re-transcription failed for file ${fileId}:`, err));
+
+    res.status(200).json({
+      success: true,
+      message: 'Re-transcription started in background',
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to start re-transcription',
     });
   }
 });
