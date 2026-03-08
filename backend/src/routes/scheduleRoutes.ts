@@ -46,7 +46,7 @@ router.get('/subjects', async (_req: Request, res: Response) => {
 
 router.get('/time-slots/:classId', async (req: Request, res: Response) => {
   try {
-    const classId = parseInt(req.params.classId, 10);
+    const classId = parseInt(req.params.classId as string, 10);
     const slots = await getTimeSlotsByClass(classId);
     res.json(slots);
   } catch (err: any) {
@@ -69,7 +69,7 @@ router.post('/time-slots', async (req: Request, res: Response) => {
 
 router.delete('/time-slots/:id', async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(req.params.id as string, 10);
     const deleted = await deleteTimeSlot(id);
     if (!deleted) return res.status(404).json({ error: 'Time slot not found' });
     res.json({ message: 'Time slot deleted', deleted });
@@ -82,7 +82,7 @@ router.delete('/time-slots/:id', async (req: Request, res: Response) => {
 
 router.get('/:classId', async (req: Request, res: Response) => {
   try {
-    const classId = parseInt(req.params.classId, 10);
+    const classId = parseInt(req.params.classId as string, 10);
     const schedule = await getFullSchedule(classId);
     res.json(schedule);
   } catch (err: any) {
@@ -105,7 +105,7 @@ router.post('/assign', async (req: Request, res: Response) => {
 
 router.delete('/assign/:scheduleId', async (req: Request, res: Response) => {
   try {
-    const scheduleId = parseInt(req.params.scheduleId, 10);
+    const scheduleId = parseInt(req.params.scheduleId as string, 10);
     const deleted = await removeSchedule(scheduleId);
     if (!deleted) return res.status(404).json({ error: 'Schedule entry not found' });
     res.json({ message: 'Schedule entry removed', deleted });
