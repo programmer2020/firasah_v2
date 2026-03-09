@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import Sidebar from '../components/Sidebar';
@@ -11,6 +11,12 @@ export const AudioUpload = () => {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
+
+  // Modal state
+  const [showModal, setShowModal] = useState(false);
+  const [classes, setClasses] = useState([]);
+  const [selectedClassId, setSelectedClassId] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
 
   const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2 GB in bytes
   const ALLOWED_AUDIO_TYPES = [
@@ -29,6 +35,19 @@ export const AudioUpload = () => {
   ];
   const ALLOWED_TYPES = [...ALLOWED_AUDIO_TYPES, ...ALLOWED_VIDEO_TYPES];
 
+  // Fetch classes on mount
+  useEffect(() => {
+    const fetchClasses = async () => {
+      try {
+        const response = await api.get('/schedule/classes');
+        setClasses(Array.isArray(response.data) ? response.data : response.data.data || []);
+      } catch (err) {
+        console.error('Failed to fetch classes:', err);
+      }
+    };
+    fetchClasses();
+  }, []);
+
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
     setError('');
@@ -46,7 +65,7 @@ export const AudioUpload = () => {
       return;
     }
 
-    // Validate file size (500 MB max)
+    // Validate file size
     if (file.size > MAX_FILE_SIZE) {
       const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
       const maxMB = MAX_FILE_SIZE / (1024 * 1024);
@@ -58,14 +77,32 @@ export const AudioUpload = () => {
     }
 
     setSelectedFile(file);
+    setSelectedClassId('');
+    setSelectedDate('');
+    setShowModal(true);
   };
 
-  const handleUpload = async () => {
-    if (!selectedFile) {
-      setError('يرجى اختيار ملف صوتي أولاً');
+  const handleModalClose = () => {
+    setShowModal(false);
+    setSelectedFile(null);
+    setSelectedClassId('');
+    setSelectedDate('');
+    const fileInput = document.getElementById('audioInput');
+    if (fileInput) fileInput.value = '';
+  };
+
+  const handleModalUpload = async () => {
+    if (!selectedFile) return;
+    if (!selectedClassId) {
+      setError('يرجى اختيار الفصل');
+      return;
+    }
+    if (!selectedDate) {
+      setError('يرجى اختيار التاريخ');
       return;
     }
 
+    setShowModal(false);
     setUploading(true);
     setUploadProgress(0);
     setError('');
@@ -73,6 +110,13 @@ export const AudioUpload = () => {
 
     const formData = new FormData();
     formData.append('file', selectedFile);
+    formData.append('class_id', selectedClassId);
+    formData.append('slot_date', selectedDate);
+
+    // Derive day_of_week from the selected date
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayOfWeek = dayNames[new Date(selectedDate).getDay()];
+    formData.append('day_of_week', dayOfWeek);
 
     try {
       const response = await api.post('/sound-files/upload', formData, {
@@ -90,6 +134,8 @@ export const AudioUpload = () => {
       setSuccess(`تم تحميل الملف بنجاح: ${selectedFile.name}`);
       setUploadedFile(response.data.data);
       setSelectedFile(null);
+      setSelectedClassId('');
+      setSelectedDate('');
       setUploadProgress(0);
 
       // Reset file input
@@ -172,14 +218,9 @@ export const AudioUpload = () => {
                 onChange={handleFileSelect}
                 disabled={uploading}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                style={{ display: selectedFile ? 'none' : 'block' }}
               />
               <div
-                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                  selectedFile
-                    ? 'border-brand-200 bg-brand-50 dark:border-brand-700 dark:bg-brand-900'
-                    : 'border-gray-300 dark:border-gray-600 hover:border-brand-400'
-                }`}
+                className="border-2 border-dashed rounded-lg p-8 text-center transition-colors border-gray-300 dark:border-gray-600 hover:border-brand-400"
               >
                 <div className="mb-4">
                   <svg
@@ -205,108 +246,119 @@ export const AudioUpload = () => {
               </div>
             </div>
 
-            {/* Selected File Display */}
-            {selectedFile && (
+            {/* Progress Bar (shown during upload) */}
+            {uploading && (
               <div className="mb-6">
                 <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center">
-                      <svg
-                        className="h-6 w-6 text-brand-600 dark:text-brand-400 mr-3"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M8 16.5a.5.5 0 01-.5-.5v-5.793l-2.146 2.147a.5.5 0 01-.708-.708l3.5-3.5a.5.5 0 01.708 0l3.5 3.5a.5.5 0 01-.708.708L8.707 10.207V16a.5.5 0 01-.5.5z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      <div>
-                        <p className="text-gray-900 dark:text-white font-semibold">
-                          {selectedFile.name}
-                        </p>
-                        <p className="text-gray-600 dark:text-gray-400 text-sm">
-                          {formatFileSize(selectedFile.size)}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setSelectedFile(null);
-                        const fileInput = document.getElementById('audioInput');
-                        if (fileInput) fileInput.value = '';
-                      }}
-                      disabled={uploading}
-                      className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                    >
-                      <svg
-                        className="h-6 w-6"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      جاري التحميل...
+                    </span>
+                    <span className="text-sm font-semibold text-brand-600 dark:text-brand-400">
+                      {uploadProgress}%
+                    </span>
                   </div>
-
-                  {/* Progress Bar */}
-                  {uploading && (
-                    <div className="mb-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">
-                          جاري التحميل...
-                        </span>
-                        <span className="text-sm font-semibold text-brand-600 dark:text-brand-400">
-                          {uploadProgress}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                        <div
-                          className="bg-brand-600 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${uploadProgress}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  )}
+                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                    <div
+                      className="bg-brand-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
                 </div>
               </div>
             )}
-
-            {/* Action Buttons */}
-            <div className="flex gap-4">
-              <button
-                onClick={handleUpload}
-                disabled={!selectedFile || uploading}
-                className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
-                  !selectedFile || uploading
-                    ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                    : 'bg-brand-600 text-white hover:bg-brand-700 dark:hover:bg-brand-500'
-                }`}
-              >
-                {uploading ? 'جاري التحميل...' : 'تحميل الملف'}
-              </button>
-              <button
-                onClick={() => {
-                  setSelectedFile(null);
-                  const fileInput = document.getElementById('audioInput');
-                  if (fileInput) fileInput.value = '';
-                  setError('');
-                  setSuccess('');
-                }}
-                className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-              >
-                إلغاء
-              </button>
-            </div>
           </div>
         </div>
+
+        {/* Upload Modal */}
+        {showModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={handleModalClose}>
+            <div
+              className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6 relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close button */}
+              <button
+                onClick={handleModalClose}
+                className="absolute top-4 left-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+
+              <h2 className="text-xl font-outfit font-bold text-gray-900 dark:text-white mb-6 text-right">
+                تفاصيل التحميل
+              </h2>
+
+              {/* Selected File Info */}
+              {selectedFile && (
+                <div className="mb-5 bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-700 rounded-lg p-4 flex items-center gap-3" dir="rtl">
+                  <svg className="h-8 w-8 text-brand-600 dark:text-brand-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
+                  </svg>
+                  <div className="min-w-0">
+                    <p className="text-gray-900 dark:text-white font-semibold truncate">{selectedFile.name}</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">{formatFileSize(selectedFile.size)}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Class Selection */}
+              <div className="mb-5" dir="rtl">
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  الفصل الدراسي
+                </label>
+                <select
+                  value={selectedClassId}
+                  onChange={(e) => setSelectedClassId(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-colors"
+                >
+                  <option value="">-- اختر الفصل --</option>
+                  {classes.map((cls) => (
+                    <option key={cls.class_id} value={cls.class_id}>
+                      {cls.class_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Date Selection */}
+              <div className="mb-6" dir="rtl">
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  التاريخ
+                </label>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-colors"
+                />
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex gap-3" dir="rtl">
+                <button
+                  onClick={handleModalUpload}
+                  disabled={!selectedClassId || !selectedDate}
+                  className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+                    !selectedClassId || !selectedDate
+                      ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                      : 'bg-brand-600 text-white hover:bg-brand-700'
+                  }`}
+                >
+                  تحميل الملف
+                </button>
+                <button
+                  onClick={handleModalClose}
+                  className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Uploaded File Info */}
         {uploadedFile && (
