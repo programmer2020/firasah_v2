@@ -6,3 +6,7 @@ dist/
 .DS_Store
 .idea/
 .vscode/settings.json
+
+# Uploaded files
+uploads/audio/*
+!uploads/audio/.gitkeep
