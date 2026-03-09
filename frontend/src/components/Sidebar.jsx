@@ -89,13 +89,6 @@ export const Sidebar = () => {
         ))}
       </nav>
 
-      {/* Footer Info */}
-      {isOpen && (
-        <div className="absolute bottom-6 left-4 right-4 p-4 bg-gradient-to-br from-brand-50 to-brand-100 dark:from-brand-900/20 dark:to-brand-900/10 rounded-lg border border-brand-200 dark:border-brand-700">
-          <p className="text-xs font-semibold text-brand-700 dark:text-brand-300">Firasah AI</p>
-          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">School Management</p>
-        </div>
-      )}
     </aside>
   );
 };

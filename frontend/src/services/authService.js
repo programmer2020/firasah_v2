@@ -15,8 +15,9 @@ export const authService = {
   login: async (credentials) => {
     try {
       const response = await api.post('/auth/login', credentials);
-      if (response.data.token) {
-        localStorage.setItem('authToken', response.data.token);
+      const token = response.data.data?.token || response.data.token;
+      if (token) {
+        localStorage.setItem('authToken', token);
       }
       return response.data;
     } catch (error) {
