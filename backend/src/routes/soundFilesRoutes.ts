@@ -16,6 +16,7 @@ import {
   getSoundFilesByCreator,
 } from '../services/soundFilesService.js';
 import { transcribeAndSave, convertVideoToAudio, getSpeechByFileId } from '../services/speechService.js';
+import { getProgress, addSSEClient, updateProgress } from '../services/progressService.js';
 
 // Configure multer for audio uploads
 const uploadDir = path.join(process.cwd(), 'uploads', 'audio');
@@ -47,12 +48,14 @@ const storage = multer.diskStorage({
 
 const AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/webm'];
 const VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska'];
+const TEXT_TYPES = ['text/plain'];
 
 const fileFilter = (req: any, file: any, cb: any) => {
-  if (AUDIO_TYPES.includes(file.mimetype) || VIDEO_TYPES.includes(file.mimetype)) {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (AUDIO_TYPES.includes(file.mimetype) || VIDEO_TYPES.includes(file.mimetype) || TEXT_TYPES.includes(file.mimetype) || ext === '.txt') {
     cb(null, true);
   } else {
-    cb(new Error('Invalid file type. Supported: audio (mp3, wav, ogg, m4a, webm) and video (mp4, webm, mov, avi, mkv)'), false);
+    cb(new Error('Invalid file type. Supported: audio (mp3, wav, ogg, m4a, webm), video (mp4, webm, mov, avi, mkv), and text (txt)'), false);
   }
 };
 
@@ -103,11 +106,14 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
     const classId = (req.body as any).class_id ? Number((req.body as any).class_id) : undefined;
     const dayOfWeek = (req.body as any).day_of_week || undefined;
     const slotDate = (req.body as any).slot_date || undefined;
+    const shouldDenoise = (req.body as any).should_denoise === 'true' || (req.body as any).should_denoise === true;
 
-    // If video, convert to audio first
+    const fileExt = path.extname(req.file.originalname).toLowerCase();
+    const isText = TEXT_TYPES.includes(req.file.mimetype) || fileExt === '.txt';
     const isVideo = VIDEO_TYPES.includes(req.file.mimetype);
     let audioPath = req.file.path;
-    if (isVideo) {
+
+    if (!isText && isVideo) {
       console.log(`[Upload] Video detected (${req.file.mimetype}), converting to audio...`);
       audioPath = await convertVideoToAudio(req.file.path);
       console.log(`[Upload] Audio extracted: ${audioPath}`);
@@ -126,22 +132,48 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       note: (req.body as any).note || null,
     });
 
-    // Transcribe audio in background (split by time slots if class_id & day provided)
-    transcribeAndSave(soundFile.file_id, audioPath, classId, dayOfWeek, slotDate)
-      .then((speeches) => {
-        console.log(`Transcription completed for file ${soundFile.file_id}: ${speeches.length} segment(s)`);
-      })
-      .catch((err) => {
-        console.error(`Transcription failed for file ${soundFile.file_id}:`, err);
-      });
+    if (isText) {
+      // For text files, read content directly and save to speech table
+      updateProgress(soundFile.file_id, { status: 'saving', message: 'جاري حفظ النص...', percent: 50 });
+      const textContent = fs.readFileSync(req.file.path, 'utf-8');
+      const { saveSpeech } = await import('../services/speechService.js');
+      await saveSpeech(soundFile.file_id, textContent, 'ar', null);
+      updateProgress(soundFile.file_id, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
+      console.log(`[Upload] Text file saved to speech table for file ${soundFile.file_id}`);
 
-    res.status(201).json({
-      success: true,
-      message: classId && dayOfWeek
-        ? `Audio uploaded. Splitting into segments by time slots and transcribing in background.`
-        : 'Audio file uploaded successfully. Transcription is processing in background.',
-      data: soundFile,
-    });
+      res.status(201).json({
+        success: true,
+        message: 'تم تحميل الملف النصي وحفظ المحتوى بنجاح',
+        data: soundFile,
+      });
+    } else {
+      // Initialize progress for audio pipeline
+      updateProgress(soundFile.file_id, { status: 'uploading', message: 'تم التحميل. جاري بدء المعالجة...', percent: 5 });
+
+      // Transcribe audio in background (split by time slots if class_id & day provided)
+      transcribeAndSave(soundFile.file_id, audioPath, classId, dayOfWeek, slotDate, shouldDenoise)
+        .then((speeches) => {
+          console.log(`[Upload] ✅ Transcription completed for file ${soundFile.file_id}: ${speeches.length} segment(s)`);
+        })
+        .catch((err) => {
+          console.error(`[Upload] ❌ Transcription failed for file ${soundFile.file_id}:`, err);
+          console.error(`[Upload] Error stack:`, err.stack);
+          updateProgress(soundFile.file_id, { 
+            status: 'failed', 
+            message: `❌ فشلت المعالجة: ${err.message}`, 
+            percent: 0, 
+            error: err.message 
+          });
+        });
+
+      res.status(201).json({
+        success: true,
+        message: classId && dayOfWeek
+          ? `Audio uploaded. Splitting into segments by time slots and transcribing in background.`
+          : 'Audio file uploaded successfully. Transcription is processing in background.',
+        data: soundFile,
+      });
+    }
   } catch (error) {
     // Delete file if there was an error
     if (req.file) {
@@ -157,6 +189,42 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       message: error instanceof Error ? error.message : 'Failed to upload file',
     });
   }
+});
+
+/**
+ * SSE endpoint: stream real-time progress updates for a file's pipeline
+ */
+router.get('/:id/progress/stream', (req: Request, res: Response) => {
+  const fileId = parseInt(req.params.id as string);
+  if (isNaN(fileId)) {
+    return res.status(400).json({ success: false, message: 'Invalid file ID' });
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.flushHeaders();
+
+  addSSEClient(fileId, res);
+});
+
+/**
+ * Polling endpoint: get current progress snapshot for a file
+ */
+router.get('/:id/progress', (req: Request, res: Response) => {
+  const fileId = parseInt(req.params.id as string);
+  if (isNaN(fileId)) {
+    return res.status(400).json({ success: false, message: 'Invalid file ID' });
+  }
+
+  const progress = getProgress(fileId);
+  if (!progress) {
+    return res.json({ success: true, data: null });
+  }
+  res.json({ success: true, data: progress });
 });
 
 /**

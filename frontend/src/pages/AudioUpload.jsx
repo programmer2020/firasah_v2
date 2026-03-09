@@ -12,11 +12,17 @@ export const AudioUpload = () => {
   const [error, setError] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
 
+  // Pipeline progress state
+  const [pipelineProgress, setPipelineProgress] = useState(null);
+  const [processing, setProcessing] = useState(false);
+
   // Modal state
   const [showModal, setShowModal] = useState(false);
+  const [showDenoiseModal, setShowDenoiseModal] = useState(false);
   const [classes, setClasses] = useState([]);
   const [selectedClassId, setSelectedClassId] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
+  const [shouldDenoise, setShouldDenoise] = useState(null);
 
   const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2 GB in bytes
   const ALLOWED_AUDIO_TYPES = [
@@ -33,7 +39,10 @@ export const AudioUpload = () => {
     'video/x-msvideo',
     'video/x-matroska',
   ];
-  const ALLOWED_TYPES = [...ALLOWED_AUDIO_TYPES, ...ALLOWED_VIDEO_TYPES];
+  const ALLOWED_TEXT_TYPES = [
+    'text/plain',
+  ];
+  const ALLOWED_TYPES = [...ALLOWED_AUDIO_TYPES, ...ALLOWED_VIDEO_TYPES, ...ALLOWED_TEXT_TYPES];
 
   // Fetch classes on mount
   useEffect(() => {
@@ -48,6 +57,42 @@ export const AudioUpload = () => {
     fetchClasses();
   }, []);
 
+  // Start polling for pipeline progress
+  const startPipelineProgress = (fileId) => {
+    setProcessing(true);
+    setPipelineProgress({ status: 'uploading', message: 'تم التحميل. جاري بدء المعالجة...', percent: 5 });
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await api.get(`/sound-files/${fileId}/progress`);
+        const data = res.data?.data;
+        if (data) {
+          setPipelineProgress(data);
+
+          if (data.status === 'completed' || data.status === 'failed') {
+            clearInterval(pollInterval);
+            if (data.status === 'completed') {
+              setSuccess(data.message || 'تم الانتهاء بنجاح!');
+            }
+            setTimeout(() => {
+              setProcessing(false);
+              setPipelineProgress(null);
+            }, 4000);
+          }
+        }
+      } catch {
+        // Ignore poll errors, will retry next interval
+      }
+    }, 1000);
+
+    // Safety: stop polling after 30 minutes
+    setTimeout(() => {
+      clearInterval(pollInterval);
+      setProcessing(false);
+      setPipelineProgress(null);
+    }, 30 * 60 * 1000);
+  };
+
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
     setError('');
@@ -58,9 +103,11 @@ export const AudioUpload = () => {
       return;
     }
 
-    // Validate file type
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      setError(`نوع الملف غير مدعوم. الأنواع المدعومة: MP3, WAV, OGG, MP4, WebM, MOV, AVI, MKV`);
+    // Validate file type (check MIME type or file extension as fallback)
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    const isAllowedType = ALLOWED_TYPES.includes(file.type) || ext === 'txt';
+    if (!isAllowedType) {
+      setError(`نوع الملف غير مدعوم. الأنواع المدعومة: MP3, WAV, OGG, MP4, WebM, MOV, AVI, MKV, TXT`);
       setSelectedFile(null);
       return;
     }
@@ -103,6 +150,18 @@ export const AudioUpload = () => {
     }
 
     setShowModal(false);
+    // Show denoise modal before proceeding with upload
+    setShowDenoiseModal(true);
+  };
+
+  const handleDenoiseChoice = async (denoise) => {
+    setShouldDenoise(denoise);
+    setShowDenoiseModal(false);
+    await performUpload(denoise);
+  };
+
+  const performUpload = async (denoise) => {
+    if (!selectedFile) return;
     setUploading(true);
     setUploadProgress(0);
     setError('');
@@ -112,6 +171,7 @@ export const AudioUpload = () => {
     formData.append('file', selectedFile);
     formData.append('class_id', selectedClassId);
     formData.append('slot_date', selectedDate);
+    formData.append('should_denoise', denoise ? 'true' : 'false');
 
     // Derive day_of_week from the selected date
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -133,6 +193,14 @@ export const AudioUpload = () => {
 
       setSuccess(`تم تحميل الملف بنجاح: ${selectedFile.name}`);
       setUploadedFile(response.data.data);
+
+      // Start listening for pipeline progress (audio files)
+      const ext = selectedFile.name.split('.').pop()?.toLowerCase();
+      const isText = selectedFile.type === 'text/plain' || ext === 'txt';
+      if (!isText && response.data.data?.file_id) {
+        startPipelineProgress(response.data.data.file_id);
+      }
+
       setSelectedFile(null);
       setSelectedClassId('');
       setSelectedDate('');
@@ -188,7 +256,7 @@ export const AudioUpload = () => {
             تحميل الملفات الصوتية والمرئية
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            قم بتحميل الملفات الصوتية أو المرئية بصيغ مختلفة (MP3, WAV, OGG, MP4, WebM, MOV, AVI, MKV)
+            قم بتحميل الملفات الصوتية أو المرئية أو النصية بصيغ مختلفة (MP3, WAV, OGG, MP4, WebM, MOV, AVI, MKV, TXT)
           </p>
         </div>
 
@@ -214,7 +282,7 @@ export const AudioUpload = () => {
               <input
                 id="audioInput"
                 type="file"
-                accept="audio/*,video/*"
+                accept="audio/*,video/*,.txt,text/plain"
                 onChange={handleFileSelect}
                 disabled={uploading}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -267,8 +335,116 @@ export const AudioUpload = () => {
                 </div>
               </div>
             )}
+
+            {/* Pipeline Progress (shown during processing) */}
+            {processing && pipelineProgress && (
+              <div className="mb-6">
+                <div className={`rounded-lg p-5 border ${
+                  pipelineProgress.status === 'completed'
+                    ? 'bg-success-50 dark:bg-success-900/30 border-success-200 dark:border-success-700'
+                    : pipelineProgress.status === 'failed'
+                    ? 'bg-error-50 dark:bg-error-900/30 border-error-200 dark:border-error-700'
+                    : 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700'
+                }`}>
+                  {/* Header */}
+                  <div className="flex items-center justify-between mb-3" dir="rtl">
+                    <div className="flex items-center gap-2">
+                      {pipelineProgress.status === 'completed' ? (
+                        <svg className="h-5 w-5 text-success-600 dark:text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      ) : pipelineProgress.status === 'failed' ? (
+                        <svg className="h-5 w-5 text-error-600 dark:text-error-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      ) : (
+                        <svg className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
+                      )}
+                      <span className={`text-sm font-semibold ${
+                        pipelineProgress.status === 'completed' ? 'text-success-700 dark:text-success-300'
+                          : pipelineProgress.status === 'failed' ? 'text-error-700 dark:text-error-300'
+                          : 'text-blue-700 dark:text-blue-300'
+                      }`}>
+                        معالجة الملف
+                      </span>
+                    </div>
+                    <span className={`text-sm font-bold ${
+                      pipelineProgress.status === 'completed' ? 'text-success-600 dark:text-success-400'
+                        : pipelineProgress.status === 'failed' ? 'text-error-600 dark:text-error-400'
+                        : 'text-blue-600 dark:text-blue-400'
+                    }`}>
+                      {pipelineProgress.percent}%
+                    </span>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5 mb-3">
+                    <div
+                      className={`h-2.5 rounded-full transition-all duration-500 ${
+                        pipelineProgress.status === 'completed' ? 'bg-success-500'
+                          : pipelineProgress.status === 'failed' ? 'bg-error-500'
+                          : 'bg-blue-500'
+                      }`}
+                      style={{ width: `${pipelineProgress.percent}%` }}
+                    ></div>
+                  </div>
+
+                  {/* Status Message */}
+                  <p className="text-sm text-gray-700 dark:text-gray-300 text-right" dir="rtl">
+                    {pipelineProgress.message}
+                  </p>
+
+                  {/* Slot info */}
+                  {pipelineProgress.currentSlot && pipelineProgress.totalSlots && pipelineProgress.status !== 'completed' && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right" dir="rtl">
+                      الحصة {pipelineProgress.currentSlot} من {pipelineProgress.totalSlots}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Denoise Modal */}
+        {showDenoiseModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div
+              className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="text-xl font-outfit font-bold text-gray-900 dark:text-white mb-4 text-right">
+                تحسين جودة الصوت
+              </h2>
+
+              <p className="text-gray-700 dark:text-gray-300 mb-6 text-right" dir="rtl">
+                هل تريد تحسين جودة الصوت من الضوضاء قبل التحويل إلى نص؟
+                <br />
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  (التفعيل يحسّن جودة النتائج لكن قد يستغرق وقتاً أطول)
+                </span>
+              </p>
+
+              <div className="flex gap-3" dir="rtl">
+                <button
+                  onClick={() => handleDenoiseChoice(true)}
+                  className="flex-1 px-6 py-3 rounded-lg font-semibold bg-brand-600 text-white hover:bg-brand-700 transition-colors"
+                >
+                  نعم، حسّن الصوت
+                </button>
+                <button
+                  onClick={() => handleDenoiseChoice(false)}
+                  className="flex-1 px-6 py-3 rounded-lg font-semibold bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  لا، كمل مباشرة
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Upload Modal */}
         {showModal && (

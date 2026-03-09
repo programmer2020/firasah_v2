@@ -9,12 +9,16 @@ import fs from 'fs';
 import path from 'path';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
+// @ts-ignore
+import ffprobeStatic from 'ffprobe-static';
 import { insert, getOne, getMany } from '../helpers/database.js';
+import { updateProgress } from './progressService.js';
 
-// Set ffmpeg binary path from ffmpeg-static
+// Set ffmpeg and ffprobe binary paths
 if (ffmpegStatic) {
   ffmpeg.setFfmpegPath(ffmpegStatic);
 }
+ffmpeg.setFfprobePath(ffprobeStatic.path);
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -33,7 +37,7 @@ interface TimeSlot {
  * Get time slots for a class on a specific date (or day_of_week fallback), ordered by start_time
  */
 export const getTimeSlots = async (classId: number, dayOfWeek: string, slotDate?: string): Promise<TimeSlot[]> => {
-  // Prefer exact date match; fall back to day_of_week
+  // 1. Prefer exact date match
   if (slotDate) {
     const query = `
       SELECT time_slot_id, class_id, day_of_week, slot_date::text,
@@ -45,15 +49,27 @@ export const getTimeSlots = async (classId: number, dayOfWeek: string, slotDate?
     const rows = await getMany(query, [classId, slotDate]);
     if (rows.length > 0) return rows;
   }
-  // Fallback: match by day_of_week
-  const query = `
+  // 2. Fallback: match by day_of_week
+  const query2 = `
     SELECT time_slot_id, class_id, day_of_week, slot_date::text,
            start_time::text, end_time::text
     FROM section_time_slots
     WHERE class_id = $1 AND day_of_week = $2
     ORDER BY start_time ASC
   `;
-  return await getMany(query, [classId, dayOfWeek]);
+  const rows2 = await getMany(query2, [classId, dayOfWeek]);
+  if (rows2.length > 0) return rows2;
+
+  // 3. Last fallback: any time slots for this class (regardless of day)
+  console.log(`[Speech] No slots for day=${dayOfWeek}, trying any day for class=${classId}`);
+  const query3 = `
+    SELECT DISTINCT ON (start_time) time_slot_id, class_id, day_of_week, slot_date::text,
+           start_time::text, end_time::text
+    FROM section_time_slots
+    WHERE class_id = $1
+    ORDER BY start_time ASC
+  `;
+  return await getMany(query3, [classId]);
 };
 
 /**
@@ -103,14 +119,9 @@ const getAudioDuration = (filePath: string): Promise<number> => {
 
 /**
  * Denoise and enhance audio using FFmpeg filters for better transcription accuracy.
- * Pipeline:
- *   1. highpass @ 100Hz  — cuts low-frequency rumble (AC, fans, traffic)
- *   2. lowpass  @ 8000Hz — cuts high-frequency hiss (speech is mostly < 8kHz)
- *   3. afftdn nf=-25     — FFT-based adaptive noise reduction
- *   4. anlmdn s=7        — Non-local means denoiser (catches residual noise)
- *   5. loudnorm          — EBU R128 loudness normalization
+ * Optimized for speed: very lightweight filter chain for fast processing.
  */
-const denoiseAudio = (inputPath: string): Promise<string> => {
+const denoiseAudio = (inputPath: string, fileId?: number): Promise<string> => {
   const ext = path.extname(inputPath);
   const denoisedPath = inputPath.replace(ext, `_denoised${ext}`);
 
@@ -121,16 +132,25 @@ const denoiseAudio = (inputPath: string): Promise<string> => {
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
       .audioFilters([
-        'highpass=f=100',
-        'lowpass=f=8000',
-        'afftdn=nf=-25:tn=1',
-        'anlmdn=s=7:p=0.002',
-        'loudnorm=I=-16:TP=-1.5:LRA=11',
+        'highpass=f=100',  // Remove low rumble
+        'lowpass=f=8000',  // Remove high noise
+        // Removed: loudnorm (too slow), anlmdn (very slow)
       ])
       .audioCodec('libmp3lame')
-      .audioBitrate(64)
+      .audioBitrate(32)  // Lower bitrate = faster processing, good for transcription
       .audioChannels(1)
       .output(denoisedPath)
+      .on('progress', (progress) => {
+        if (fileId && progress.percent != null) {
+          // Map denoising progress (0-100%) to overall progress (10-20%)
+          const overallPercent = Math.round(10 + (progress.percent / 100) * 10);
+          updateProgress(fileId, {
+            status: 'denoising',
+            message: `جاري تنقية الصوت... ${Math.round(progress.percent)}%`,
+            percent: Math.min(overallPercent, 20),
+          });
+        }
+      })
       .on('end', () => {
         const sizeMB = (fs.statSync(denoisedPath).size / 1024 / 1024).toFixed(1);
         console.log(`[FFmpeg] Denoised: ${path.basename(denoisedPath)} (${sizeMB}MB)`);
@@ -200,23 +220,40 @@ const compressAudioIfNeeded = (filePath: string): Promise<string> => {
 /**
  * Transcribe an audio file using OpenAI API with retry and model fallback
  */
-export const transcribeAudio = async (filePath: string) => {
+export const transcribeAudio = async (filePath: string, fileId?: number, slotInfo?: { current: number; total: number }) => {
   const absolutePath = path.isAbsolute(filePath)
     ? filePath
     : path.join(process.cwd(), filePath);
 
+  console.log(`[Speech] Starting transcription for file: ${absolutePath}`);
+  console.log(`[Speech] File exists: ${fs.existsSync(absolutePath)}`);
+
   // Compress if file exceeds Whisper limit
   const audioPath = await compressAudioIfNeeded(absolutePath);
   const needsCleanup = audioPath !== absolutePath;
+  
+  console.log(`[Speech] Using audio path: ${audioPath} (cleanup needed: ${needsCleanup})`);
 
   const models = ['gpt-4o-transcribe', 'whisper-1'];
-  const MAX_RETRIES = 2;
+  const MAX_RETRIES = 1;
+  const slotLabel = slotInfo ? `الحصة ${slotInfo.current} من ${slotInfo.total}` : 'الملف';
 
   try {
+    let attemptNum = 0;
+    const totalAttempts = models.length * MAX_RETRIES;
     for (const model of models) {
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        attemptNum++;
         try {
-          console.log(`[Speech] Transcribing with ${model} (attempt ${attempt}/${MAX_RETRIES})...`);
+          const startTime = Date.now();
+          console.log(`[Speech] Transcribing with ${model} (attempt ${attempt}/${MAX_RETRIES}) - file: ${path.basename(audioPath)}`);
+
+          if (fileId) {
+            updateProgress(fileId, {
+              message: `جاري تحويل ${slotLabel} إلى نص... (محاولة ${attemptNum}/${totalAttempts})`,
+            });
+          }
+
           const file = fs.createReadStream(audioPath);
 
           const isGpt4o = model === 'gpt-4o-transcribe';
@@ -227,18 +264,44 @@ export const transcribeAudio = async (filePath: string) => {
             response_format: isGpt4o ? 'json' : 'verbose_json',
           });
 
-          console.log(`[Speech] Transcription succeeded with ${model}`);
+          const duration = Date.now() - startTime;
+          console.log(`[Speech] ✅ Transcription succeeded with ${model} (${duration}ms)`);
+          console.log(`[Speech] Transcript length: ${transcription.text.length} chars`);
           return {
             text: transcription.text,
             language: (transcription as any).language || 'ar',
             duration: (transcription as any).duration || null,
           };
         } catch (err: any) {
-          console.error(`[Speech] ${model} attempt ${attempt} failed: ${err.status || err.message}`);
+          console.error(`[Speech] ❌ ${model} attempt ${attempt} failed:`);
+          console.error(`[Speech] Error status: ${err.status}`);
+          console.error(`[Speech] Error message: ${err.message}`);
+          console.error(`[Speech] Error code: ${err.code}`);
+          
           if (attempt < MAX_RETRIES) {
-            const delay = attempt * 5000;
-            console.log(`[Speech] Retrying in ${delay / 1000}s...`);
-            await new Promise(r => setTimeout(r, delay));
+            // Quick retry: 1 second, with progress updates every 250ms
+            const delay = 1000;
+            const updateInterval = 250;
+            const steps = Math.ceil(delay / updateInterval);
+            
+            if (fileId) {
+              updateProgress(fileId, {
+                message: `فشلت المحاولة ${attemptNum}. إعادة المحاولة...`,
+              });
+            }
+
+            // Update progress every interval to show countdown
+            for (let i = 0; i < steps; i++) {
+              await new Promise(r => setTimeout(r, updateInterval));
+              if (fileId) {
+                const remaining = Math.max(0, (delay - (i + 1) * updateInterval) / 1000);
+                if (remaining > 0) {
+                  updateProgress(fileId, {
+                    message: `إعادة المحاولة خلال ${remaining.toFixed(1)}s...`,
+                  });
+                }
+              }
+            }
           }
         }
       }
@@ -249,6 +312,7 @@ export const transcribeAudio = async (filePath: string) => {
     // Clean up compressed file
     if (needsCleanup && fs.existsSync(audioPath)) {
       fs.unlinkSync(audioPath);
+      console.log(`[Speech] Cleaned up compressed audio file`);
     }
   }
 };
@@ -264,16 +328,26 @@ export const saveSpeech = async (
   timeSlotId: number | null = null,
   slotOrder: number = 0
 ) => {
-  return await insert('speech', {
-    file_id: fileId,
-    transcript,
-    language,
-    duration,
-    time_slot_id: timeSlotId,
-    slot_order: slotOrder,
-    created_at: new Date(),
-    updated_at: new Date(),
-  });
+  try {
+    console.log(`[Speech] Saving speech record: file_id=${fileId}, time_slot_id=${timeSlotId}, slot_order=${slotOrder}, transcript_len=${transcript.length}`);
+    
+    const result = await insert('speech', {
+      file_id: fileId,
+      transcript,
+      language,
+      duration,
+      time_slot_id: timeSlotId,
+      slot_order: slotOrder,
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+    
+    console.log(`[Speech] ✅ Speech saved successfully: id=${result.id}, file_id=${result.file_id}`);
+    return result;
+  } catch (err) {
+    console.error(`[Speech] ❌ Failed to save speech:`, err);
+    throw err;
+  }
 };
 
 /**
@@ -312,6 +386,7 @@ export const getAllSpeech = async () => {
  * @param classId    Class ID to look up time slots
  * @param dayOfWeek  Day of week (e.g. 'Sunday', 'Monday')
  * @param slotDate   Specific date (e.g. '2026-03-08')
+ * @param shouldDenoise Whether to apply audio denoising (default: true)
  * @returns Array of created speech records
  */
 export const transcribeAndSave = async (
@@ -319,23 +394,36 @@ export const transcribeAndSave = async (
   filePath: string,
   classId?: number,
   dayOfWeek?: string,
-  slotDate?: string
+  slotDate?: string,
+  shouldDenoise: boolean = true
 ) => {
   const absolutePath = path.isAbsolute(filePath)
     ? filePath
     : path.join(process.cwd(), filePath);
 
-  // Step 1: Denoise the audio for better transcription accuracy
-  console.log(`[Speech] Denoising audio before transcription (file_id=${fileId})...`);
-  const denoisedPath = await denoiseAudio(absolutePath);
-  const denoisedCleanup = denoisedPath !== absolutePath;
+  // Step 1: Denoise the audio (if user chose to)
+  let denoisedPath = absolutePath;
+  let denoisedCleanup = false;
+  
+  if (shouldDenoise) {
+    console.log(`[Speech] Denoising audio before transcription (file_id=${fileId})...`);
+    updateProgress(fileId, { status: 'denoising', message: 'جاري تنقية الصوت من الضوضاء...', percent: 10 });
+    denoisedPath = await denoiseAudio(absolutePath, fileId);
+    denoisedCleanup = denoisedPath !== absolutePath;
+  } else {
+    console.log(`[Speech] Skipping denoise - user chose to process as-is (file_id=${fileId})...`);
+    updateProgress(fileId, { status: 'analyzing', message: 'جاري تحليل الملف...', percent: 15 });
+  }
 
   try {
   // If no class/day provided, transcribe the whole file (legacy behavior)
   if (!classId || !dayOfWeek) {
     console.log(`[Speech] No class/day provided — transcribing full file (file_id=${fileId})`);
-    const result = await transcribeAudio(denoisedPath);
+    updateProgress(fileId, { status: 'transcribing', message: 'جاري تحويل الصوت إلى نص...', percent: 30 });
+    const result = await transcribeAudio(denoisedPath, fileId);
+    updateProgress(fileId, { status: 'saving', message: 'جاري حفظ النص...', percent: 90 });
     const speech = await saveSpeech(fileId, result.text, result.language, result.duration);
+    updateProgress(fileId, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
     return [speech];
   }
 
@@ -343,12 +431,16 @@ export const transcribeAndSave = async (
   const slots = await getTimeSlots(classId, dayOfWeek, slotDate);
   if (slots.length === 0) {
     console.log(`[Speech] No time slots found for class=${classId}, day=${dayOfWeek}, date=${slotDate} — transcribing full file`);
-    const result = await transcribeAudio(denoisedPath);
+    updateProgress(fileId, { status: 'transcribing', message: 'جاري تحويل الصوت إلى نص...', percent: 30 });
+    const result = await transcribeAudio(denoisedPath, fileId);
+    updateProgress(fileId, { status: 'saving', message: 'جاري حفظ النص...', percent: 90 });
     const speech = await saveSpeech(fileId, result.text, result.language, result.duration);
+    updateProgress(fileId, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
     return [speech];
   }
 
   console.log(`[Speech] Found ${slots.length} time slots for class=${classId}, day=${dayOfWeek}`);
+  updateProgress(fileId, { status: 'analyzing', message: `تم العثور على ${slots.length} حصص. جاري تحليل الملف...`, percent: 20, totalSlots: slots.length });
 
   // Get total audio duration
   const totalDuration = await getAudioDuration(denoisedPath);
@@ -387,17 +479,48 @@ export const transcribeAndSave = async (
     const effectiveDuration = Math.min(seg.durationSec, totalDuration - seg.startSec);
 
     const segmentFile = path.join(tempDir, `segment_${seg.slotOrder}${ext}`);
-    console.log(`[Speech] Splitting slot ${seg.slotOrder}: start=${seg.startSec}s, duration=${effectiveDuration}s`);
+    console.log(`[Speech] 📌 Processing slot ${seg.slotOrder}/${segments.length}: start=${seg.startSec}s, duration=${effectiveDuration}s, time_slot_id=${seg.timeSlotId}`);
+
+    // Calculate progress: slots spread across 25%-95%
+    const slotProgressBase = 25;
+    const slotProgressRange = 70; // 25% to 95%
+    const perSlotRange = slotProgressRange / segments.length;
+    const slotStart = slotProgressBase + (seg.slotOrder - 1) * perSlotRange;
 
     try {
       // Split audio segment
+      updateProgress(fileId, {
+        status: 'splitting',
+        message: `جاري تقسيم الحصة ${seg.slotOrder} من ${segments.length}...`,
+        percent: Math.round(slotStart),
+        currentSlot: seg.slotOrder,
+        totalSlots: segments.length,
+      });
+      console.log(`[Speech] 🔀 Splitting segment ${seg.slotOrder}...`);
       await splitAudioSegment(denoisedPath, segmentFile, seg.startSec, effectiveDuration);
+      console.log(`[Speech] ✂️ Segment split: ${path.basename(segmentFile)}`);
 
       // Transcribe segment
-      console.log(`[Speech] Transcribing slot ${seg.slotOrder}...`);
-      const result = await transcribeAudio(segmentFile);
+      console.log(`[Speech] 🗣️ Transcribing segment ${seg.slotOrder}...`);
+      updateProgress(fileId, {
+        status: 'transcribing',
+        message: `جاري تحويل الحصة ${seg.slotOrder} من ${segments.length} إلى نص...`,
+        percent: Math.round(slotStart + perSlotRange * 0.3),
+        currentSlot: seg.slotOrder,
+        totalSlots: segments.length,
+      });
+      const result = await transcribeAudio(segmentFile, fileId, { current: seg.slotOrder, total: segments.length });
+      console.log(`[Speech] ✅ Transcription result: ${result.text.substring(0, 100)}...`);
 
       // Save to DB
+      updateProgress(fileId, {
+        status: 'saving',
+        message: `جاري حفظ الحصة ${seg.slotOrder} من ${segments.length}...`,
+        percent: Math.round(slotStart + perSlotRange * 0.8),
+        currentSlot: seg.slotOrder,
+        totalSlots: segments.length,
+      });
+      console.log(`[Speech] 💾 Saving paragraph ${seg.slotOrder}...`);
       const speech = await saveSpeech(
         fileId,
         result.text,
@@ -407,10 +530,26 @@ export const transcribeAndSave = async (
         seg.slotOrder
       );
 
-      console.log(`[Speech] Slot ${seg.slotOrder} saved: speech.id=${speech.id}`);
+      console.log(`[Speech] ✅ Slot ${seg.slotOrder} saved: speech.id=${speech.id}`);
       results.push(speech);
     } catch (err) {
-      console.error(`[Speech] Error processing slot ${seg.slotOrder}:`, err);
+      console.error(`[Speech] ❌ Error processing slot ${seg.slotOrder}:`, err);
+      console.error(`[Speech] Error details:`, (err as any).message);
+      // Save a placeholder record so the time_slot link is preserved
+      try {
+        const speech = await saveSpeech(
+          fileId,
+          '[transcription_pending]',
+          'ar',
+          effectiveDuration,
+          seg.timeSlotId,
+          seg.slotOrder
+        );
+        console.log(`[Speech] ⚠️ Slot ${seg.slotOrder} saved as pending: speech.id=${speech.id}`);
+        results.push(speech);
+      } catch (saveErr) {
+        console.error(`[Speech] ❌ Failed to save placeholder for slot ${seg.slotOrder}:`, saveErr);
+      }
     } finally {
       // Clean up segment file
       if (fs.existsSync(segmentFile)) {
@@ -425,6 +564,7 @@ export const transcribeAndSave = async (
   } catch { /* ignore if not empty */ }
 
   console.log(`[Speech] Completed: ${results.length}/${segments.length} slots transcribed for file_id=${fileId}`);
+  updateProgress(fileId, { status: 'completed', message: `تم الانتهاء! تم معالجة ${results.length} من ${segments.length} حصة.`, percent: 100 });
   return results;
   } finally {
     // Clean up denoised file
