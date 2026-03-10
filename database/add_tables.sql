@@ -10,10 +10,24 @@ CREATE TABLE IF NOT EXISTS sound_files (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create kpis table
+-- Create kpi_domains table for teaching evaluation framework
+CREATE TABLE IF NOT EXISTS kpi_domains (
+  domain_id SERIAL PRIMARY KEY,
+  domain_code VARCHAR(20) NOT NULL UNIQUE COLLATE "C",
+  domain_name VARCHAR(255) NOT NULL COLLATE "C",
+  domain_description TEXT COLLATE "C",
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create kpis table with domain reference
 CREATE TABLE IF NOT EXISTS kpis (
   kpi_id SERIAL PRIMARY KEY,
+  domain_id INTEGER REFERENCES kpi_domains(domain_id) ON DELETE CASCADE,
+  kpi_code VARCHAR(20) COLLATE "C",
   kpi_name VARCHAR(255) NOT NULL COLLATE "C",
+  kpi_description TEXT COLLATE "C",
   createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   createdBy VARCHAR(255) COLLATE "C",
   note TEXT COLLATE "C",
@@ -45,18 +59,22 @@ CREATE TABLE IF NOT EXISTS evaluations (
 );
 
 -- Create indexes for better query performance
-CREATE INDEX idx_sound_files_filename ON sound_files(filename);
-CREATE INDEX idx_sound_files_createdby ON sound_files(createdBy);
-CREATE INDEX idx_kpis_kpi_name ON kpis(kpi_name);
-CREATE INDEX idx_kpis_createdby ON kpis(createdBy);
-CREATE INDEX idx_evidences_kpi_id ON evidences(kpi_id);
-CREATE INDEX idx_evidences_file_id ON evidences(file_id);
-CREATE INDEX idx_evaluations_file_id ON evaluations(file_id);
-CREATE INDEX idx_evaluations_kpi_id ON evaluations(kpi_id);
+CREATE INDEX IF NOT EXISTS idx_sound_files_filename ON sound_files(filename);
+CREATE INDEX IF NOT EXISTS idx_sound_files_createdby ON sound_files(createdBy);
+CREATE INDEX IF NOT EXISTS idx_kpi_domains_code ON kpi_domains(domain_code);
+CREATE INDEX IF NOT EXISTS idx_kpis_domain_id ON kpis(domain_id);
+CREATE INDEX IF NOT EXISTS idx_kpis_code ON kpis(kpi_code);
+CREATE INDEX IF NOT EXISTS idx_kpis_kpi_name ON kpis(kpi_name);
+CREATE INDEX IF NOT EXISTS idx_kpis_createdby ON kpis(createdBy);
+CREATE INDEX IF NOT EXISTS idx_evidences_kpi_id ON evidences(kpi_id);
+CREATE INDEX IF NOT EXISTS idx_evidences_file_id ON evidences(file_id);
+CREATE INDEX IF NOT EXISTS idx_evaluations_file_id ON evaluations(file_id);
+CREATE INDEX IF NOT EXISTS idx_evaluations_kpi_id ON evaluations(kpi_id);
 
 -- Add comments to tables
 COMMENT ON TABLE sound_files IS 'Stores audio file metadata for the application';
-COMMENT ON TABLE kpis IS 'Stores KPI (Key Performance Indicator) data';
+COMMENT ON TABLE kpi_domains IS 'Teaching evaluation framework domains (8 domains)';
+COMMENT ON TABLE kpis IS 'Stores KPI (Key Performance Indicator) data with domain reference';
 COMMENT ON TABLE evidences IS 'Stores evidence records linking KPIs to sound files with time ranges';
 COMMENT ON TABLE evaluations IS 'Stores evaluation scores and evidence counts for KPIs and sound files';
 
@@ -67,8 +85,17 @@ COMMENT ON COLUMN sound_files.filepath IS 'Path to the sound file';
 COMMENT ON COLUMN sound_files.createdBy IS 'User who created the file';
 COMMENT ON COLUMN sound_files.note IS 'Additional notes about the file';
 
+COMMENT ON COLUMN kpi_domains.domain_id IS 'Unique identifier for teaching domain';
+COMMENT ON COLUMN kpi_domains.domain_code IS 'Domain code (D1-D8)';
+COMMENT ON COLUMN kpi_domains.domain_name IS 'Domain name in Arabic and English';
+COMMENT ON COLUMN kpi_domains.domain_description IS 'Description of the domain';
+COMMENT ON COLUMN kpi_domains.sort_order IS 'Order for display';
+
 COMMENT ON COLUMN kpis.kpi_id IS 'Unique identifier for KPI';
+COMMENT ON COLUMN kpis.domain_id IS 'Reference to KPI domain (foreign key)';
+COMMENT ON COLUMN kpis.kpi_code IS 'KPI code (1.1, 1.2, ... 8.2)';
 COMMENT ON COLUMN kpis.kpi_name IS 'Name of the KPI';
+COMMENT ON COLUMN kpis.kpi_description IS 'Detailed description of the KPI';
 COMMENT ON COLUMN kpis.createdBy IS 'User who created the KPI';
 COMMENT ON COLUMN kpis.note IS 'Additional notes about the KPI';
 

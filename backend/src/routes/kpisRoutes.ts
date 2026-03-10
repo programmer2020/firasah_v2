@@ -11,9 +11,146 @@ import {
   updateKPI,
   deleteKPI,
   getKPIsByCreator,
+  getAllKPIDomains,
+  getKPIDomainById,
+  getKPIsGroupedByDomain,
+  getKPIsByDomain,
 } from '../services/kpisService.js';
 
 const router = Router();
+
+/**
+ * @swagger
+ * /api/kpis/domains/all:
+ *   get:
+ *     tags:
+ *       - KPI Domains
+ *     summary: Get all KPI domains
+ *     description: Retrieve all teaching evaluation framework domains
+ *     responses:
+ *       200:
+ *         description: List of KPI domains retrieved successfully
+ */
+router.get('/domains/all', async (req: Request, res: Response) => {
+  try {
+    const domains = await getAllKPIDomains();
+    res.status(200).json({
+      success: true,
+      message: 'KPI domains retrieved successfully',
+      data: domains,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to retrieve KPI domains',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/kpis/domains/{id}:
+ *   get:
+ *     tags:
+ *       - KPI Domains
+ *     summary: Get KPI domain by ID
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: KPI domain retrieved successfully
+ */
+router.get('/domains/:id', async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const domain = await getKPIDomainById(parseInt(id));
+
+    if (!domain) {
+      return res.status(404).json({
+        success: false,
+        message: 'KPI domain not found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'KPI domain retrieved successfully',
+      data: domain,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to retrieve KPI domain',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/kpis/domains-grouped:
+ *   get:
+ *     tags:
+ *       - KPI Domains
+ *     summary: Get KPIs grouped by domain
+ *     description: Retrieve all domains with their associated KPIs
+ *     responses:
+ *       200:
+ *         description: KPIs grouped by domain retrieved successfully
+ */
+router.get('/domains-grouped', async (req: Request, res: Response) => {
+  try {
+    const data = await getKPIsGroupedByDomain();
+    res.status(200).json({
+      success: true,
+      message: 'KPIs grouped by domain retrieved successfully',
+      data: data,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to retrieve KPIs grouped by domain',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/kpis/by-domain/{domainId}:
+ *   get:
+ *     tags:
+ *       - KPI Domains
+ *     summary: Get KPIs by domain ID
+ *     parameters:
+ *       - in: path
+ *         name: domainId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: KPIs for domain retrieved successfully
+ */
+router.get('/by-domain/:domainId', async (req: Request, res: Response) => {
+  try {
+    const domainId = req.params.domainId as string;
+    const kpis = await getKPIsByDomain(parseInt(domainId));
+
+    res.status(200).json({
+      success: true,
+      message: 'KPIs retrieved successfully',
+      data: kpis,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to retrieve KPIs by domain',
+    });
+  }
+});
 
 /**
  * @swagger

@@ -233,23 +233,8 @@ export const AudioUpload = () => {
       {/* Sidebar */}
       <Sidebar />
 
-      {/* Header */}
-      <header className="fixed top-0 right-0 left-0 bg-brand-600 text-white shadow-lg z-30">
-        <div className="px-4 py-6">
-          <div className="flex items-center justify-between">
-            <Link
-              to="/dashboard"
-              className="text-2xl font-outfit font-bold hover:opacity-90"
-            >
-              Firasah AI
-            </Link>
-            <span className="text-brand-100">تحميل الملفات الصوتية</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="pt-24 pl-64 transition-all duration-300">
-        <div className="max-w-4xl mx-auto px-4 py-8">
+      <main className="pt-6 pl-64 transition-all duration-300">
+        <div className="max-w-4xl mx-auto px-4 py-8 mx-6">
         {/* Page Title */}
         <div className="mb-8">
           <h1 className="text-3xl font-outfit font-bold text-gray-900 dark:text-white mb-2">

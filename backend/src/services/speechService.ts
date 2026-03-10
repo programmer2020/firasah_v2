@@ -13,6 +13,7 @@ import ffmpegStatic from 'ffmpeg-static';
 import ffprobeStatic from 'ffprobe-static';
 import { insert, getOne, getMany } from '../helpers/database.js';
 import { updateProgress } from './progressService.js';
+import { evaluateSpeechAgainstKPIs } from './evaluationsService.js';
 
 // Set ffmpeg and ffprobe binary paths
 if (ffmpegStatic) {
@@ -76,9 +77,17 @@ export const getTimeSlots = async (classId: number, dayOfWeek: string, slotDate?
  * Convert HH:MM:SS or HH:MM time string to total seconds
  */
 const timeToSeconds = (time: string): number => {
-  const parts = time.split(':').map(Number);
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-  return parts[0] * 3600 + parts[1] * 60;
+  // Accept values like HH:MM, HH:MM:SS, HH:MM:SS.sss or HH:MM:SS+TZ
+  const normalized = String(time).trim();
+  const match = normalized.match(/^(\d{1,2}):(\d{2})(?::(\d{2}(?:\.\d+)?))?/);
+  if (!match) return NaN;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = Number(match[3] ?? '0');
+
+  if (![hours, minutes, seconds].every(Number.isFinite)) return NaN;
+  return hours * 3600 + minutes * 60 + seconds;
 };
 
 /**
@@ -179,13 +188,34 @@ const splitAudioSegment = (
   startSec: number,
   durationSec: number
 ): Promise<void> => {
+  console.log(`[FFmpeg] splitAudioSegment START: input=${path.basename(inputPath)}, output=${path.basename(outputPath)}`);
+  console.log(`[FFmpeg] splitAudioSegment PARAMS: start=${startSec}s, duration=${durationSec}s`);
+  
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
       .setStartTime(startSec)
       .setDuration(durationSec)
       .output(outputPath)
-      .on('end', () => resolve())
-      .on('error', (err) => reject(err))
+      .on('start', (cmd) => {
+        console.log(`[FFmpeg] FFmpeg command started: ${cmd}`);
+      })
+      .on('progress', (progress) => {
+        console.log(`[FFmpeg] Progress: ${progress.percent}% | Time: ${progress.timemark}`);
+      })
+      .on('end', () => {
+        console.log(`[FFmpeg] splitAudioSegment END: segment file should be at ${outputPath}`);
+        if (fs.existsSync(outputPath)) {
+          const size = fs.statSync(outputPath).size;
+          console.log(`[FFmpeg] ✅ Segment file created: ${(size / 1024).toFixed(1)}KB`);
+        } else {
+          console.error(`[FFmpeg] ❌ WARNING: Segment file NOT found at ${outputPath}`);
+        }
+        resolve();
+      })
+      .on('error', (err) => {
+        console.error(`[FFmpeg] ❌ splitAudioSegment ERROR:`, err.message);
+        reject(err);
+      })
       .run();
   });
 };
@@ -343,6 +373,27 @@ export const saveSpeech = async (
     });
     
     console.log(`[Speech] ✅ Speech saved successfully: id=${result.id}, file_id=${result.file_id}`);
+    
+    // Automatically evaluate speech against KPIs asynchronously
+    // Do not await - let it process in background without delaying the response
+    if (transcript && transcript.trim() && transcript !== '[transcription_pending]') {
+      setImmediate(async () => {
+        try {
+          console.log(`[Evaluation] 🔄 Starting automatic KPI evaluation for file_id=${fileId}...`);
+          const evaluations = await evaluateSpeechAgainstKPIs(
+            transcript,
+            fileId,
+            undefined,
+            undefined
+          );
+          console.log(`[Evaluation] ✅ Completed: Evaluated against all KPIs, found ${evaluations.length} evidence records`);
+        } catch (evalErr) {
+          console.error(`[Evaluation] ⚠️ Non-blocking evaluation error for file_id=${fileId}:`, evalErr);
+          // Don't re-throw - this is background processing
+        }
+      });
+    }
+    
     return result;
   } catch (err) {
     console.error(`[Speech] ❌ Failed to save speech:`, err);
@@ -446,16 +497,69 @@ export const transcribeAndSave = async (
   const totalDuration = await getAudioDuration(denoisedPath);
   console.log(`[Speech] Total audio duration: ${totalDuration}s`);
 
-  // Calculate segment durations from time slots
-  const firstSlotStart = timeToSeconds(slots[0].start_time);
-  const segments = slots.map((slot, index) => {
-    const slotStartSec = timeToSeconds(slot.start_time) - firstSlotStart;
-    const slotDurationSec = timeToSeconds(slot.end_time) - timeToSeconds(slot.start_time);
+  // Calculate segment timings from time slots.
+  // If slot times are malformed/duplicated, fallback to sequential slicing by duration.
+  const parsedSlots = slots.map((slot, index) => {
+    const startAbs = timeToSeconds(slot.start_time);
+    const endAbs = timeToSeconds(slot.end_time);
+    const durationRaw = endAbs - startAbs;
+
+    console.log(
+      `[Speech] Slot ${index + 1} raw: start_time=${slot.start_time}, end_time=${slot.end_time}, startAbs=${startAbs}, endAbs=${endAbs}, durationRaw=${durationRaw}`
+    );
+
     return {
       timeSlotId: slot.time_slot_id,
-      startSec: slotStartSec,
-      durationSec: slotDurationSec,
       slotOrder: index + 1,
+      startAbs,
+      durationRaw,
+    };
+  });
+
+  const hasInvalidTimes = parsedSlots.some((s) => !Number.isFinite(s.startAbs) || !Number.isFinite(s.durationRaw) || s.durationRaw <= 0);
+  const firstSlotStart = parsedSlots[0]?.startAbs ?? NaN;
+  const relativeStarts = parsedSlots.map((s) => s.startAbs - firstSlotStart);
+  const nonIncreasingRelativeStarts = relativeStarts.some((start, idx) => idx > 0 && start <= relativeStarts[idx - 1]);
+  const allRelativeStartsZero = relativeStarts.length > 1 && relativeStarts.every((start) => Math.abs(start) < 1e-6);
+
+  const useProportionalFallback = hasInvalidTimes || !Number.isFinite(firstSlotStart) || nonIncreasingRelativeStarts || allRelativeStartsZero;
+
+  if (useProportionalFallback) {
+    console.warn('[Speech] Slot times are invalid or not increasing. Using proportional segmentation fallback.');
+    console.warn(`[Speech] hasInvalidTimes=${hasInvalidTimes}, nonIncreasingRelativeStarts=${nonIncreasingRelativeStarts}, allRelativeStartsZero=${allRelativeStartsZero}`);
+  }
+
+  const slotDurations = parsedSlots.map((slot) =>
+    Number.isFinite(slot.durationRaw) && slot.durationRaw > 0 ? slot.durationRaw : 900
+  );
+
+  const totalSlotDuration = slotDurations.reduce((sum, dur) => sum + dur, 0);
+
+  let consumedDuration = 0;
+  const segments = parsedSlots.map((slot, index) => {
+    const safeDuration = slotDurations[index];
+
+    let startSec: number;
+    let durationSec: number;
+
+    if (useProportionalFallback) {
+      // Map slot durations onto the actual audio timeline so each slot gets a unique segment.
+      const ratioStart = consumedDuration / totalSlotDuration;
+      const ratioEnd = (consumedDuration + safeDuration) / totalSlotDuration;
+      startSec = totalDuration * ratioStart;
+      const endSec = totalDuration * ratioEnd;
+      durationSec = Math.max(0.001, endSec - startSec);
+      consumedDuration += safeDuration;
+    } else {
+      startSec = slot.startAbs - firstSlotStart;
+      durationSec = safeDuration;
+    }
+
+    return {
+      timeSlotId: slot.timeSlotId,
+      startSec,
+      durationSec,
+      slotOrder: slot.slotOrder,
     };
   });
 
@@ -469,6 +573,11 @@ export const transcribeAndSave = async (
   const ext = path.extname(absolutePath);
 
   for (const seg of segments) {
+    if (!Number.isFinite(seg.startSec) || !Number.isFinite(seg.durationSec) || seg.durationSec <= 0) {
+      console.warn(`[Speech] Skipping slot ${seg.slotOrder} due to invalid segment timing: start=${seg.startSec}, duration=${seg.durationSec}`);
+      continue;
+    }
+
     // Skip if segment starts beyond audio duration
     if (seg.startSec >= totalDuration) {
       console.log(`[Speech] Slot ${seg.slotOrder} starts at ${seg.startSec}s which is beyond audio duration ${totalDuration}s — skipping`);
@@ -477,6 +586,10 @@ export const transcribeAndSave = async (
 
     // Clamp duration to not exceed audio end
     const effectiveDuration = Math.min(seg.durationSec, totalDuration - seg.startSec);
+    if (!Number.isFinite(effectiveDuration) || effectiveDuration <= 0) {
+      console.log(`[Speech] Slot ${seg.slotOrder} computed non-positive effective duration (${effectiveDuration}) — skipping`);
+      continue;
+    }
 
     const segmentFile = path.join(tempDir, `segment_${seg.slotOrder}${ext}`);
     console.log(`[Speech] 📌 Processing slot ${seg.slotOrder}/${segments.length}: start=${seg.startSec}s, duration=${effectiveDuration}s, time_slot_id=${seg.timeSlotId}`);
@@ -497,11 +610,36 @@ export const transcribeAndSave = async (
         totalSlots: segments.length,
       });
       console.log(`[Speech] 🔀 Splitting segment ${seg.slotOrder}...`);
+      console.log(`[Speech] Source file: ${denoisedPath} (exists: ${fs.existsSync(denoisedPath)})`);
+      console.log(`[Speech] Target segment: ${segmentFile}`);
+      console.log(`[Speech] Split params: start=${seg.startSec}s, duration=${effectiveDuration}s`);
+      
+      console.log(`[Speech] About to call splitAudioSegment...`);
       await splitAudioSegment(denoisedPath, segmentFile, seg.startSec, effectiveDuration);
-      console.log(`[Speech] ✂️ Segment split: ${path.basename(segmentFile)}`);
+      
+      console.log(`[Speech] ✂️ splitAudioSegment completed`);
+      const segmentExists = fs.existsSync(segmentFile);
+      console.log(`[Speech] Segment file exists check: ${segmentExists}`);
+      
+      if (!segmentExists) {
+        console.error(`[Speech] ❌ CRITICAL: Segment file was NOT created!`);
+        console.error(`[Speech] Expected path: ${segmentFile}`);
+        console.error(`[Speech] Files in temp_dir:`);
+        try {
+          const tempFiles = fs.readdirSync(tempDir);
+          console.error(`[Speech] Temp dir contents: ${JSON.stringify(tempFiles)}`);
+        } catch (e) {
+          console.error(`[Speech] Could not read temp dir: ${(e as any).message}`);
+        }
+        throw new Error(`Segment file not created: ${segmentFile}`);
+      }
+      
+      const segmentSize = (fs.statSync(segmentFile).size / 1024).toFixed(1);
+      console.log(`[Speech] ✂️ Segment split: ${path.basename(segmentFile)} (size: ${segmentSize}KB)`);
 
       // Transcribe segment
       console.log(`[Speech] 🗣️ Transcribing segment ${seg.slotOrder}...`);
+      console.log(`[Speech] Segment file to transcribe: ${segmentFile} (exists: ${fs.existsSync(segmentFile)})`);
       updateProgress(fileId, {
         status: 'transcribing',
         message: `جاري تحويل الحصة ${seg.slotOrder} من ${segments.length} إلى نص...`,
@@ -509,8 +647,20 @@ export const transcribeAndSave = async (
         currentSlot: seg.slotOrder,
         totalSlots: segments.length,
       });
-      const result = await transcribeAudio(segmentFile, fileId, { current: seg.slotOrder, total: segments.length });
-      console.log(`[Speech] ✅ Transcription result: ${result.text.substring(0, 100)}...`);
+      
+      
+      let result;
+      try {
+        console.log(`[Speech] Calling transcribeAudio...`);
+        result = await transcribeAudio(segmentFile, fileId, { current: seg.slotOrder, total: segments.length });
+        console.log(`[Speech] ✅ Transcription result received`);
+        console.log(`[Speech] Segment ${seg.slotOrder} text length: ${result.text.length} chars`);
+        console.log(`[Speech] First 200 chars: "${result.text.substring(0, 200)}"`);
+        console.log(`[Speech] Last 200 chars: "${result.text.substring(Math.max(0, result.text.length - 200))}"`);
+      } catch (transcribeErr) {
+        console.error(`[Speech] ❌ transcribeAudio threw error:`, transcribeErr);
+        throw transcribeErr;
+      }
 
       // Save to DB
       updateProgress(fileId, {
@@ -534,7 +684,11 @@ export const transcribeAndSave = async (
       results.push(speech);
     } catch (err) {
       console.error(`[Speech] ❌ Error processing slot ${seg.slotOrder}:`, err);
-      console.error(`[Speech] Error details:`, (err as any).message);
+      console.error(`[Speech] Error type: ${err instanceof Error ? err.name : typeof err}`);
+      console.error(`[Speech] Error message: ${(err as any).message}`);
+      console.error(`[Speech] Error status: ${(err as any).status}`);
+      console.error(`[Speech] Error code: ${(err as any).code}`);
+      console.error(`[Speech] Full error:`, JSON.stringify(err, null, 2));
       // Save a placeholder record so the time_slot link is preserved
       try {
         const speech = await saveSpeech(

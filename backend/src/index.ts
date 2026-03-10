@@ -17,6 +17,12 @@ import kpisRoutes from './routes/kpisRoutes.js';
 import evidencesRoutes from './routes/evidencesRoutes.js';
 import evaluationsRoutes from './routes/evaluationsRoutes.js';
 import scheduleRoutes from './routes/scheduleRoutes.js';
+import schoolsRoutes from './routes/schoolsRoutes.js';
+import teachersRoutes from './routes/teachersRoutes.js';
+import classesRoutes from './routes/classesRoutes.js';
+import subjectsRoutes from './routes/subjectsRoutes.js';
+import gradesRoutes from './routes/gradesRoutes.js';
+import sectionsRoutes from './routes/sectionsRoutes.js';
 
 // Import middleware
 import { errorHandler } from './middleware/auth.js';
@@ -97,6 +103,12 @@ app.use('/api/kpis', kpisRoutes);
 app.use('/api/evidences', evidencesRoutes);
 app.use('/api/evaluations', evaluationsRoutes);
 app.use('/api/schedule', scheduleRoutes);
+app.use('/api/schools', schoolsRoutes);
+app.use('/api/teachers', teachersRoutes);
+app.use('/api/classes', classesRoutes);
+app.use('/api/subjects', subjectsRoutes);
+app.use('/api/grades', gradesRoutes);
+app.use('/api/sections', sectionsRoutes);
 
 /**
  * 404 Handler - API endpoint not found

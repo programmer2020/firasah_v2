@@ -9,9 +9,9 @@ export const Classes = () => {
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
-    className: '',
-    roomNumber: '',
-    capacity: '',
+    grade_id: '',
+    section_id: '',
+    class_name: '',
   });
 
   useEffect(() => {
@@ -43,7 +43,7 @@ export const Classes = () => {
     e.preventDefault();
     try {
       await api.post('/classes', formData);
-      setFormData({ className: '', roomNumber: '', capacity: '' });
+      setFormData({ grade_id: '', section_id: '', class_name: '' });
       setShowForm(false);
       fetchClasses();
     } catch (err) {
@@ -68,20 +68,8 @@ export const Classes = () => {
       {/* Sidebar */}
       <Sidebar />
 
-      {/* Header */}
-      <header className="fixed top-0 right-0 left-0 bg-brand-600 text-white shadow-lg z-30">
-        <div className="px-4 py-6">
-          <div className="flex items-center justify-between">
-            <Link to="/dashboard" className="text-2xl font-outfit font-bold hover:opacity-90">
-              Firasah AI
-            </Link>
-            <span className="text-brand-100">Classes Management</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="pt-24 pl-64 transition-all duration-300">
-        <div className="max-w-7xl mx-auto px-4 py-8">
+      <main className="pt-6 pl-64 transition-all duration-300">
+        <div className="max-w-7xl mx-auto px-4 py-8 mx-6">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-outfit font-bold text-gray-900 dark:text-white">
             Classes Management
@@ -105,42 +93,44 @@ export const Classes = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Grade ID
+                </label>
+                <input
+                  type="number"
+                  name="grade_id"
+                  value={formData.grade_id}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
+                  placeholder="Enter grade ID"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Section ID
+                </label>
+                <input
+                  type="number"
+                  name="section_id"
+                  value={formData.section_id}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
+                  placeholder="Enter section ID"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Class Name
                 </label>
                 <input
                   type="text"
-                  name="className"
-                  value={formData.className}
+                  name="class_name"
+                  value={formData.class_name}
                   onChange={handleChange}
                   required
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                   placeholder="Enter class name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Room Number
-                </label>
-                <input
-                  type="text"
-                  name="roomNumber"
-                  value={formData.roomNumber}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
-                  placeholder="Enter room number"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Capacity
-                </label>
-                <input
-                  type="number"
-                  name="capacity"
-                  value={formData.capacity}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
-                  placeholder="Enter capacity"
                 />
               </div>
             </div>
@@ -166,10 +156,10 @@ export const Classes = () => {
                     Class Name
                   </th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Room Number
+                    Grade ID
                   </th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Capacity
+                    Section ID
                   </th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
                     Actions
@@ -180,24 +170,24 @@ export const Classes = () => {
                 {classes.length > 0 ? (
                   classes.map((classItem) => (
                     <tr
-                      key={classItem.id}
+                      key={classItem.class_id}
                       className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                     >
                       <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
-                        {classItem.className}
+                        {classItem.class_name}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                        {classItem.roomNumber}
+                        {classItem.grade_id}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                        {classItem.capacity}
+                        {classItem.section_id}
                       </td>
                       <td className="px-6 py-4 text-sm flex gap-2">
                         <button className="px-3 py-1 bg-brand-100 text-brand-600 rounded hover:bg-brand-200 transition-colors">
                           Edit
                         </button>
                         <button
-                          onClick={() => handleDelete(classItem.id)}
+                          onClick={() => handleDelete(classItem.class_id)}
                           className="px-3 py-1 bg-error-100 text-error-600 rounded hover:bg-error-200 transition-colors"
                         >
                           Delete

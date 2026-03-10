@@ -9,10 +9,10 @@ export const Schools = () => {
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    address: '',
-    phone: '',
-    email: '',
+    school_name: '',
+    school_code: '',
+    city: '',
+    country: '',
   });
 
   useEffect(() => {
@@ -44,7 +44,7 @@ export const Schools = () => {
     e.preventDefault();
     try {
       await api.post('/schools', formData);
-      setFormData({ name: '', address: '', phone: '', email: '' });
+      setFormData({ school_name: '', school_code: '', city: '', country: '' });
       setShowForm(false);
       fetchSchools();
     } catch (err) {
@@ -69,19 +69,8 @@ export const Schools = () => {
       {/* Sidebar */}
       <Sidebar />
 
-      {/* Header */}
-      <header className="fixed top-0 right-0 left-0 bg-brand-600 text-white shadow-lg z-30">
-        <div className="px-4 py-6">
-          <div className="flex items-center justify-between">
-            <Link to="/dashboard" className="text-2xl font-outfit font-bold hover:opacity-90">
-              Firasah AI
-            </Link>
-            <span className="text-brand-100">Schools Management</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="pt-24 pl-64 transition-all duration-300">
+      <main className="pt-6 pl-64 transition-all duration-300">
+        <div className="mx-6">
         {/* Header with Add Button */}
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-outfit font-bold text-gray-900 dark:text-white">
@@ -112,8 +101,8 @@ export const Schools = () => {
                 </label>
                 <input
                   type="text"
-                  name="name"
-                  value={formData.name}
+                  name="school_name"
+                  value={formData.school_name}
                   onChange={handleChange}
                   required
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
@@ -122,41 +111,41 @@ export const Schools = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Address
+                  School Code
                 </label>
                 <input
                   type="text"
-                  name="address"
-                  value={formData.address}
+                  name="school_code"
+                  value={formData.school_code}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
-                  placeholder="Enter school address"
+                  placeholder="Enter school code"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Phone
+                  City
                 </label>
                 <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
+                  type="text"
+                  name="city"
+                  value={formData.city}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
-                  placeholder="Enter phone number"
+                  placeholder="Enter city"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Email
+                  Country
                 </label>
                 <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
+                  type="text"
+                  name="country"
+                  value={formData.country}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
-                  placeholder="Enter email address"
+                  placeholder="Enter country"
                 />
               </div>
             </div>
@@ -180,16 +169,16 @@ export const Schools = () => {
               <thead>
                 <tr className="bg-brand-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Name
+                    School Name
                   </th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Address
+                    School Code
                   </th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Phone
+                    City
                   </th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Email
+                    Country
                   </th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
                     Actions
@@ -200,27 +189,27 @@ export const Schools = () => {
                 {schools.length > 0 ? (
                   schools.map((school) => (
                     <tr
-                      key={school.id}
+                      key={school.school_id}
                       className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                     >
                       <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
-                        {school.name}
+                        {school.school_name}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                        {school.address}
+                        {school.school_code}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                        {school.phone}
+                        {school.city}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                        {school.email}
+                        {school.country}
                       </td>
                       <td className="px-6 py-4 text-sm flex gap-2">
                         <button className="px-3 py-1 bg-brand-100 text-brand-600 rounded hover:bg-brand-200 transition-colors">
                           Edit
                         </button>
                         <button
-                          onClick={() => handleDelete(school.id)}
+                          onClick={() => handleDelete(school.school_id)}
                           className="px-3 py-1 bg-error-100 text-error-600 rounded hover:bg-error-200 transition-colors"
                         >
                           Delete
@@ -239,6 +228,7 @@ export const Schools = () => {
             </table>
           </div>
         )}
+        </div>
       </main>
     </div>
   );

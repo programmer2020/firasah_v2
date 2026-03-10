@@ -41,9 +41,9 @@ export const Dashboard = () => {
       <Sidebar />
 
       {/* Header */}
-      <header className="fixed top-0 right-0 left-0 bg-gradient-to-r from-brand-600 to-brand-600 text-white shadow-lg z-30">
+      <header className="fixed top-0 right-0 left-0 bg-white shadow-lg z-30">
         <div className="px-4 py-4 flex items-center justify-between">
-          <Link to="/dashboard" className="text-2xl md:text-3xl font-outfit font-bold hover:opacity-90">
+          <Link to="/dashboard" className="text-2xl md:text-3xl font-outfit font-bold text-gray-800 hover:opacity-90">
             Firasah AI
           </Link>
           
@@ -52,7 +52,7 @@ export const Dashboard = () => {
           <div className="relative">
             <button
               onClick={() => setShowMenu(!showMenu)}
-              className="flex items-center gap-2 text-sm font-medium hover:text-brand-100 transition-colors"
+              className="flex items-center gap-2 text-sm font-medium text-gray-800 hover:text-gray-600 transition-colors"
             >
               {user?.name || 'User'} ▼
             </button>
@@ -78,8 +78,8 @@ export const Dashboard = () => {
       </header>
 
       {/* Main Content */}
-      <main className="pt-24 pl-64 transition-all duration-300">
-        <div className="max-w-7xl mx-auto px-4 py-12">
+      <main className="pt-6 pl-64 transition-all duration-300">
+        <div className="max-w-7xl mx-auto px-4 py-12 mx-6">
           <div className="mb-8">
             <h1 className="text-4xl font-outfit font-bold text-gray-900 dark:text-white mb-2">
               Welcome, {user?.name}!

@@ -9,8 +9,7 @@ export const Sections = () => {
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    capacity: '',
+    section_name: '',
   });
 
   useEffect(() => {
@@ -42,7 +41,7 @@ export const Sections = () => {
     e.preventDefault();
     try {
       await api.post('/sections', formData);
-      setFormData({ name: '', capacity: '' });
+      setFormData({ section_name: '' });
       setShowForm(false);
       fetchSections();
     } catch (err) {
@@ -67,20 +66,8 @@ export const Sections = () => {
       {/* Sidebar */}
       <Sidebar />
 
-      {/* Header */}
-      <header className="fixed top-0 right-0 left-0 bg-brand-600 text-white shadow-lg z-30">
-        <div className="px-4 py-6">
-          <div className="flex items-center justify-between">
-            <Link to="/dashboard" className="text-2xl font-outfit font-bold hover:opacity-90">
-              Firasah AI
-            </Link>
-            <span className="text-brand-100">Sections Management</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="pt-24 pl-64 transition-all duration-300">
-        <div className="max-w-7xl mx-auto px-4 py-8">
+      <main className="pt-6 pl-64 transition-all duration-300">
+        <div className="max-w-7xl mx-auto px-4 py-8 mx-6">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-outfit font-bold text-gray-900 dark:text-white">
             Sections Management
@@ -108,25 +95,12 @@ export const Sections = () => {
                 </label>
                 <input
                   type="text"
-                  name="name"
-                  value={formData.name}
+                  name="section_name"
+                  value={formData.section_name}
                   onChange={handleChange}
                   required
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                   placeholder="Enter section name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Capacity
-                </label>
-                <input
-                  type="number"
-                  name="capacity"
-                  value={formData.capacity}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
-                  placeholder="Enter capacity"
                 />
               </div>
             </div>
@@ -149,10 +123,7 @@ export const Sections = () => {
               <thead>
                 <tr className="bg-brand-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Capacity
+                    Section Name
                   </th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
                     Actions
@@ -163,21 +134,18 @@ export const Sections = () => {
                 {sections.length > 0 ? (
                   sections.map((section) => (
                     <tr
-                      key={section.id}
+                      key={section.section_id}
                       className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                     >
                       <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
-                        {section.name}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                        {section.capacity}
+                        {section.section_name}
                       </td>
                       <td className="px-6 py-4 text-sm flex gap-2">
                         <button className="px-3 py-1 bg-brand-100 text-brand-600 rounded hover:bg-brand-200 transition-colors">
                           Edit
                         </button>
                         <button
-                          onClick={() => handleDelete(section.id)}
+                          onClick={() => handleDelete(section.section_id)}
                           className="px-3 py-1 bg-error-100 text-error-600 rounded hover:bg-error-200 transition-colors"
                         >
                           Delete
@@ -187,7 +155,7 @@ export const Sections = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="3" className="px-6 py-8 text-center text-gray-600 dark:text-gray-400">
+                    <td colSpan="2" className="px-6 py-8 text-center text-gray-600 dark:text-gray-400">
                       No sections found. Add one to get started!
                     </td>
                   </tr>

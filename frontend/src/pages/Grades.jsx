@@ -9,8 +9,9 @@ export const Grades = () => {
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    level: '',
+    school_id: 1,
+    grade_name: '',
+    grade_level: '',
   });
 
   useEffect(() => {
@@ -42,7 +43,7 @@ export const Grades = () => {
     e.preventDefault();
     try {
       await api.post('/grades', formData);
-      setFormData({ name: '', level: '' });
+      setFormData({ school_id: 1, grade_name: '', grade_level: '' });
       setShowForm(false);
       fetchGrades();
     } catch (err) {
@@ -67,20 +68,8 @@ export const Grades = () => {
       {/* Sidebar */}
       <Sidebar />
 
-      {/* Header */}
-      <header className="fixed top-0 right-0 left-0 bg-brand-600 text-white shadow-lg z-30">
-        <div className="px-4 py-6">
-          <div className="flex items-center justify-between">
-            <Link to="/dashboard" className="text-2xl font-outfit font-bold hover:opacity-90">
-              Firasah AI
-            </Link>
-            <span className="text-brand-100">Grades Management</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="pt-24 pl-64 transition-all duration-300">
-        <div className="max-w-7xl mx-auto px-4 py-8">
+      <main className="pt-6 pl-64 transition-all duration-300">
+        <div className="max-w-7xl mx-auto px-4 py-8 mx-6">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-outfit font-bold text-gray-900 dark:text-white">
             Grades Management
@@ -108,8 +97,8 @@ export const Grades = () => {
                 </label>
                 <input
                   type="text"
-                  name="name"
-                  value={formData.name}
+                  name="grade_name"
+                  value={formData.grade_name}
                   onChange={handleChange}
                   required
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
@@ -118,15 +107,15 @@ export const Grades = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Level
+                  Grade Level
                 </label>
                 <input
                   type="text"
-                  name="level"
-                  value={formData.level}
+                  name="grade_level"
+                  value={formData.grade_level}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
-                  placeholder="Enter level"
+                  placeholder="Enter grade level"
                 />
               </div>
             </div>
@@ -149,10 +138,10 @@ export const Grades = () => {
               <thead>
                 <tr className="bg-brand-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Name
+                    Grade Name
                   </th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Level
+                    Grade Level
                   </th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
                     Actions
@@ -163,21 +152,21 @@ export const Grades = () => {
                 {grades.length > 0 ? (
                   grades.map((grade) => (
                     <tr
-                      key={grade.id}
+                      key={grade.grade_id}
                       className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                     >
                       <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
-                        {grade.name}
+                        {grade.grade_name}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                        {grade.level}
+                        {grade.grade_level}
                       </td>
                       <td className="px-6 py-4 text-sm flex gap-2">
                         <button className="px-3 py-1 bg-brand-100 text-brand-600 rounded hover:bg-brand-200 transition-colors">
                           Edit
                         </button>
                         <button
-                          onClick={() => handleDelete(grade.id)}
+                          onClick={() => handleDelete(grade.grade_id)}
                           className="px-3 py-1 bg-error-100 text-error-600 rounded hover:bg-error-200 transition-colors"
                         >
                           Delete

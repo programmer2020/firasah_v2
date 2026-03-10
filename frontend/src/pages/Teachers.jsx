@@ -9,10 +9,10 @@ export const Teachers = () => {
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    subject: '',
+    school_id: 1,
+    teacher_name: '',
+    teacher_email: '',
+    teacher_phone: '',
   });
 
   useEffect(() => {
@@ -44,7 +44,7 @@ export const Teachers = () => {
     e.preventDefault();
     try {
       await api.post('/teachers', formData);
-      setFormData({ name: '', email: '', phone: '', subject: '' });
+      setFormData({ school_id: 1, teacher_name: '', teacher_email: '', teacher_phone: '' });
       setShowForm(false);
       fetchTeachers();
     } catch (err) {
@@ -70,20 +70,8 @@ export const Teachers = () => {
       {/* Sidebar */}
       <Sidebar />
 
-      {/* Header */}
-      <header className="fixed top-0 right-0 left-0 bg-brand-600 text-white shadow-lg z-30">
-        <div className="px-4 py-6">
-          <div className="flex items-center justify-between">
-            <Link to="/dashboard" className="text-2xl font-outfit font-bold hover:opacity-90">
-              Firasah AI
-            </Link>
-            <span className="text-brand-100">Teachers Management</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="pt-24 pl-64 transition-all duration-300">
-        <div className="max-w-7xl mx-auto px-4 py-8">
+      <main className="pt-6 pl-64 transition-all duration-300">
+        <div className="max-w-7xl mx-auto px-4 py-8 mx-6">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-outfit font-bold text-gray-900 dark:text-white">
             Teachers Management
@@ -111,8 +99,8 @@ export const Teachers = () => {
                 </label>
                 <input
                   type="text"
-                  name="name"
-                  value={formData.name}
+                  name="teacher_name"
+                  value={formData.teacher_name}
                   onChange={handleChange}
                   required
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
@@ -125,8 +113,8 @@ export const Teachers = () => {
                 </label>
                 <input
                   type="email"
-                  name="email"
-                  value={formData.email}
+                  name="teacher_email"
+                  value={formData.teacher_email}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                   placeholder="Enter email"
@@ -138,24 +126,11 @@ export const Teachers = () => {
                 </label>
                 <input
                   type="tel"
-                  name="phone"
-                  value={formData.phone}
+                  name="teacher_phone"
+                  value={formData.teacher_phone}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                   placeholder="Enter phone number"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Subject
-                </label>
-                <input
-                  type="text"
-                  name="subject"
-                  value={formData.subject}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
-                  placeholder="Enter subject"
                 />
               </div>
             </div>
@@ -178,16 +153,13 @@ export const Teachers = () => {
               <thead>
                 <tr className="bg-brand-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Name
+                    Teacher Name
                   </th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
                     Email
                   </th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
                     Phone
-                  </th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Subject
                   </th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
                     Actions
@@ -198,27 +170,24 @@ export const Teachers = () => {
                 {teachers.length > 0 ? (
                   teachers.map((teacher) => (
                     <tr
-                      key={teacher.id}
+                      key={teacher.teacher_id}
                       className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                     >
                       <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
-                        {teacher.name}
+                        {teacher.teacher_name}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                        {teacher.email}
+                        {teacher.teacher_email}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                        {teacher.phone}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                        {teacher.subject}
+                        {teacher.teacher_phone}
                       </td>
                       <td className="px-6 py-4 text-sm flex gap-2">
                         <button className="px-3 py-1 bg-brand-100 text-brand-600 rounded hover:bg-brand-200 transition-colors">
                           Edit
                         </button>
                         <button
-                          onClick={() => handleDelete(teacher.id)}
+                          onClick={() => handleDelete(teacher.teacher_id)}
                           className="px-3 py-1 bg-error-100 text-error-600 rounded hover:bg-error-200 transition-colors"
                         >
                           Delete

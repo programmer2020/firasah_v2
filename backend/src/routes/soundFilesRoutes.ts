@@ -17,6 +17,7 @@ import {
 } from '../services/soundFilesService.js';
 import { transcribeAndSave, convertVideoToAudio, getSpeechByFileId } from '../services/speechService.js';
 import { getProgress, addSSEClient, updateProgress } from '../services/progressService.js';
+import { getEvaluationResults, generateEvaluationReport, testEvaluation, getEvaluationsWithFilters, exportEvaluationToJSON, generateComprehensiveReport } from '../services/evaluationsService.js';
 
 // Configure multer for audio uploads
 const uploadDir = path.join(process.cwd(), 'uploads', 'audio');
@@ -264,6 +265,120 @@ router.get('/', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: error instanceof Error ? error.message : 'Failed to retrieve sound files',
+    });
+  }
+});
+
+/**
+ * GET /api/sound-files/:id/evaluation/report
+ * Get grouped evaluation report by domain
+ * @swagger
+ * /sound-files/{id}/evaluation/report:
+ *   get:
+ *     summary: Get evaluation report grouped by teaching domain
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Evaluation report retrieved successfully
+ */
+router.get('/:id/evaluation/report', async (req: Request, res: Response) => {
+  try {
+    const fileId = parseInt(req.params.id as string);
+
+    if (!fileId || isNaN(fileId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid file ID',
+      });
+    }
+
+    const soundFile = await getSoundFileById(fileId);
+    if (!soundFile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sound file not found',
+      });
+    }
+
+    const report = await generateEvaluationReport(fileId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Evaluation report generated successfully',
+      data: {
+        file_id: fileId,
+        filename: soundFile.filename,
+        domains: report,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to generate evaluation report',
+    });
+  }
+});
+
+/**
+ * GET /api/sound-files/:id/evaluation
+ * Get evaluation results for a sound file
+ * @swagger
+ * /sound-files/{id}/evaluation:
+ *   get:
+ *     summary: Get evaluation results for a sound file
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Evaluation results retrieved successfully
+ */
+router.get('/:id/evaluation', async (req: Request, res: Response) => {
+  try {
+    const fileId = parseInt(req.params.id as string);
+
+    if (!fileId || isNaN(fileId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid file ID',
+      });
+    }
+
+    const soundFile = await getSoundFileById(fileId);
+    if (!soundFile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sound file not found',
+      });
+    }
+
+    const evaluations = await getEvaluationResults(fileId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Evaluation results retrieved successfully',
+      data: {
+        file_id: fileId,
+        filename: soundFile.filename,
+        evaluations,
+        summary: {
+          total_kpis_evaluated: evaluations.length,
+          evidence_found: evaluations.filter(e => e.status !== 'Insufficient').length,
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to retrieve evaluation results',
     });
   }
 });
@@ -565,6 +680,134 @@ router.post('/:id/retranscribe', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: error instanceof Error ? error.message : 'Failed to start re-transcription',
+    });
+  }
+});
+
+/**
+ * POST /api/sound-files/test/evaluate
+ * Test evaluation endpoint - evaluate any text directly
+ */
+router.post('/test/evaluate', async (req: Request, res: Response) => {
+  try {
+    const { text, description } = req.body;
+
+    if (!text || text.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Text is required for evaluation',
+      });
+    }
+
+    const result = await testEvaluation(text, description);
+
+    res.status(200).json({
+      success: true,
+      message: 'Test evaluation completed successfully',
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to perform test evaluation',
+    });
+  }
+});
+
+/**
+ * GET /api/sound-files/evaluations/search
+ * Get evaluations with filters and pagination
+ */
+router.get('/evaluations/search', async (req: Request, res: Response) => {
+  try {
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+    const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;
+    const search = (req.query.search as string) || '';
+    const status = (req.query.status as string) || '';
+    const domain = (req.query.domain as string) || '';
+    const fileId = req.query.fileId ? parseInt(req.query.fileId as string) : undefined;
+    const orderBy = (req.query.orderBy as 'date' | 'domain' | 'status') || 'date';
+    const orderDirection = (req.query.orderDirection as 'ASC' | 'DESC') || 'DESC';
+
+    const result = await getEvaluationsWithFilters({
+      limit,
+      offset,
+      search,
+      status,
+      domain,
+      fileId,
+      orderBy,
+      orderDirection,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Evaluations retrieved successfully',
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to retrieve evaluations',
+    });
+  }
+});
+
+/**
+ * GET /api/sound-files/:id/evaluation/export
+ * Export evaluation to JSON
+ */
+router.get('/:id/evaluation/export', async (req: Request, res: Response) => {
+  try {
+    const fileId = parseInt(req.params.id as string);
+
+    if (!fileId || isNaN(fileId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid file ID',
+      });
+    }
+
+    const result = await exportEvaluationToJSON(fileId);
+
+    // Return as downloadable JSON
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="evaluation_${fileId}_${new Date().toISOString().slice(0, 10)}.json"`);
+    res.status(200).send(JSON.stringify(result.data, null, 2));
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to export evaluation',
+    });
+  }
+});
+
+/**
+ * GET /api/sound-files/:id/evaluation/report/comprehensive
+ * Generate comprehensive evaluation report
+ */
+router.get('/:id/evaluation/report/comprehensive', async (req: Request, res: Response) => {
+  try {
+    const fileId = parseInt(req.params.id as string);
+
+    if (!fileId || isNaN(fileId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid file ID',
+      });
+    }
+
+    const result = await generateComprehensiveReport(fileId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Comprehensive report generated successfully',
+      data: result.data,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to generate comprehensive report',
     });
   }
 });

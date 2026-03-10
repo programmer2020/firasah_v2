@@ -1,50 +1,112 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
+// Material Design Icon Components
+const IconSchool = () => (
+  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M12 3L2 9v2h20V9L12 3zm0 4.18V7.82L6.9 10.5h10.2L12 7.18zM2 20h20v2H2z" />
+  </svg>
+);
+
+const IconPeople = () => (
+  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M9 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0-6c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 7c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4zm6 5H3v-2c0-1.5 3.58-2.5 6-2.5s6 1 6 2.5v2z" />
+  </svg>
+);
+
+const IconBooks = () => (
+  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M19 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 16H5V4h14v14zm-5.04-6.71l-2.75 3.54-2.16-2.66c-.23-.29-.61-.37-.92-.15-.31.21-.38.56-.15.87l2.92 3.58c.23.29.61.37.92.15l3.54-4.58c.23-.29.14-.65-.15-.92-.29-.23-.65-.14-.92.15z" />
+  </svg>
+);
+
+const IconEdit = () => (
+  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" />
+    <path d="M20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+  </svg>
+);
+
+const IconChart = () => (
+  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-3-5h2V7h-2v7zm-4 0h2V9h-2v5zm-4 0h2v-3H8v3z" />
+  </svg>
+);
+
+const IconList = () => (
+  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M15 5H5v2h10V5zm0 8H5v2h10v-2zM5 16h10v-2H5v2zM20 5h-2v6h2V5zm0 8h-2v2h2v-2z" />
+  </svg>
+);
+
+const IconMic = () => (
+  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+    <path d="M17 16c0 2.76-2.24 5-5 5s-5-2.24-5-5h-2c0 3.87 3.13 7 7 7s7-3.13 7-7h-2z" />
+  </svg>
+);
+
+const IconCalendar = () => (
+  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z" />
+  </svg>
+);
+
+const IconHome = () => (
+  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+  </svg>
+);
+
 export const Sidebar = () => {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(true);
 
   const menuItems = [
     {
+      label: 'Dashboard',
+      href: '/dashboard',
+      icon: IconHome,
+    },
+    {
       label: 'Schools',
       href: '/schools',
-      icon: '🏫',
+      icon: IconSchool,
     },
     {
       label: 'Teachers',
       href: '/teachers',
-      icon: '👨‍🏫',
+      icon: IconPeople,
     },
     {
       label: 'Classes',
       href: '/classes',
-      icon: '📚',
+      icon: IconBooks,
     },
     {
       label: 'Subjects',
       href: '/subjects',
-      icon: '✏️',
+      icon: IconEdit,
     },
     {
       label: 'Grades',
       href: '/grades',
-      icon: '📊',
+      icon: IconChart,
     },
     {
       label: 'Sections',
       href: '/sections',
-      icon: '📋',
+      icon: IconList,
     },
     {
       label: 'Audio Upload',
       href: '/audio-upload',
-      icon: '🎙️',
+      icon: IconMic,
     },
     {
       label: 'الجدول الدراسي',
       href: '/schedule',
-      icon: '📅',
+      icon: IconCalendar,
     },
   ];
 
@@ -73,20 +135,23 @@ export const Sidebar = () => {
 
       {/* Menu Items */}
       <nav className="px-4 py-6 space-y-2">
-        {menuItems.map((item) => (
-          <Link
-            key={item.label}
-            to={item.href}
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-              isActive(item.href)
-                ? 'bg-brand-600 text-white shadow-md'
-                : 'text-gray-700 dark:text-gray-300 hover:bg-brand-50 dark:hover:bg-brand-900/20'
-            }`}
-          >
-            <span className="text-xl">{item.icon}</span>
-            {isOpen && <span className="font-medium text-sm">{item.label}</span>}
-          </Link>
-        ))}
+        {menuItems.map((item) => {
+          const IconComponent = item.icon;
+          return (
+            <Link
+              key={item.label}
+              to={item.href}
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                isActive(item.href)
+                  ? 'bg-gray-300 text-gray-900 shadow-md dark:bg-gray-600 dark:text-white'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              <IconComponent />
+              {isOpen && <span className="font-medium text-sm">{item.label}</span>}
+            </Link>
+          );
+        })}
       </nav>
 
     </aside>

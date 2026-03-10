@@ -280,3 +280,35 @@ VALUES
 (1,2,2,2), -- Sunday 8-9 Science Grade 6A
 (1,3,3,3), -- Monday 7-8 English Grade 6A
 (2,1,1,4); -- Sunday 7-8 Math Grade 6B
+
+
+/* ============================================================
+KPI DOMAINS TABLE - Teaching Evaluation Framework
+============================================================ */
+
+CREATE TABLE kpi_domains (
+    domain_id SERIAL PRIMARY KEY,
+    domain_code VARCHAR(20) NOT NULL UNIQUE,
+    domain_name VARCHAR(255) NOT NULL,
+    domain_description TEXT,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+/* ============================================================
+KPI DOMAINS - INSERT DATA
+============================================================ */
+
+INSERT INTO kpi_domains (domain_code, domain_name, domain_description, sort_order) 
+VALUES 
+    ('D1', 'إعداد وتنفيذ خطة التعلم داخل الحصة', 'Planning and implementing learning strategies within the classroom session', 1),
+    ('D2', 'تنوع استراتيجيات التدريس', 'Diversity of teaching strategies and methods', 2),
+    ('D3', 'تهيئة البيئة التعليمية', 'Preparing and organizing the educational environment', 3),
+    ('D4', 'الإدارة الصفية', 'Classroom management and organization', 4),
+    ('D5', 'تنوع أساليب التقويم داخل الحصة', 'Diversity of assessment methods within the session', 5),
+    ('D6', 'تحليل مشاركات الطلاب وتشخيص مستوياتهم', 'Analyzing student participation and diagnosing their levels', 6),
+    ('D7', 'توظيف تقنيات ووسائل التعلم المناسبة', 'Utilizing appropriate learning technologies and tools', 7),
+    ('D8', 'تحسين نتائج المتعلمين', 'Improving learner outcomes and achievement', 8)
+ON CONFLICT (domain_code) DO NOTHING;

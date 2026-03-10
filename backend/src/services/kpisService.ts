@@ -128,3 +128,121 @@ export const getKPIsByCreator = async (createdBy: string) => {
     throw error;
   }
 };
+
+/**
+ * Get all KPI domains
+ * @returns Promise with array of domains
+ */
+export const getAllKPIDomains = async () => {
+  try {
+    const query = `
+      SELECT 
+        domain_id,
+        domain_code,
+        domain_name,
+        domain_description,
+        sort_order,
+        created_at,
+        updated_at
+      FROM kpi_domains
+      ORDER BY sort_order ASC
+    `;
+    return await getMany(query);
+  } catch (error) {
+    console.error('Error fetching KPI domains:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get KPI domain by ID
+ * @param domainId Domain ID
+ * @returns Promise with single domain
+ */
+export const getKPIDomainById = async (domainId: number) => {
+  try {
+    const query = `
+      SELECT 
+        domain_id,
+        domain_code,
+        domain_name,
+        domain_description,
+        sort_order,
+        created_at,
+        updated_at
+      FROM kpi_domains
+      WHERE domain_id = $1
+    `;
+    return await getOne(query, [domainId]);
+  } catch (error) {
+    console.error('Error fetching KPI domain:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get KPIs organized by domain
+ * @returns Promise with domains and their associated KPIs
+ */
+export const getKPIsGroupedByDomain = async () => {
+  try {
+    const query = `
+      SELECT 
+        d.domain_id,
+        d.domain_code,
+        d.domain_name,
+        d.domain_description,
+        d.sort_order,
+        json_agg(
+          json_build_object(
+            'kpi_id', k.kpi_id,
+            'kpi_code', k.kpi_code,
+            'kpi_name', k.kpi_name,
+            'kpi_description', k.kpi_description,
+            'createdAt', k.createdAt,
+            'createdBy', k.createdBy,
+            'note', k.note
+          ) ORDER BY k.kpi_code
+        ) as kpis
+      FROM kpi_domains d
+      LEFT JOIN kpis k ON d.domain_id = k.domain_id
+      GROUP BY d.domain_id, d.domain_code, d.domain_name, d.domain_description, d.sort_order
+      ORDER BY d.sort_order ASC
+    `;
+    return await getMany(query);
+  } catch (error) {
+    console.error('Error fetching KPIs grouped by domain:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get KPIs for a specific domain
+ * @param domainId Domain ID
+ * @returns Promise with KPIs for that domain
+ */
+export const getKPIsByDomain = async (domainId: number) => {
+  try {
+    const query = `
+      SELECT 
+        k.kpi_id,
+        k.domain_id,
+        k.kpi_code,
+        k.kpi_name,
+        k.kpi_description,
+        k.createdAt,
+        k.createdBy,
+        k.note,
+        d.domain_name,
+        d.domain_code
+      FROM kpis k
+      JOIN kpi_domains d ON k.domain_id = d.domain_id
+      WHERE k.domain_id = $1
+      ORDER BY k.kpi_code ASC
+    `;
+    return await getMany(query, [domainId]);
+  } catch (error) {
+    console.error('Error fetching KPIs by domain:', error);
+    throw error;
+  }
+};
