@@ -3,13 +3,32 @@
  * Provides utility functions for database operations
  */
 
-import pool from '../config/database.js';
+import { getPool } from '../config/database-manager.js';
 import { QueryResult, PoolClient } from 'pg';
 
 interface QueryOptions {
   values?: any[];
   timeout?: number;
 }
+
+/**
+ * Safe query wrapper that retries if pool was ended
+ */
+const executeWithRetry = async (
+  fn: (pool: any) => Promise<any>,
+  retries: number = 1
+): Promise<any> => {
+  try {
+    const pool = getPool();
+    return await fn(pool);
+  } catch (error: any) {
+    if (retries > 0 && error.message?.includes('pool')) {
+      console.warn('Pool error detected, retrying with fresh pool...');
+      return executeWithRetry(fn, retries - 1);
+    }
+    throw error;
+  }
+};
 
 /**
  * Execute a single query
@@ -22,8 +41,7 @@ export const executeQuery = async (
   values?: any[]
 ): Promise<QueryResult> => {
   try {
-    const result = await pool.query(query, values);
-    return result;
+    return await executeWithRetry((pool) => pool.query(query, values));
   } catch (error) {
     console.error('Database Query Error:', error);
     throw error;
@@ -38,7 +56,7 @@ export const executeQuery = async (
  */
 export const getOne = async (query: string, values?: any[]) => {
   try {
-    const result = await pool.query(query, values);
+    const result = await executeWithRetry((pool) => pool.query(query, values));
     return result.rows[0] || null;
   } catch (error) {
     console.error('Database Get One Error:', error);
@@ -54,7 +72,7 @@ export const getOne = async (query: string, values?: any[]) => {
  */
 export const getMany = async (query: string, values?: any[]) => {
   try {
-    const result = await pool.query(query, values);
+    const result = await executeWithRetry((pool) => pool.query(query, values));
     return result.rows;
   } catch (error) {
     console.error('Database Get Many Error:', error);
@@ -80,7 +98,7 @@ export const insert = async (tableName: string, data: Record<string, any>) => {
       RETURNING *;
     `;
     
-    const result = await pool.query(query, values);
+    const result = await executeWithRetry((pool) => pool.query(query, values));
     return result.rows[0];
   } catch (error) {
     console.error('Database Insert Error:', error);
@@ -121,7 +139,7 @@ export const update = async (
       RETURNING *;
     `;
     
-    const result = await pool.query(query, allValues);
+    const result = await executeWithRetry((pool) => pool.query(query, allValues));
     return result.rows[0];
   } catch (error) {
     console.error('Database Update Error:', error);
@@ -148,7 +166,7 @@ export const deleteRecord = async (
       RETURNING *;
     `;
     
-    const result = await pool.query(query, whereValues);
+    const result = await executeWithRetry((pool) => pool.query(query, whereValues));
     return result.rows[0] || null;
   } catch (error) {
     console.error('Database Delete Error:', error);
@@ -173,7 +191,7 @@ export const getCount = async (
       ? `SELECT COUNT(*) as count FROM ${tableName} WHERE ${whereClause};`
       : `SELECT COUNT(*) as count FROM ${tableName};`;
     
-    const result = await pool.query(query, whereValues);
+    const result = await executeWithRetry((pool) => pool.query(query, whereValues));
     return parseInt(result.rows[0].count, 10);
   } catch (error) {
     console.error('Database Count Error:', error);
@@ -189,7 +207,7 @@ export const getCount = async (
 export const transaction = async (
   callback: (client: PoolClient) => Promise<any>
 ) => {
-  const client = await pool.connect();
+  const client = await getPool().connect();
   try {
     await client.query('BEGIN');
     const result = await callback(client);
@@ -217,7 +235,7 @@ export const tableExists = async (tableName: string): Promise<boolean> => {
         WHERE table_name = $1
       );
     `;
-    const result = await pool.query(query, [tableName]);
+    const result = await executeWithRetry((pool) => pool.query(query, [tableName]));
     return result.rows[0].exists;
   } catch (error) {
     console.error('Table Exists Check Error:', error);
@@ -245,8 +263,8 @@ export const paginate = async (
     const countQuery = `SELECT COUNT(*) FROM (${query}) as count_table;`;
     
     const [dataResult, countResult] = await Promise.all([
-      pool.query(paginatedQuery, [...(values || []), limit, offset]),
-      pool.query(countQuery, values),
+      executeWithRetry((pool) => pool.query(paginatedQuery, [...(values || []), limit, offset])),
+      executeWithRetry((pool) => pool.query(countQuery, values)),
     ]);
     
     const total = parseInt(countResult.rows[0].count, 10);

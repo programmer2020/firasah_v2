@@ -23,6 +23,7 @@ import classesRoutes from './routes/classesRoutes.js';
 import subjectsRoutes from './routes/subjectsRoutes.js';
 import gradesRoutes from './routes/gradesRoutes.js';
 import sectionsRoutes from './routes/sectionsRoutes.js';
+import configRoutes from './routes/configRoutes.js';
 
 // Import middleware
 import { errorHandler } from './middleware/auth.js';
@@ -98,6 +99,7 @@ app.get('/swagger.json', (req: Request, res: Response) => {
  */
 app.use('/', healthRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/config', configRoutes);
 app.use('/api/sound-files', soundFilesRoutes);
 app.use('/api/kpis', kpisRoutes);
 app.use('/api/evidences', evidencesRoutes);

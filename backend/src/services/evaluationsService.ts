@@ -378,7 +378,7 @@ export const evaluateSpeechAgainstKPIs = async (
     }
 
     // Build KPI reference text for OpenAI prompt
-    const kpiReference = allKPIs.map((kpi) => {
+    const kpiReference = allKPIs.map((kpi: any) => {
       return `${kpi.kpi_code}: ${kpi.kpi_name}\n   التفاصيل: ${kpi.kpi_description}`;
     }).join('\n\n');
 
@@ -494,7 +494,7 @@ ${kpiReference}
         }
 
         // Find KPI in database
-        const kpiRecord = allKPIs.find((kpi) => kpi.kpi_code.toLowerCase() === kpiCode.toLowerCase());
+        const kpiRecord = allKPIs.find((kpi: any) => kpi.kpi_code.toLowerCase() === kpiCode.toLowerCase());
         if (!kpiRecord) {
           console.warn(`[Evaluation] ⚠️ KPI not found in database: ${kpiCode}`);
           continue;
@@ -811,9 +811,9 @@ export const exportEvaluationToJSON = async (fileId: number) => {
         report,
         summary: {
           totalEvidences: evaluation.length,
-          strongCount: evaluation.filter((e) => e.evidence_txt?.includes('[Strong]')).length,
-          emergingCount: evaluation.filter((e) => e.evidence_txt?.includes('[Emerging]')).length,
-          limitedCount: evaluation.filter((e) => e.evidence_txt?.includes('[Limited]')).length,
+          strongCount: evaluation.filter((e: any) => e.evidence_txt?.includes('[Strong]')).length,
+          emergingCount: evaluation.filter((e: any) => e.evidence_txt?.includes('[Emerging]')).length,
+          limitedCount: evaluation.filter((e: any) => e.evidence_txt?.includes('[Limited]')).length,
         },
       },
     };
@@ -832,10 +832,10 @@ export const generateComprehensiveReport = async (fileId: number) => {
     const report = await generateEvaluationReport(fileId);
 
     // Calculate statistics
-    const strongCount = evaluations.filter((e) => e.evidence_txt?.includes('[Strong]')).length;
-    const emergingCount = evaluations.filter((e) => e.evidence_txt?.includes('[Emerging]')).length;
-    const limitedCount = evaluations.filter((e) => e.evidence_txt?.includes('[Limited]')).length;
-    const insufficientCount = evaluations.filter((e) => e.evidence_txt?.includes('[Insufficient]')).length;
+    const strongCount = evaluations.filter((e: any) => e.evidence_txt?.includes('[Strong]')).length;
+    const emergingCount = evaluations.filter((e: any) => e.evidence_txt?.includes('[Emerging]')).length;
+    const limitedCount = evaluations.filter((e: any) => e.evidence_txt?.includes('[Limited]')).length;
+    const insufficientCount = evaluations.filter((e: any) => e.evidence_txt?.includes('[Insufficient]')).length;
 
     // Calculate percentages
     const total = evaluations.length || 1;

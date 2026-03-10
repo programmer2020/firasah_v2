@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import '../styles/EvaluationDashboard.css';
+import ProtectedLayout from '../components/ProtectedLayout';
 
 const EvaluationDashboard = () => {
   const [fileId, setFileId] = useState('45'); // Default test file ID
@@ -108,7 +109,8 @@ const EvaluationDashboard = () => {
   };
 
   return (
-    <div className="evaluation-dashboard" dir="rtl">
+    <ProtectedLayout>
+      <div className="evaluation-dashboard" dir="rtl">
       {/* Input Section */}
       <div className="input-section">
         <div className="file-input">
@@ -312,7 +314,8 @@ const EvaluationDashboard = () => {
           <p className="hint">تأكد من رقم الملف وحاول مرة أخرى</p>
         </div>
       )}
-    </div>
+      </div>
+    </ProtectedLayout>
   );
 };
 

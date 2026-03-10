@@ -371,7 +371,7 @@ router.get('/:id/evaluation', async (req: Request, res: Response) => {
         evaluations,
         summary: {
           total_kpis_evaluated: evaluations.length,
-          evidence_found: evaluations.filter(e => e.status !== 'Insufficient').length,
+          evidence_found: evaluations.filter((e: any) => e.status !== 'Insufficient').length,
         },
       },
     });

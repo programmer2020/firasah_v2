@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import DatabaseSwitch from '../components/DatabaseSwitch';
 
 export const Login = () => {
   const [email, setEmail] = useState('');
@@ -47,7 +48,11 @@ export const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4 transition-colors duration-300">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4 transition-colors duration-300 relative">
+      {/* Database Switch - Top Right */}
+      <div className="fixed top-4 right-4 z-50">
+        <DatabaseSwitch />
+      </div>
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">

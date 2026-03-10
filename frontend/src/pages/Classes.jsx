@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
-import Sidebar from '../components/Sidebar';
+import ProtectedLayout from '../components/ProtectedLayout';
 
 export const Classes = () => {
   const [classes, setClasses] = useState([]);
@@ -64,12 +64,8 @@ export const Classes = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Sidebar */}
-      <Sidebar />
-
-      <main className="pt-6 pl-64 transition-all duration-300">
-        <div className="max-w-7xl mx-auto px-4 py-8 mx-6">
+    <ProtectedLayout>
+      <div>
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-outfit font-bold text-gray-900 dark:text-white">
             Classes Management
@@ -206,9 +202,8 @@ export const Classes = () => {
             </table>
           </div>
         )}
-        </div>
-      </main>
-    </div>
+      </div>
+    </ProtectedLayout>
   );
 };
 

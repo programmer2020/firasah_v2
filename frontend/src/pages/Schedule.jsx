@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import Sidebar from '../components/Sidebar';
+import ProtectedLayout from '../components/ProtectedLayout';
 import api from '../services/api';
 
 const DAYS = [
@@ -135,9 +135,8 @@ export default function Schedule() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50" dir="rtl">
-      <Sidebar />
-      <div className="flex-1 p-6">
+    <ProtectedLayout>
+      <div>
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-brand-600">الجدول الدراسي</h1>
@@ -340,6 +339,6 @@ export default function Schedule() {
           </>
         )}
       </div>
-    </div>
+    </ProtectedLayout>
   );
 }

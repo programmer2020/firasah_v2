@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
-import Sidebar from '../components/Sidebar';
+import ProtectedLayout from '../components/ProtectedLayout';
 import '../pages/AudioUpload.css';
 
 export const AudioUpload = () => {
@@ -229,12 +229,8 @@ export const AudioUpload = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Sidebar */}
-      <Sidebar />
-
-      <main className="pt-6 pl-64 transition-all duration-300">
-        <div className="max-w-4xl mx-auto px-4 py-8 mx-6">
+    <ProtectedLayout>
+      <div>
         {/* Page Title */}
         <div className="mb-8">
           <h1 className="text-3xl font-outfit font-bold text-gray-900 dark:text-white mb-2">
@@ -559,9 +555,8 @@ export const AudioUpload = () => {
             </div>
           </div>
         )}
-        </div>
-      </main>
-    </div>
+      </div>
+    </ProtectedLayout>
   );
 };
 

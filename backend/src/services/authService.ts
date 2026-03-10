@@ -5,7 +5,7 @@
 
 import jwt from 'jsonwebtoken';
 import bcryptjs from 'bcryptjs';
-import { getOne, insert, update } from '../helpers/database.js';
+import { getOne, insert, update, executeQuery } from '../helpers/database.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_secret_key';
 const JWT_EXPIRE = process.env.JWT_EXPIRE || '7d';
@@ -22,6 +22,16 @@ interface JWTPayload {
   iat?: number;
   exp?: number;
 }
+
+const syncUsersIdSequence = async () => {
+  await executeQuery(`
+    SELECT setval(
+      pg_get_serial_sequence('users', 'id'),
+      COALESCE((SELECT MAX(id) FROM users), 0) + 1,
+      false
+    );
+  `);
+};
 
 /**
  * Hash password
@@ -92,14 +102,30 @@ export const registerUser = async (credentials: UserCredentials) => {
     // Hash password
     const hashedPassword = await hashPassword(credentials.password);
 
+    // Ensure sequence is aligned with current max(id) after migrations/imports
+    await syncUsersIdSequence();
+
     // Create user
-    const user = await insert('users', {
+    const createUser = () => insert('users', {
       email: credentials.email,
       password: hashedPassword,
       name: credentials.name || 'Unknown User',
       created_at: new Date(),
       updated_at: new Date(),
     });
+
+    let user;
+    try {
+      user = await createUser();
+    } catch (err: any) {
+      // Retry once after reseeding sequence if primary key sequence drift exists
+      if (String(err?.message || '').includes('users_pkey')) {
+        await syncUsersIdSequence();
+        user = await createUser();
+      } else {
+        throw err;
+      }
+    }
 
     // Remove password from response
     const { password, ...userWithoutPassword } = user;
