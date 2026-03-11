@@ -368,6 +368,38 @@ export const evaluateSpeechAgainstKPIs = async (
   try {
     console.log(`[Evaluation] Starting evaluation for file_id=${fileId}, text_length=${speechText.length}`);
 
+    // Get timeslot information for this file
+    let slotStartTime: Date | null = null;
+    let slotEndTime: Date | null = null;
+    
+    try {
+      const speechQuery = `
+        SELECT s.time_slot_id, ts.start_time, ts.end_time
+        FROM speech s
+        LEFT JOIN section_time_slots ts ON s.time_slot_id = ts.time_slot_id
+        WHERE s.file_id = $1
+        LIMIT 1
+      `;
+      const speechRecord = await getOne(speechQuery, [fileId]);
+      if (speechRecord && speechRecord.start_time && speechRecord.end_time) {
+        // Convert TIME values to TIMESTAMP format (today's date + time)
+        const today = new Date();
+        const timeStart = speechRecord.start_time; // Format: "HH:MM:SS"
+        const timeEnd = speechRecord.end_time;     // Format: "HH:MM:SS"
+        
+        // Parse time strings and create timestamps
+        const [startHours, startMins, startSecs] = timeStart.split(':').map(Number);
+        const [endHours, endMins, endSecs] = timeEnd.split(':').map(Number);
+        
+        slotStartTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(), startHours, startMins, startSecs);
+        slotEndTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(), endHours, endMins, endSecs);
+        
+        console.log(`[Evaluation] 📅 Found timeslot for file_id=${fileId}: ${slotStartTime.toISOString()} - ${slotEndTime.toISOString()}`);
+      }
+    } catch (err) {
+      console.warn(`[Evaluation] ⚠️ Could not fetch timeslot info for file_id=${fileId}:`, err);
+    }
+
     // Get all KPIs for reference
     const allKPIs = await getAllKPIsForEvaluation();
     console.log(`[Evaluation] Retrieved ${allKPIs.length} KPIs for evaluation`);
@@ -538,10 +570,12 @@ ${kpiReference}
               kpi_id: kpiRecord.kpi_id,
               file_id: fileId,
               evidence_txt: evidence_text,
+              start_time: slotStartTime,
+              end_time: slotEndTime,
               created_at: now,
               updated_at: now,
             });
-            console.log(`[Evaluation] ✅ Evidence stored: evidence_id=${evidence.id}, status=${determinedStatus}`);
+            console.log(`[Evaluation] ✅ Evidence stored: evidence_id=${evidence.id}, status=${determinedStatus}, timeslot=${slotStartTime?.toLocaleTimeString('ar-SA') ?? 'N/A'}-${slotEndTime?.toLocaleTimeString('ar-SA') ?? 'N/A'}`);
           } catch (err) {
             console.error(`[Evaluation] ⚠️ Failed to store evidence for ${kpiCode}:`, err);
           }
