@@ -14,6 +14,7 @@ import Sections from './pages/Sections';
 import AudioUpload from './pages/AudioUpload';
 import Schedule from './pages/Schedule';
 import EvaluationDashboard from './pages/EvaluationDashboard';
+import WorkerJobs from './pages/WorkerJobs';
 import ThemeTest from './components/ThemeTest';
 import './App.css';
 
@@ -52,6 +53,7 @@ function AppRoutes() {
       <Route path="/audio-upload" element={<ProtectedRoute element={<AudioUpload />} />} />
       <Route path="/schedule" element={<ProtectedRoute element={<Schedule />} />} />
       <Route path="/evaluations" element={<ProtectedRoute element={<EvaluationDashboard />} />} />
+      <Route path="/worker-jobs" element={<ProtectedRoute element={<WorkerJobs />} />} />
 
       {/* Default Route */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

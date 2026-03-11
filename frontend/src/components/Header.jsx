@@ -25,10 +25,8 @@ const Header = () => {
         {/* Right Items */}
         <div className="flex items-center gap-6">
           {/* Database Switch */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Neon</span>
+          <div className="flex items-center">
             <DatabaseSwitch />
-            <span className="text-sm text-gray-600 dark:text-gray-400">Cloud</span>
           </div>
 
           {/* User Menu */}

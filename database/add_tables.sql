@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS evidences (
   start_time TIMESTAMP,
   end_time TIMESTAMP,
   evidence_txt TEXT COLLATE "C",
+  iscalculated BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -55,7 +56,8 @@ CREATE TABLE IF NOT EXISTS evaluations (
   evidence_count INTEGER DEFAULT 0,
   mark DECIMAL(5, 2),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_evaluations_file_kpi UNIQUE (file_id, kpi_id)
 );
 
 -- Create indexes for better query performance
@@ -68,6 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_kpis_kpi_name ON kpis(kpi_name);
 CREATE INDEX IF NOT EXISTS idx_kpis_createdby ON kpis(createdBy);
 CREATE INDEX IF NOT EXISTS idx_evidences_kpi_id ON evidences(kpi_id);
 CREATE INDEX IF NOT EXISTS idx_evidences_file_id ON evidences(file_id);
+CREATE INDEX IF NOT EXISTS idx_evidences_file_kpi_iscalculated ON evidences(file_id, kpi_id, iscalculated);
 CREATE INDEX IF NOT EXISTS idx_evaluations_file_id ON evaluations(file_id);
 CREATE INDEX IF NOT EXISTS idx_evaluations_kpi_id ON evaluations(kpi_id);
 
@@ -105,3 +108,4 @@ COMMENT ON COLUMN evidences.file_id IS 'Foreign key to sound_files table';
 COMMENT ON COLUMN evidences.start_time IS 'Start time of the evidence';
 COMMENT ON COLUMN evidences.end_time IS 'End time of the evidence';
 COMMENT ON COLUMN evidences.evidence_txt IS 'Text description of the evidence';
+COMMENT ON COLUMN evidences.iscalculated IS 'Whether this evidence row was already aggregated into evaluations';

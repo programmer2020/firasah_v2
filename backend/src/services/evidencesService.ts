@@ -12,6 +12,7 @@ interface Evidence {
   start_time?: string;
   end_time?: string;
   evidence_txt?: string;
+  iscalculated?: boolean;
 }
 
 /**
@@ -28,6 +29,7 @@ export const getAllEvidences = async () => {
         e.start_time, 
         e.end_time, 
         e.evidence_txt, 
+        e.iscalculated,
         e.created_at,
         k.kpi_name,
         s.filename
@@ -58,6 +60,7 @@ export const getEvidenceById = async (evidenceId: number) => {
         e.start_time, 
         e.end_time, 
         e.evidence_txt, 
+        e.iscalculated,
         e.created_at,
         k.kpi_name,
         s.filename
@@ -153,6 +156,7 @@ export const getEvidencesByKPI = async (kpiId: number) => {
         e.start_time, 
         e.end_time, 
         e.evidence_txt, 
+        e.iscalculated,
         e.created_at,
         k.kpi_name,
         s.filename
@@ -184,6 +188,7 @@ export const getEvidencesByFile = async (fileId: number) => {
         e.start_time, 
         e.end_time, 
         e.evidence_txt, 
+        e.iscalculated,
         e.created_at,
         k.kpi_name,
         s.filename
