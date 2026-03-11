@@ -20,13 +20,22 @@ import { errorHandler } from './middleware/auth.js';
 import { specs } from './config/swagger.js';
 
 const app: Express = express();
-const PORT = process.env.PORT || 5000;
+const PORT = parseInt(process.env.PORT || '8080', 10);
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 /**
  * Middleware Setup
  */
-app.use(helmet()); // Security headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+      scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+      imgSrc: ["'self'", 'data:', 'https:'],
+    },
+  },
+})); // Security headers
 app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',
   credentials: true,

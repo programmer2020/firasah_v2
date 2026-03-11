@@ -38,7 +38,16 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 /**
  * Middleware Setup
  */
-app.use(helmet()); // Security headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+      scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+      imgSrc: ["'self'", 'data:', 'https:'],
+    },
+  },
+})); // Security headers
 
 // UTF-8 Encoding headers middleware
 app.use((req: Request, res: Response, next) => {

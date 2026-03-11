@@ -18,11 +18,11 @@ const options = {
     },
     servers: [
       {
-        url: 'http://localhost:5000',
+        url: 'http://localhost:8080',
         description: 'Development Server',
       },
       {
-        url: 'https://api.firasah.ai',
+        url: 'https://firasahv2-production.up.railway.app',
         description: 'Production Server',
       },
     ],
