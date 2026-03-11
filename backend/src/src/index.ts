@@ -55,10 +55,11 @@ app.use((req: Request, res: Response, next) => {
 /**
  * Swagger Documentation
  */
-app.use('/api-docs', swaggerUi.serve);
+app.use('/api-docs', swaggerUi.serveFiles(specs));
 app.get('/api-docs', swaggerUi.setup(specs, {
   swaggerOptions: {
     url: '/swagger.json',
+    persistAuthorization: true,
   },
 }));
 
