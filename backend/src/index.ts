@@ -49,10 +49,12 @@ app.use(helmet({
   },
 })); // Security headers
 
-// UTF-8 Encoding headers middleware
+// UTF-8 Encoding headers middleware - only for API routes, not for HTML pages
 app.use((req: Request, res: Response, next) => {
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Accept-Charset', 'utf-8');
+  if (!req.path.startsWith('/api-docs') && !req.path.startsWith('/swagger')) {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Accept-Charset', 'utf-8');
+  }
   next();
 });
 
