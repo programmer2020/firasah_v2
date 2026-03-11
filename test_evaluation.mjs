@@ -12,14 +12,14 @@
  * Usage: node test_evaluation.mjs
  * 
  * Prerequisites:
- * - Backend running on http://localhost:5000
+ * - Backend running on https://firasahv2-production.up.railway.app
  * - PostgreSQL database with KPIs setup
  * - OpenAI API key configured
  */
 
 import fetch from 'node-fetch';
 
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = 'https://firasahv2-production.up.railway.app/api';
 const DELAY = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Sample classroom speech in Arabic

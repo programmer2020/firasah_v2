@@ -1,4 +1,4 @@
-const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
@@ -22,8 +22,8 @@ const body = Buffer.concat([
 ]);
 
 const options = {
-  hostname: 'localhost',
-  port: 5000,
+  hostname: 'firasahv2-production.up.railway.app',
+  port: 443,
   path: '/api/sound-files/upload',
   method: 'POST',
   headers: {
@@ -32,7 +32,7 @@ const options = {
   }
 };
 
-const req = http.request(options, (res) => {
+const req = https.request(options, (res) => {
   let data = '';
   res.on('data', chunk => data += chunk);
   res.on('end', () => {

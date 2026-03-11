@@ -1,12 +1,14 @@
 import pkg from 'pg';
 const { Client } = pkg;
 
+// Use environment variables or Neon Cloud config
 const client = new Client({
-  host: 'localhost',
-  port: 5432,
-  user: 'postgres',
-  password: '123456',
-  database: 'firasah_ai_db'
+  host: process.env.DB_HOST || 'ep-flat-king-a80gh336-pooler.eastus2.azure.neon.tech',
+  port: process.env.DB_PORT || 5432,
+  user: process.env.DB_USER || 'neondb_owner',
+  password: process.env.DB_PASSWORD || 'npg_o4iEtH5mkKIz',
+  database: process.env.DB_NAME || 'neondb',
+  ssl: true
 });
 
 try {
