@@ -31,6 +31,7 @@ const LOCAL_CONFIG = {
 let currentPool: Pool;
 let isUsingNeon = true; // Default to Neon
 let poolEnded = false; // Track if pool has been ended
+let switchInProgress: Promise<boolean> | null = null;
 
 // Initialize with Neon by default
 const initializePool = () => {
@@ -47,6 +48,16 @@ const initializePool = () => {
 
 // Switch database configuration
 export const switchDatabase = async (useNeon: boolean) => {
+  if (switchInProgress) {
+    await switchInProgress;
+
+    // If the in-flight switch already reached the requested target, we're done.
+    if (isUsingNeon === useNeon) {
+      return true;
+    }
+  }
+
+  switchInProgress = (async () => {
   try {
     if (isUsingNeon === useNeon) {
       console.log(`Already using ${useNeon ? 'Neon Cloud' : 'Local Database'}`);
@@ -70,7 +81,12 @@ export const switchDatabase = async (useNeon: boolean) => {
   } catch (error) {
     console.error('Error switching database:', error);
     return false;
+  } finally {
+    switchInProgress = null;
   }
+  })();
+
+  return await switchInProgress;
 };
 
 // Get current pool

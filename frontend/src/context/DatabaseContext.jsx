@@ -1,46 +1,71 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import api from '../services/api';
 
 const DatabaseContext = createContext();
 
 export const DatabaseProvider = ({ children }) => {
   const [useNeon, setUseNeon] = useState(true); // Neon by default
   const [loading, setLoading] = useState(true);
+  const didInitRef = useRef(false);
+
+  const getBackendDatabaseMode = async () => {
+    const response = await api.get('/config/database/status');
+    return Boolean(response?.data?.database?.isUsingNeon);
+  };
 
   // Load preference from localStorage on mount
   useEffect(() => {
-    const saved = localStorage.getItem('useNeonDatabase');
-    if (saved !== null) {
-      setUseNeon(JSON.parse(saved));
+    if (didInitRef.current) {
+      return;
     }
-    setLoading(false);
-    
-    // Notify backend of preference
-    notifyBackend(saved !== null ? JSON.parse(saved) : true);
+    didInitRef.current = true;
+
+    const initializePreference = async () => {
+      const saved = localStorage.getItem('useNeonDatabase');
+      const preferredMode = saved !== null ? JSON.parse(saved) : true;
+      setUseNeon(preferredMode);
+
+      const actualMode = await notifyBackend(preferredMode);
+      setUseNeon(actualMode);
+      localStorage.setItem('useNeonDatabase', JSON.stringify(actualMode));
+      setLoading(false);
+    };
+
+    void initializePreference();
   }, []);
 
   const notifyBackend = async (neonMode) => {
     try {
-      const response = await fetch('http://localhost:5000/api/config/database', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ useNeon: neonMode })
-      });
+      const response = await api.post('/config/database', { useNeon: neonMode });
       
-      if (!response.ok) {
-        console.warn('Backend returned error status:', response.status);
+      if (!response.data?.success) {
+        console.warn('Backend returned unsuccessful response:', response.data);
       }
-      
-      const data = await response.json();
-      console.log('Database switched successfully:', data);
+
+      console.log('Database switched successfully:', response.data);
+      return Boolean(response?.data?.database?.isUsingNeon);
     } catch (error) {
-      console.warn('Could not notify backend of database selection:', error.message);
+      const backendMessage = error?.response?.data?.message;
+      console.warn('Could not notify backend of database selection:', backendMessage || error.message);
+
+      // Best effort: query current backend status so UI reflects real source of truth.
+      try {
+        return await getBackendDatabaseMode();
+      } catch (statusError) {
+        console.warn('Could not fetch backend database status:', statusError?.message || statusError);
+        return neonMode;
+      }
     }
   };
 
   const toggleDatabase = async (neonMode) => {
-    setUseNeon(neonMode);
-    localStorage.setItem('useNeonDatabase', JSON.stringify(neonMode));
-    await notifyBackend(neonMode);
+    setLoading(true);
+
+    const actualMode = await notifyBackend(neonMode);
+    setUseNeon(actualMode);
+    localStorage.setItem('useNeonDatabase', JSON.stringify(actualMode));
+
+    setLoading(false);
   };
 
   return (

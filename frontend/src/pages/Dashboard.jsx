@@ -20,6 +20,13 @@ export const Dashboard = () => {
     { title: 'Subjects', link: '/subjects', color: 'bg-brand-50 text-brand-600' },
   ];
 
+  const quickActions = [
+    { label: 'Add New School', route: '/schools' },
+    { label: 'Add Teacher', route: '/teachers' },
+    { label: 'Create Class', route: '/classes' },
+    { label: 'Add Subject', route: '/subjects' },
+  ];
+
   return (
     <ProtectedLayout>
       <div>
@@ -51,18 +58,16 @@ export const Dashboard = () => {
           <section className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
             <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Quick Actions</h2>
             <div className="flex flex-wrap gap-4">
-              <button className="px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md hover:shadow-lg">
-                Add New School
-              </button>
-              <button className="px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md hover:shadow-lg">
-                Add Teacher
-              </button>
-              <button className="px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md hover:shadow-lg">
-                Create Class
-              </button>
-              <button className="px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md hover:shadow-lg">
-                Add Subject
-              </button>
+              {quickActions.map((action) => (
+                <button
+                  key={action.label}
+                  type="button"
+                  onClick={() => navigate(action.route, { state: { openForm: true } })}
+                  className="px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md hover:shadow-lg"
+                >
+                  {action.label}
+                </button>
+              ))}
             </div>
           </section>
       </div>

@@ -4,13 +4,16 @@ import api from '../services/api';
 import ProtectedLayout from '../components/ProtectedLayout';
 
 export const Sections = () => {
+  const initialFormData = {
+    section_name: '',
+  };
+
   const [sections, setSections] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    section_name: '',
-  });
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState(initialFormData);
 
   useEffect(() => {
     fetchSections();
@@ -40,14 +43,31 @@ export const Sections = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/sections', formData);
-      setFormData({ section_name: '' });
+      if (editingId) {
+        await api.put(`/sections/${editingId}`, formData);
+      } else {
+        await api.post('/sections', formData);
+      }
+
+      setError('');
+      setEditingId(null);
+      setFormData(initialFormData);
       setShowForm(false);
-      fetchSections();
+      await fetchSections();
     } catch (err) {
-      setError('Failed to add section');
+      const message = err?.response?.data?.message || err?.message || 'Failed to save section';
+      setError(message);
       console.error(err);
     }
+  };
+
+  const handleEdit = (section) => {
+    setEditingId(section.section_id);
+    setFormData({
+      section_name: section.section_name || '',
+    });
+    setError('');
+    setShowForm(true);
   };
 
   const handleDelete = async (id) => {
@@ -69,7 +89,14 @@ export const Sections = () => {
             Sections Management
           </h1>
           <button
-            onClick={() => setShowForm(!showForm)}
+            onClick={() => {
+              if (showForm) {
+                setEditingId(null);
+                setFormData(initialFormData);
+                setError('');
+              }
+              setShowForm(!showForm);
+            }}
             className="px-6 py-2 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md"
           >
             {showForm ? 'Cancel' : '+ Add Section'}
@@ -104,7 +131,7 @@ export const Sections = () => {
               type="submit"
               className="mt-6 w-full px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md"
             >
-              Add Section
+              {editingId ? 'Update Section' : 'Add Section'}
             </button>
           </form>
         )}
@@ -137,7 +164,10 @@ export const Sections = () => {
                         {section.section_name}
                       </td>
                       <td className="px-6 py-4 text-sm flex gap-2">
-                        <button className="px-3 py-1 bg-brand-100 text-brand-600 rounded hover:bg-brand-200 transition-colors">
+                        <button
+                          onClick={() => handleEdit(section)}
+                          className="px-3 py-1 bg-brand-100 text-brand-600 rounded hover:bg-brand-200 transition-colors"
+                        >
                           Edit
                         </button>
                         <button

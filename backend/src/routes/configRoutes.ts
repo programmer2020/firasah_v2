@@ -30,6 +30,10 @@ router.post('/database', async (req: Request, res: Response) => {
       });
     }
 
+    // Capture current scheduler state so we can preserve behavior after DB switch.
+    const previousWorkerStatus = await getEvaluationScheduleStatus();
+    const previousSchedule = previousWorkerStatus.pgCron?.schedule || EVALUATION_PG_CRON_DEFAULT_SCHEDULE;
+
     const success = await switchDatabase(useNeon);
 
     if (success) {
@@ -39,6 +43,13 @@ router.post('/database', async (req: Request, res: Response) => {
       void runEvaluationAggregationWorker().catch((err) => {
         console.error('[Evaluation Worker] Post-switch run failed:', err);
       });
+
+      // Keep scheduler behavior consistent across Local/Cloud switching.
+      if (previousWorkerStatus.enabled) {
+        void enableEvaluationSchedule(previousSchedule).catch((err) => {
+          console.error('[Evaluation Worker] Post-switch schedule restore failed:', err);
+        });
+      }
 
       return res.json({
         success: true,

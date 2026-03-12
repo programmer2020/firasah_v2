@@ -1,23 +1,43 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import ProtectedLayout from '../components/ProtectedLayout';
 
 export const Teachers = () => {
-  const [teachers, setTeachers] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
+  const location = useLocation();
+  const initialFormData = {
     school_id: 1,
     teacher_name: '',
     teacher_email: '',
     teacher_phone: '',
-  });
+  };
+
+  const [teachers, setTeachers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState(initialFormData);
 
   useEffect(() => {
     fetchTeachers();
   }, []);
+
+  useEffect(() => {
+    if (!location.state?.openForm) {
+      return;
+    }
+
+    setEditingId(null);
+    setFormData({
+      school_id: 1,
+      teacher_name: '',
+      teacher_email: '',
+      teacher_phone: '',
+    });
+    setError('');
+    setShowForm(true);
+  }, [location.state]);
 
   const fetchTeachers = async () => {
     setLoading(true);
@@ -43,14 +63,34 @@ export const Teachers = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/teachers', formData);
-      setFormData({ school_id: 1, teacher_name: '', teacher_email: '', teacher_phone: '' });
+      if (editingId) {
+        await api.put(`/teachers/${editingId}`, formData);
+      } else {
+        await api.post('/teachers', formData);
+      }
+
+      setError('');
+      setEditingId(null);
+      setFormData(initialFormData);
       setShowForm(false);
-      fetchTeachers();
+      await fetchTeachers();
     } catch (err) {
-      setError('Failed to add teacher');
+      const message = err?.response?.data?.message || err?.message || 'Failed to save teacher';
+      setError(message);
       console.error(err);
     }
+  };
+
+  const handleEdit = (teacher) => {
+    setEditingId(teacher.teacher_id);
+    setFormData({
+      school_id: teacher.school_id || 1,
+      teacher_name: teacher.teacher_name || '',
+      teacher_email: teacher.teacher_email || '',
+      teacher_phone: teacher.teacher_phone || '',
+    });
+    setError('');
+    setShowForm(true);
   };
 
   const handleDelete = async (id) => {
@@ -73,7 +113,14 @@ export const Teachers = () => {
             Teachers Management
           </h1>
           <button
-            onClick={() => setShowForm(!showForm)}
+            onClick={() => {
+              if (showForm) {
+                setEditingId(null);
+                setFormData(initialFormData);
+                setError('');
+              }
+              setShowForm(!showForm);
+            }}
             className="px-6 py-2 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md"
           >
             {showForm ? 'Cancel' : '+ Add Teacher'}
@@ -134,7 +181,7 @@ export const Teachers = () => {
               type="submit"
               className="mt-6 w-full px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md"
             >
-              Add Teacher
+              {editingId ? 'Update Teacher' : 'Add Teacher'}
             </button>
           </form>
         )}
@@ -179,7 +226,10 @@ export const Teachers = () => {
                         {teacher.teacher_phone}
                       </td>
                       <td className="px-6 py-4 text-sm flex gap-2">
-                        <button className="px-3 py-1 bg-brand-100 text-brand-600 rounded hover:bg-brand-200 transition-colors">
+                        <button
+                          onClick={() => handleEdit(teacher)}
+                          className="px-3 py-1 bg-brand-100 text-brand-600 rounded hover:bg-brand-200 transition-colors"
+                        >
                           Edit
                         </button>
                         <button

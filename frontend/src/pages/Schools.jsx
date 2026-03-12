@@ -1,23 +1,43 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import ProtectedLayout from '../components/ProtectedLayout';
 
 export const Schools = () => {
-  const [schools, setSchools] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
+  const location = useLocation();
+  const initialFormData = {
     school_name: '',
     school_code: '',
     city: '',
     country: '',
-  });
+  };
+
+  const [schools, setSchools] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState(initialFormData);
 
   useEffect(() => {
     fetchSchools();
   }, []);
+
+  useEffect(() => {
+    if (!location.state?.openForm) {
+      return;
+    }
+
+    setEditingId(null);
+    setFormData({
+      school_name: '',
+      school_code: '',
+      city: '',
+      country: '',
+    });
+    setError('');
+    setShowForm(true);
+  }, [location.state]);
 
   const fetchSchools = async () => {
     setLoading(true);
@@ -43,14 +63,34 @@ export const Schools = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/schools', formData);
-      setFormData({ school_name: '', school_code: '', city: '', country: '' });
+      if (editingId) {
+        await api.put(`/schools/${editingId}`, formData);
+      } else {
+        await api.post('/schools', formData);
+      }
+
+      setError('');
+      setEditingId(null);
+      setFormData(initialFormData);
       setShowForm(false);
-      fetchSchools();
+      await fetchSchools();
     } catch (err) {
-      setError('Failed to add school');
+      const message = err?.response?.data?.message || err?.message || 'Failed to save school';
+      setError(message);
       console.error(err);
     }
+  };
+
+  const handleEdit = (school) => {
+    setEditingId(school.school_id);
+    setFormData({
+      school_name: school.school_name || '',
+      school_code: school.school_code || '',
+      city: school.city || '',
+      country: school.country || '',
+    });
+    setError('');
+    setShowForm(true);
   };
 
   const handleDelete = async (id) => {
@@ -73,7 +113,14 @@ export const Schools = () => {
             Schools Management
           </h1>
           <button
-            onClick={() => setShowForm(!showForm)}
+            onClick={() => {
+              if (showForm) {
+                setEditingId(null);
+                setFormData(initialFormData);
+                setError('');
+              }
+              setShowForm(!showForm);
+            }}
             className="px-6 py-2 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md"
           >
             {showForm ? 'Cancel' : '+ Add School'}
@@ -149,7 +196,7 @@ export const Schools = () => {
               type="submit"
               className="mt-6 w-full px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md"
             >
-              Add School
+              {editingId ? 'Update School' : 'Add School'}
             </button>
           </form>
         )}
@@ -201,7 +248,10 @@ export const Schools = () => {
                         {school.country}
                       </td>
                       <td className="px-6 py-4 text-sm flex gap-2">
-                        <button className="px-3 py-1 bg-brand-100 text-brand-600 rounded hover:bg-brand-200 transition-colors">
+                        <button
+                          onClick={() => handleEdit(school)}
+                          className="px-3 py-1 bg-brand-100 text-brand-600 rounded hover:bg-brand-200 transition-colors"
+                        >
                           Edit
                         </button>
                         <button

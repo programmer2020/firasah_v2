@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'https://firasahv2-production.up.railway.app/api';
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.DEV ? 'http://localhost:5000/api' : `${window.location.origin}/api`);
 
 // Create axios instance with default config and UTF-8 encoding
 const api = axios.create({

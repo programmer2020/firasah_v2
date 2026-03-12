@@ -2,7 +2,7 @@ import React from 'react';
 import { useDatabase } from '../context/DatabaseContext';
 
 const DatabaseSwitch = () => {
-  const { useNeon, toggleDatabase } = useDatabase();
+  const { useNeon, toggleDatabase, loading } = useDatabase();
 
   return (
     <div className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-md hover:shadow-lg transition-shadow">
@@ -12,11 +12,13 @@ const DatabaseSwitch = () => {
       
       {/* Toggle Switch */}
       <button
+        type="button"
         onClick={() => toggleDatabase(!useNeon)}
+        disabled={loading}
         className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
           useNeon ? 'bg-brand-600' : 'bg-gray-400'
-        }`}
-        title={useNeon ? 'Click to use Local Database' : 'Click to use Neon Cloud'}
+        } ${loading ? 'opacity-60 cursor-not-allowed' : ''}`}
+        title={loading ? 'Switching database...' : (useNeon ? 'Click to use Local Database' : 'Click to use Neon Cloud')}
         aria-label="Database Switch"
       >
         <span

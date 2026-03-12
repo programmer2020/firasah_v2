@@ -16,7 +16,21 @@ interface Evaluation {
   file_id: number;
   kpi_id: number;
   evidence_count?: number;
-  mark?: number;
+  mark?: string;
+}
+
+/**
+ * Compute mark letter from evidence_count:
+ *   >= 3  → 's' (strong)
+ *   >= 2  → 'g' (good)
+ *   >= 1  → 'l' (low)
+ *   0 / null → 'n' (none)
+ */
+function computeMark(count: number | null | undefined): string {
+  if (!count || count <= 0) return 'n';
+  if (count >= 3) return 's';
+  if (count >= 2) return 'g';
+  return 'l';
 }
 
 /**
@@ -87,11 +101,12 @@ export const createEvaluation = async (data: Evaluation) => {
       throw new Error('file_id and kpi_id are required');
     }
 
+    const evidenceCount = data.evidence_count || 0;
     return await insert('evaluations', {
       file_id: data.file_id,
       kpi_id: data.kpi_id,
-      evidence_count: data.evidence_count || 0,
-      mark: data.mark || null,
+      evidence_count: evidenceCount,
+      mark: computeMark(evidenceCount),
     });
   } catch (error) {
     console.error('Error creating evaluation:', error);
@@ -111,8 +126,12 @@ export const updateEvaluation = async (evaluationId: number, data: Partial<Evalu
     
     if (data.file_id) updateData.file_id = data.file_id;
     if (data.kpi_id) updateData.kpi_id = data.kpi_id;
-    if (data.evidence_count !== undefined) updateData.evidence_count = data.evidence_count;
-    if (data.mark !== undefined) updateData.mark = data.mark;
+    if (data.evidence_count !== undefined) {
+      updateData.evidence_count = data.evidence_count;
+      updateData.mark = computeMark(data.evidence_count);
+    } else if (data.mark !== undefined) {
+      updateData.mark = data.mark;
+    }
     
     if (Object.keys(updateData).length === 0) {
       throw new Error('No fields to update');

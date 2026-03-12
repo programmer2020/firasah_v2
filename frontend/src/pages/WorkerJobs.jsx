@@ -53,7 +53,11 @@ const WorkerJobs = () => {
       const response = await api.post('/config/worker/run');
       const result = response.data?.data || null;
       setLastRunResult(result);
-      setSuccess('تم تشغيل الـ Worker بنجاح.');
+      setSuccess(
+        result?.skipped
+          ? 'تم تجاهل التشغيل لأن هناك تشغيلًا آخر جارٍ بالفعل.'
+          : `تم تشغيل الـ Worker بنجاح. تمت معالجة ${result?.evidencesProcessed ?? 0} evidence.`
+      );
       await loadStatus();
     });
   };
@@ -84,6 +88,9 @@ const WorkerJobs = () => {
   const activeMode = worker?.activeMode || 'none';
   const usingInAppFallback = activeMode === 'in_app' && Boolean(worker?.enabled);
   const schedulerHealthy = Boolean(worker?.enabled) && (activeMode === 'pg_cron' || activeMode === 'in_app') && !inApp?.lastError;
+  const disableScheduleReason = !worker?.enabled
+    ? 'لا توجد أي جدولة فعالة حاليًا، لذلك زر الإيقاف غير متاح.'
+    : null;
   const pgCronStatusText = pgCron?.pgCronAvailable
     ? 'متاح'
     : usingInAppFallback
@@ -151,6 +158,11 @@ const WorkerJobs = () => {
             <p className="text-sm text-gray-500 mt-1">
               {usingInAppFallback ? 'غير مطلوب حاليًا لأن fallback نشط.' : (pgCron?.info || '-')}
             </p>
+            {!pgCron?.pgCronAvailable && !usingInAppFallback && (
+              <p className="text-xs text-amber-700 mt-2">
+                على قاعدة البيانات الحالية لا يتوفر pg_cron، لذلك عند التفعيل سيتم استخدام in-app fallback.
+              </p>
+            )}
           </div>
 
           <div className="bg-white rounded-xl shadow p-4 border">
@@ -171,7 +183,7 @@ const WorkerJobs = () => {
             <button
               onClick={handleRunNow}
               disabled={actionLoading || statusLoading}
-              className="px-4 py-3 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
+              className="px-4 py-3 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               تشغيل الـ Worker الآن
             </button>
@@ -179,11 +191,17 @@ const WorkerJobs = () => {
             <button
               onClick={handleDisableSchedule}
               disabled={actionLoading || statusLoading || !worker?.enabled}
-              className="px-4 py-3 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50"
+              className="px-4 py-3 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               إيقاف كل الجدولات
             </button>
           </div>
+
+          {disableScheduleReason && (
+            <p className="text-sm text-amber-700">
+              {disableScheduleReason}
+            </p>
+          )}
 
           <div className="pt-2 border-t">
             <label className="block text-sm text-gray-600 mb-2">Cron Expression (كل 12 ساعة افتراضيًا)</label>

@@ -1,20 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import ProtectedLayout from '../components/ProtectedLayout';
 
 export const Subjects = () => {
+  const location = useLocation();
+  const initialFormData = {
+    subject_name: '',
+  };
+
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    subject_name: '',
-  });
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState(initialFormData);
 
   useEffect(() => {
     fetchSubjects();
   }, []);
+
+  useEffect(() => {
+    if (!location.state?.openForm) {
+      return;
+    }
+
+    setEditingId(null);
+    setFormData({
+      subject_name: '',
+    });
+    setError('');
+    setShowForm(true);
+  }, [location.state]);
 
   const fetchSubjects = async () => {
     setLoading(true);
@@ -40,14 +57,31 @@ export const Subjects = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/subjects', formData);
-      setFormData({ subject_name: '' });
+      if (editingId) {
+        await api.put(`/subjects/${editingId}`, formData);
+      } else {
+        await api.post('/subjects', formData);
+      }
+
+      setError('');
+      setEditingId(null);
+      setFormData(initialFormData);
       setShowForm(false);
-      fetchSubjects();
+      await fetchSubjects();
     } catch (err) {
-      setError('Failed to add subject');
+      const message = err?.response?.data?.message || err?.message || 'Failed to save subject';
+      setError(message);
       console.error(err);
     }
+  };
+
+  const handleEdit = (subject) => {
+    setEditingId(subject.subject_id);
+    setFormData({
+      subject_name: subject.subject_name || '',
+    });
+    setError('');
+    setShowForm(true);
   };
 
   const handleDelete = async (id) => {
@@ -69,7 +103,14 @@ export const Subjects = () => {
             Subjects Management
           </h1>
           <button
-            onClick={() => setShowForm(!showForm)}
+            onClick={() => {
+              if (showForm) {
+                setEditingId(null);
+                setFormData(initialFormData);
+                setError('');
+              }
+              setShowForm(!showForm);
+            }}
             className="px-6 py-2 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md"
           >
             {showForm ? 'Cancel' : '+ Add Subject'}
@@ -104,7 +145,7 @@ export const Subjects = () => {
               type="submit"
               className="mt-6 w-full px-6 py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-md"
             >
-              Add Subject
+              {editingId ? 'Update Subject' : 'Add Subject'}
             </button>
           </form>
         )}
@@ -137,7 +178,10 @@ export const Subjects = () => {
                         {subject.subject_name}
                       </td>
                       <td className="px-6 py-4 text-sm flex gap-2">
-                        <button className="px-3 py-1 bg-brand-100 text-brand-600 rounded hover:bg-brand-200 transition-colors">
+                        <button
+                          onClick={() => handleEdit(subject)}
+                          className="px-3 py-1 bg-brand-100 text-brand-600 rounded hover:bg-brand-200 transition-colors"
+                        >
                           Edit
                         </button>
                         <button

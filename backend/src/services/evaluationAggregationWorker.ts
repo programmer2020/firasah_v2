@@ -70,6 +70,33 @@ export const ensureAggregationSchemaForCurrentDb = async (): Promise<void> => {
       ADD COLUMN IF NOT EXISTS iscalculated BOOLEAN NOT NULL DEFAULT FALSE;
     `);
 
+    // Ensure the mark column in evaluations is VARCHAR(1) (not numeric).
+    await client.query(`
+      DO $$ BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name   = 'evaluations'
+            AND column_name  = 'mark'
+            AND data_type    = 'numeric'
+        ) THEN
+          ALTER TABLE evaluations ALTER COLUMN mark TYPE VARCHAR(1) USING NULL;
+        END IF;
+      END $$;
+    `);
+
+    // Backfill mark for any rows where it is NULL or not a valid letter.
+    await client.query(`
+      UPDATE evaluations
+      SET mark = CASE
+        WHEN COALESCE(evidence_count, 0) >= 3 THEN 's'
+        WHEN COALESCE(evidence_count, 0) >= 2 THEN 'g'
+        WHEN COALESCE(evidence_count, 0) >= 1 THEN 'l'
+        ELSE 'n'
+      END
+      WHERE mark IS NULL OR mark NOT IN ('s', 'g', 'l', 'n');
+    `);
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_evidences_file_kpi_iscalculated
       ON evidences(file_id, kpi_id, iscalculated);
@@ -92,7 +119,12 @@ export const ensureAggregationSchemaForCurrentDb = async (): Promise<void> => {
       UPDATE evaluations e
       SET
         evidence_count = dg.merged_evidence_count,
-        mark = COALESCE(e.mark, dg.merged_mark),
+        mark = CASE
+          WHEN dg.merged_evidence_count >= 3 THEN 's'
+          WHEN dg.merged_evidence_count >= 2 THEN 'g'
+          WHEN dg.merged_evidence_count >= 1 THEN 'l'
+          ELSE 'n'
+        END,
         updated_at = COALESCE(dg.latest_updated_at, NOW())
       FROM duplicate_groups dg
       WHERE e.id = dg.keep_id;
@@ -162,11 +194,27 @@ export const ensureAggregationFunctionForCurrentDb = async (): Promise<void> => 
         ),
         upserted AS (
           INSERT INTO evaluations (file_id, kpi_id, evidence_count, mark, created_at, updated_at)
-          SELECT g.file_id, g.kpi_id, g.pending_count, NULL, NOW(), NOW()
+          SELECT
+            g.file_id,
+            g.kpi_id,
+            g.pending_count,
+            CASE
+              WHEN g.pending_count >= 3 THEN 's'
+              WHEN g.pending_count >= 2 THEN 'g'
+              WHEN g.pending_count >= 1 THEN 'l'
+              ELSE 'n'
+            END,
+            NOW(), NOW()
           FROM grouped g
           ON CONFLICT (file_id, kpi_id)
           DO UPDATE SET
             evidence_count = COALESCE(evaluations.evidence_count, 0) + EXCLUDED.evidence_count,
+            mark = CASE
+              WHEN COALESCE(evaluations.evidence_count, 0) + EXCLUDED.evidence_count >= 3 THEN 's'
+              WHEN COALESCE(evaluations.evidence_count, 0) + EXCLUDED.evidence_count >= 2 THEN 'g'
+              WHEN COALESCE(evaluations.evidence_count, 0) + EXCLUDED.evidence_count >= 1 THEN 'l'
+              ELSE 'n'
+            END,
             updated_at = NOW()
           RETURNING file_id, kpi_id
         ),
