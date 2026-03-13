@@ -3,7 +3,7 @@
  * Handles CRUD operations for sound files metadata
  */
 
-import { getOne, getMany, insert, update, deleteRecord } from '../helpers/database.js';
+import { getOne, getMany, insert, update, deleteRecord, executeQuery } from '../helpers/database.js';
 
 interface SoundFile {
   file_id?: number;
@@ -13,6 +13,16 @@ interface SoundFile {
   createdBy: string;
   note?: string;
 }
+
+const syncSoundFilesIdSequence = async () => {
+  await executeQuery(`
+    SELECT setval(
+      pg_get_serial_sequence('sound_files', 'file_id'),
+      COALESCE((SELECT MAX(file_id) FROM sound_files), 0) + 1,
+      false
+    );
+  `);
+};
 
 /**
  * Get all sound files
@@ -60,13 +70,27 @@ export const createSoundFile = async (data: SoundFile) => {
       throw new Error('filename, filepath, and createdBy are required');
     }
 
-    return await insert('sound_files', {
+    const createRecord = () => insert('sound_files', {
       filename: data.filename,
       filepath: data.filepath,
       createdAt: new Date(),
       createdBy: data.createdBy,
       note: data.note || null,
     });
+
+    // Keep SERIAL sequence aligned with imported/migrated data before insert.
+    await syncSoundFilesIdSequence();
+
+    try {
+      return await createRecord();
+    } catch (error: any) {
+      if (error?.code === '23505' && error?.constraint === 'sound_files_pkey') {
+        console.warn('[SoundFiles] Sequence mismatch detected. Resyncing and retrying insert...');
+        await syncSoundFilesIdSequence();
+        return await createRecord();
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Error creating sound file:', error);
     throw error;
