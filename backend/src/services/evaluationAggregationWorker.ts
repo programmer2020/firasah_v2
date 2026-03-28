@@ -98,8 +98,8 @@ export const ensureAggregationSchemaForCurrentDb = async (): Promise<void> => {
     `);
 
     await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_evidences_file_kpi_iscalculated
-      ON evidences(file_id, kpi_id, iscalculated);
+      CREATE INDEX IF NOT EXISTS idx_evidences_fragment_kpi_iscalculated
+      ON evidences(fragment_id, kpi_id, iscalculated);
     `);
 
     // Merge duplicated evaluations rows before enforcing uniqueness.
@@ -182,14 +182,16 @@ export const ensureAggregationFunctionForCurrentDb = async (): Promise<void> => 
 
         RETURN QUERY
         WITH pending AS (
-          SELECT id, file_id, kpi_id
-          FROM evidences
-          WHERE COALESCE(iscalculated, FALSE) = FALSE
-          FOR UPDATE SKIP LOCKED
+          SELECT e.id, f.file_id, e.kpi_id
+          FROM evidences e
+          LEFT JOIN fragments f ON e.fragment_id = f.id
+          WHERE COALESCE(e.iscalculated, FALSE) = FALSE
+          FOR UPDATE OF e SKIP LOCKED
         ),
         grouped AS (
           SELECT file_id, kpi_id, COUNT(*)::int AS pending_count
           FROM pending
+          WHERE file_id IS NOT NULL
           GROUP BY file_id, kpi_id
         ),
         upserted AS (

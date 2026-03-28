@@ -623,7 +623,8 @@ export const getEvaluationResults = async (fileId: number) => {
     SELECT 
       e.id as evidence_id,
       e.kpi_id,
-      e.file_id,
+      e.fragment_id,
+      f.file_id,
       e.evidence_txt,
       e.start_time,
       e.end_time,
@@ -635,7 +636,8 @@ export const getEvaluationResults = async (fileId: number) => {
     FROM evidences e
     JOIN kpis k ON e.kpi_id = k.kpi_id
     LEFT JOIN kpi_domains d ON k.domain_id = d.domain_id
-    WHERE e.file_id = $1
+    LEFT JOIN fragments f ON e.fragment_id = f.id
+    WHERE f.file_id = $1
     ORDER BY d.sort_order ASC, k.kpi_code ASC
   `;
   return await getMany(query, [fileId]);
@@ -738,7 +740,8 @@ export const getEvaluationsWithFilters = async (options: {
       SELECT 
         e.id as evidence_id,
         e.kpi_id,
-        e.file_id,
+        e.fragment_id,
+        f.file_id,
         e.evidence_txt,
         e.start_time,
         e.end_time,
@@ -751,7 +754,8 @@ export const getEvaluationsWithFilters = async (options: {
       FROM evidences e
       JOIN kpis k ON e.kpi_id = k.kpi_id
       LEFT JOIN kpi_domains d ON k.domain_id = d.domain_id
-      LEFT JOIN sound_files s ON e.file_id = s.file_id
+      LEFT JOIN fragments f ON e.fragment_id = f.id
+      LEFT JOIN sound_files s ON f.file_id = s.file_id
       WHERE 1=1
     `;
 
@@ -759,7 +763,7 @@ export const getEvaluationsWithFilters = async (options: {
 
     // File ID filter
     if (fileId) {
-      query += ` AND e.file_id = $${params.length + 1}`;
+      query += ` AND f.file_id = $${params.length + 1}`;
       params.push(fileId);
     }
 
@@ -799,13 +803,14 @@ export const getEvaluationsWithFilters = async (options: {
       FROM evidences e
       JOIN kpis k ON e.kpi_id = k.kpi_id
       LEFT JOIN kpi_domains d ON k.domain_id = d.domain_id
-      LEFT JOIN sound_files s ON e.file_id = s.file_id
+      LEFT JOIN fragments f ON e.fragment_id = f.id
+      LEFT JOIN sound_files s ON f.file_id = s.file_id
       WHERE 1=1
     `;
 
     const countParams: any[] = [];
     if (fileId) {
-      countQuery += ` AND e.file_id = $${countParams.length + 1}`;
+      countQuery += ` AND f.file_id = $${countParams.length + 1}`;
       countParams.push(fileId);
     }
     if (status) {
