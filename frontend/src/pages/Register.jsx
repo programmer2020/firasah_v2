@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import DatabaseSwitch from '../components/DatabaseSwitch';
+import useAutoHideMessage from '../hooks/useAutoHideMessage';
 
 export const Register = () => {
   const [formData, setFormData] = useState({
@@ -16,6 +17,9 @@ export const Register = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { register } = useAuth();
+
+  // Auto-hide error message after 5 seconds
+  useAutoHideMessage(error, setError);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

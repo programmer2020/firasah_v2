@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import ProtectedLayout from '../components/ProtectedLayout';
 import api from '../services/api';
+import useAutoHideMessage from '../hooks/useAutoHideMessage';
 
 const FALLBACK_SCHEDULE = '0 */12 * * *';
 
@@ -12,6 +13,10 @@ const WorkerJobs = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [lastRunResult, setLastRunResult] = useState(null);
+
+  // Auto-hide success and error messages after 5 seconds
+  useAutoHideMessage(error, setError);
+  useAutoHideMessage(success, setSuccess);
 
   const loadStatus = async () => {
     setError('');

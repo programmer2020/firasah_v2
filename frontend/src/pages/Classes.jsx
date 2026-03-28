@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import ProtectedLayout from '../components/ProtectedLayout';
 import ConfirmModal from '../components/ConfirmModal';
+import useAutoHideMessage from '../hooks/useAutoHideMessage';
 
 export const Classes = () => {
   const location = useLocation();
@@ -22,6 +23,9 @@ export const Classes = () => {
   const [formData, setFormData] = useState(initialFormData);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
+
+  // Auto-hide error message after 5 seconds
+  useAutoHideMessage(error, setError);
 
   useEffect(() => {
     fetchClasses();

@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import '../styles/EvaluationDashboard.css';
 import ProtectedLayout from '../components/ProtectedLayout';
+import useAutoHideMessage from '../hooks/useAutoHideMessage';
 
 const EvaluationDashboard = () => {
   const [fileId, setFileId] = useState('45'); // Default test file ID
@@ -18,6 +19,9 @@ const EvaluationDashboard = () => {
   const [filterStatus, setFilterStatus] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+
+  // Auto-hide error message after 5 seconds
+  useAutoHideMessage(error, setError);
 
   // Fetch comprehensive report
   const fetchReport = async (id) => {

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import ProtectedLayout from '../components/ProtectedLayout';
 import api from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
+import useAutoHideMessage from '../hooks/useAutoHideMessage';
 
 const DAYS = [
   { key: 'Sunday', label: 'الأحد' },
@@ -34,6 +35,9 @@ export default function Schedule() {
   // Assignment form
   const [assignForm, setAssignForm] = useState({ time_slot_id: '', subject_id: '', teacher_id: '' });
   const [showAssignForm, setShowAssignForm] = useState(false);
+
+  // Auto-hide error message after 5 seconds
+  useAutoHideMessage(error, setError);
 
   // Load lookups
   useEffect(() => {

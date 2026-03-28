@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import ProtectedLayout from '../components/ProtectedLayout';
+import useAutoHideMessage from '../hooks/useAutoHideMessage';
 import '../pages/AudioUpload.css';
 
 export const AudioUpload = () => {
@@ -43,6 +44,10 @@ export const AudioUpload = () => {
     'text/plain',
   ];
   const ALLOWED_TYPES = [...ALLOWED_AUDIO_TYPES, ...ALLOWED_VIDEO_TYPES, ...ALLOWED_TEXT_TYPES];
+
+  // Auto-hide success and error messages after 5 seconds
+  useAutoHideMessage(success, setSuccess);
+  useAutoHideMessage(error, setError);
 
   // Fetch classes on mount
   useEffect(() => {

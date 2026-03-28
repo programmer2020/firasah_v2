@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import DatabaseSwitch from '../components/DatabaseSwitch';
+import useAutoHideMessage from '../hooks/useAutoHideMessage';
 
 export const Login = () => {
   const [email, setEmail] = useState('');
@@ -12,6 +13,9 @@ export const Login = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth();
+
+  // Auto-hide error message after 5 seconds
+  useAutoHideMessage(error, setError);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
