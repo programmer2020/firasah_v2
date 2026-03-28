@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import ProtectedLayout from '../components/ProtectedLayout';
+import ConfirmModal from '../components/ConfirmModal';
 
 export const Classes = () => {
   const location = useLocation();
@@ -12,14 +13,20 @@ export const Classes = () => {
   };
 
   const [classes, setClasses] = useState([]);
+  const [grades, setGrades] = useState([]);
+  const [sections, setSections] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState(initialFormData);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
 
   useEffect(() => {
     fetchClasses();
+    fetchGrades();
+    fetchSections();
   }, []);
 
   useEffect(() => {
@@ -50,6 +57,24 @@ export const Classes = () => {
     }
   };
 
+  const fetchGrades = async () => {
+    try {
+      const response = await api.get('/grades');
+      setGrades(response.data.data || []);
+    } catch (err) {
+      console.error('Failed to fetch grades:', err);
+    }
+  };
+
+  const fetchSections = async () => {
+    try {
+      const response = await api.get('/sections');
+      setSections(response.data.data || []);
+    } catch (err) {
+      console.error('Failed to fetch sections:', err);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -60,6 +85,24 @@ export const Classes = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validate all fields are filled
+    if (!formData.class_name.trim() || !formData.grade_id.toString().trim() || !formData.section_id.toString().trim()) {
+      setError('All fields are required');
+      return;
+    }
+
+    // Check if grade+section combination already exists when creating new class
+    if (!editingId) {
+      const combinationExists = classes.some(
+        (c) => c.grade_id === Number(formData.grade_id) && c.section_id === Number(formData.section_id)
+      );
+      if (combinationExists) {
+        setError(`Grade ${formData.grade_id} + Section ${formData.section_id} already exists. Choose a different combination.`);
+        return;
+      }
+    }
+
     try {
       if (editingId) {
         await api.put(`/classes/${editingId}`, formData);
@@ -90,19 +133,41 @@ export const Classes = () => {
     setShowForm(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this class?')) return;
+  const handleDelete = (id) => {
+    setDeleteId(id);
+    setShowConfirmModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
     try {
-      await api.delete(`/classes/${id}`);
+      await api.delete(`/classes/${deleteId}`);
       fetchClasses();
+      setShowConfirmModal(false);
+      setDeleteId(null);
     } catch (err) {
       setError('Failed to delete class');
       console.error(err);
+      setShowConfirmModal(false);
+      setDeleteId(null);
     }
   };
 
   return (
     <ProtectedLayout>
+      <ConfirmModal
+        isOpen={showConfirmModal}
+        title="Delete Class"
+        message="Are you sure you want to delete this class?"
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          setShowConfirmModal(false);
+          setDeleteId(null);
+        }}
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDangerous
+      />
       <div>
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-outfit font-bold text-gray-900 dark:text-white">
@@ -134,31 +199,41 @@ export const Classes = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Grade ID
+                  Grade
                 </label>
-                <input
-                  type="number"
+                <select
                   name="grade_id"
                   value={formData.grade_id}
                   onChange={handleChange}
                   required
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
-                  placeholder="Enter grade ID"
-                />
+                >
+                  <option value="">-- Select Grade --</option>
+                  {grades.map((grade) => (
+                    <option key={grade.grade_id} value={grade.grade_id}>
+                      {grade.grade_name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Section ID
+                  Section
                 </label>
-                <input
-                  type="number"
+                <select
                   name="section_id"
                   value={formData.section_id}
                   onChange={handleChange}
                   required
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
-                  placeholder="Enter section ID"
-                />
+                >
+                  <option value="">-- Select Section --</option>
+                  {sections.map((section) => (
+                    <option key={section.section_id} value={section.section_id}>
+                      {section.section_name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

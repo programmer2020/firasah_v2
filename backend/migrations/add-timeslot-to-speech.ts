@@ -1,6 +1,6 @@
 /**
- * Migration: Add time_slot_id and slot_order columns to speech table if missing
- * Purpose: Track which timeslot each speech segment belongs to and its order
+ * Migration: Add time_slot_id and slot_order columns to lecture table if missing
+ * Purpose: Track which timeslot each lecture segment belongs to and its order
  */
 
 import { getPool } from '../config/database.js';
@@ -13,7 +13,7 @@ export const up = async () => {
     const result = await pool.query(`
       SELECT column_name 
       FROM information_schema.columns 
-      WHERE table_name = 'speech' 
+      WHERE table_name = 'lecture' 
       AND column_name IN ('time_slot_id', 'slot_order')
     `);
     
@@ -21,11 +21,11 @@ export const up = async () => {
     
     // Add time_slot_id if missing
     if (!existingCols.includes('time_slot_id')) {
-      console.log('[Migration] Adding time_slot_id column to speech table...');
+      console.log('[Migration] Adding time_slot_id column to lecture table...');
       await pool.query(`
-        ALTER TABLE speech 
+        ALTER TABLE lecture 
         ADD COLUMN time_slot_id INTEGER,
-        ADD CONSTRAINT fk_speech_timeslot
+        ADD CONSTRAINT fk_lecture_timeslot
           FOREIGN KEY (time_slot_id)
           REFERENCES section_time_slots(time_slot_id)
           ON DELETE SET NULL
@@ -37,9 +37,9 @@ export const up = async () => {
     
     // Add slot_order if missing
     if (!existingCols.includes('slot_order')) {
-      console.log('[Migration] Adding slot_order column to speech table...');
+      console.log('[Migration] Adding slot_order column to lecture table...');
       await pool.query(`
-        ALTER TABLE speech 
+        ALTER TABLE lecture 
         ADD COLUMN slot_order INTEGER DEFAULT 0
       `);
       console.log('[Migration] ✅ slot_order column added');
@@ -60,8 +60,8 @@ export const down = async () => {
     
     console.log('[Migration] Rolling back: removing time_slot_id and slot_order columns...');
     await pool.query(`
-      ALTER TABLE speech 
-      DROP CONSTRAINT IF EXISTS fk_speech_timeslot,
+      ALTER TABLE lecture 
+      DROP CONSTRAINT IF EXISTS fk_lecture_timeslot,
       DROP COLUMN IF EXISTS time_slot_id,
       DROP COLUMN IF EXISTS slot_order
     `);

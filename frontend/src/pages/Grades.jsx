@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import ProtectedLayout from '../components/ProtectedLayout';
+import ConfirmModal from '../components/ConfirmModal';
 
 export const Grades = () => {
   const initialFormData = {
@@ -16,6 +17,8 @@ export const Grades = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState(initialFormData);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
 
   useEffect(() => {
     fetchGrades();
@@ -44,11 +47,40 @@ export const Grades = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validate all fields are filled
+    if (!formData.grade_name.trim()) {
+      setError('Grade name is required');
+      return;
+    }
+
+    if (!formData.grade_level || isNaN(formData.grade_level)) {
+      setError('Grade level must be a valid number');
+      return;
+    }
+
+    // Check if grade name already exists when creating new grade
+    if (!editingId) {
+      const nameExists = grades.some(
+        (g) => g.grade_name.toLowerCase() === formData.grade_name.toLowerCase()
+      );
+      if (nameExists) {
+        setError(`Grade "${formData.grade_name}" already exists. Choose a different name.`);
+        return;
+      }
+    }
+
     try {
+      const dataToSend = {
+        school_id: formData.school_id,
+        grade_name: formData.grade_name,
+        grade_level: parseInt(formData.grade_level, 10),
+      };
+
       if (editingId) {
-        await api.put(`/grades/${editingId}`, formData);
+        await api.put(`/grades/${editingId}`, dataToSend);
       } else {
-        await api.post('/grades', formData);
+        await api.post('/grades', dataToSend);
       }
 
       setError('');
@@ -74,19 +106,41 @@ export const Grades = () => {
     setShowForm(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this grade?')) return;
+  const handleDelete = (id) => {
+    setDeleteId(id);
+    setShowConfirmModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
     try {
-      await api.delete(`/grades/${id}`);
+      await api.delete(`/grades/${deleteId}`);
       fetchGrades();
+      setShowConfirmModal(false);
+      setDeleteId(null);
     } catch (err) {
       setError('Failed to delete grade');
       console.error(err);
+      setShowConfirmModal(false);
+      setDeleteId(null);
     }
   };
 
   return (
     <ProtectedLayout>
+      <ConfirmModal
+        isOpen={showConfirmModal}
+        title="Delete Grade"
+        message="Are you sure you want to delete this grade?"
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          setShowConfirmModal(false);
+          setDeleteId(null);
+        }}
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDangerous
+      />
       <div>
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-outfit font-bold text-gray-900 dark:text-white">
@@ -135,10 +189,13 @@ export const Grades = () => {
                   Grade Level
                 </label>
                 <input
-                  type="text"
+                  type="number"
                   name="grade_level"
                   value={formData.grade_level}
                   onChange={handleChange}
+                  required
+                  min="1"
+                  step="1"
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                   placeholder="Enter grade level"
                 />

@@ -1,5 +1,5 @@
 /**
- * Migrate speech table data to fixed Neon schema
+ * Migrate lecture table data to fixed Neon schema
  */
 
 import pkg from 'pg';
@@ -40,22 +40,22 @@ class SpeechMigration {
 
   async migrateSpeech() {
     try {
-      console.log('\n📥 Extracting speech data from local...');
-      const result = await this.localClient.query('SELECT * FROM speech');
+      console.log('\n📥 Extracting lecture data from local...');
+      const result = await this.localClient.query('SELECT * FROM lecture');
       const speechData = result.rows;
       
       console.log(`✅ Extracted ${speechData.length} records\n`);
 
       if (speechData.length === 0) {
-        console.log('ℹ️  No speech data to migrate');
+        console.log('ℹ️  No lecture data to migrate');
         return;
       }
 
-      console.log('📤 Inserting speech data to Neon...');
+      console.log('📤 Inserting lecture data to Neon...');
       
       for (const row of speechData) {
         const query = `
-          INSERT INTO speech (id, file_id, transcript, language, duration, created_at, updated_at, time_slot_id, slot_order)
+          INSERT INTO lecture (id, file_id, transcript, language, duration, created_at, updated_at, time_slot_id, slot_order)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
           ON CONFLICT (id) DO NOTHING
         `;
@@ -75,15 +75,15 @@ class SpeechMigration {
         try {
           await this.neonClient.query(query, values);
         } catch (error) {
-          console.warn(`⚠️  Could not insert speech record ${row.id}: ${error.message}`);
+          console.warn(`⚠️  Could not insert lecture record ${row.id}: ${error.message}`);
         }
       }
 
-      console.log(`✅ Successfully inserted ${speechData.length} speech records to Neon\n`);
+      console.log(`✅ Successfully inserted ${speechData.length} lecture records to Neon\n`);
 
       // Verify
-      const verifyResult = await this.neonClient.query('SELECT COUNT(*) FROM speech');
-      console.log(`📊 Verification: ${verifyResult.rows[0].count} records in Neon speech table`);
+      const verifyResult = await this.neonClient.query('SELECT COUNT(*) FROM lecture');
+      console.log(`📊 Verification: ${verifyResult.rows[0].count} records in Neon lecture table`);
 
     } catch (error) {
       console.error('❌ Error during migration:', error.message);
@@ -99,7 +99,7 @@ class SpeechMigration {
 }
 
 console.log('╔════════════════════════════════════════╗');
-console.log('║   SPEECH TABLE DATA MIGRATION        ║');
+console.log('║   LECTURE TABLE DATA MIGRATION        ║');
 console.log('╚════════════════════════════════════════╝\n');
 
 const migration = new SpeechMigration();

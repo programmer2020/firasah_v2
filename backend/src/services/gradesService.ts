@@ -24,7 +24,7 @@ export const getGradeById = async (gradeId: number) => {
 export const createGrade = async (grade: Grade) => {
   const { school_id, grade_name, grade_level } = grade;
   const query = `INSERT INTO grades (school_id, grade_name, grade_level) VALUES ($1, $2, $3) RETURNING *`;
-  const result = await executeQuery(query, [school_id, grade_name, grade_level]);
+  const result = await executeQuery(query, [school_id, grade_name, parseInt(grade_level as any, 10)]);
   return result.rows[0];
 };
 

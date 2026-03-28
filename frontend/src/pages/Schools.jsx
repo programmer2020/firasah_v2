@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import ProtectedLayout from '../components/ProtectedLayout';
+import ConfirmModal from '../components/ConfirmModal';
 
 export const Schools = () => {
   const location = useLocation();
@@ -18,6 +19,8 @@ export const Schools = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState(initialFormData);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
 
   useEffect(() => {
     fetchSchools();
@@ -62,6 +65,13 @@ export const Schools = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validate all fields are filled
+    if (!formData.school_name.trim() || !formData.school_code.trim() || !formData.city.trim() || !formData.country.trim()) {
+      setError('All fields are required');
+      return;
+    }
+
     try {
       if (editingId) {
         await api.put(`/schools/${editingId}`, formData);
@@ -93,19 +103,41 @@ export const Schools = () => {
     setShowForm(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this school?')) return;
+  const handleDelete = (id) => {
+    setDeleteId(id);
+    setShowConfirmModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
     try {
-      await api.delete(`/schools/${id}`);
+      await api.delete(`/schools/${deleteId}`);
       fetchSchools();
+      setShowConfirmModal(false);
+      setDeleteId(null);
     } catch (err) {
       setError('Failed to delete school');
       console.error(err);
+      setShowConfirmModal(false);
+      setDeleteId(null);
     }
   };
 
   return (
     <ProtectedLayout>
+      <ConfirmModal
+        isOpen={showConfirmModal}
+        title="Delete School"
+        message="Are you sure you want to delete this school?"
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          setShowConfirmModal(false);
+          setDeleteId(null);
+        }}
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDangerous
+      />
       <div>
         {/* Header with Add Button */}
         <div className="flex items-center justify-between mb-8">
@@ -161,6 +193,7 @@ export const Schools = () => {
                   name="school_code"
                   value={formData.school_code}
                   onChange={handleChange}
+                  required
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                   placeholder="Enter school code"
                 />
@@ -174,6 +207,7 @@ export const Schools = () => {
                   name="city"
                   value={formData.city}
                   onChange={handleChange}
+                  required
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                   placeholder="Enter city"
                 />
@@ -187,6 +221,7 @@ export const Schools = () => {
                   name="country"
                   value={formData.country}
                   onChange={handleChange}
+                  required
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                   placeholder="Enter country"
                 />

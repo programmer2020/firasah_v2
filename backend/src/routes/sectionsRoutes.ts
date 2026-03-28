@@ -34,6 +34,13 @@ router.post('/', errorHandler, async (req: Request, res: Response) => {
     const section = await createSection({ section_name });
     res.status(201).json({ success: true, data: section, message: 'Section created successfully' });
   } catch (error: any) {
+    // Handle duplicate key error
+    if (error.message && error.message.includes('duplicate key')) {
+      return res.status(409).json({ 
+        success: false, 
+        message: `Section "${req.body.section_name}" already exists. Please choose a different name.` 
+      });
+    }
     res.status(500).json({ success: false, message: 'Failed to create section', error: error.message });
   }
 });

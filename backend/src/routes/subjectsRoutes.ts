@@ -34,6 +34,13 @@ router.post('/', errorHandler, async (req: Request, res: Response) => {
     const subject = await createSubject({ subject_name });
     res.status(201).json({ success: true, data: subject, message: 'Subject created successfully' });
   } catch (error: any) {
+    // Handle duplicate key error
+    if (error.message && error.message.includes('duplicate key')) {
+      return res.status(409).json({ 
+        success: false, 
+        message: `Subject "${req.body.subject_name}" already exists. Please choose a different name.` 
+      });
+    }
     res.status(500).json({ success: false, message: 'Failed to create subject', error: error.message });
   }
 });

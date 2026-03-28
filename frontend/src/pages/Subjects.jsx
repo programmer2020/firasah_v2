@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import ProtectedLayout from '../components/ProtectedLayout';
+import ConfirmModal from '../components/ConfirmModal';
 
 export const Subjects = () => {
   const location = useLocation();
@@ -15,6 +16,8 @@ export const Subjects = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState(initialFormData);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
 
   useEffect(() => {
     fetchSubjects();
@@ -56,6 +59,24 @@ export const Subjects = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validate all fields are filled
+    if (!formData.subject_name.trim()) {
+      setError('Subject name is required');
+      return;
+    }
+
+    // Check if subject name already exists when creating new subject
+    if (!editingId) {
+      const nameExists = subjects.some(
+        (s) => s.subject_name.toLowerCase() === formData.subject_name.toLowerCase()
+      );
+      if (nameExists) {
+        setError(`Subject "${formData.subject_name}" already exists. Choose a different name.`);
+        return;
+      }
+    }
+
     try {
       if (editingId) {
         await api.put(`/subjects/${editingId}`, formData);
@@ -84,19 +105,41 @@ export const Subjects = () => {
     setShowForm(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this subject?')) return;
+  const handleDelete = (id) => {
+    setDeleteId(id);
+    setShowConfirmModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
     try {
-      await api.delete(`/subjects/${id}`);
+      await api.delete(`/subjects/${deleteId}`);
       fetchSubjects();
+      setShowConfirmModal(false);
+      setDeleteId(null);
     } catch (err) {
       setError('Failed to delete subject');
       console.error(err);
+      setShowConfirmModal(false);
+      setDeleteId(null);
     }
   };
 
   return (
     <ProtectedLayout>
+      <ConfirmModal
+        isOpen={showConfirmModal}
+        title="Delete Subject"
+        message="Are you sure you want to delete this subject?"
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          setShowConfirmModal(false);
+          setDeleteId(null);
+        }}
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDangerous
+      />
       <div>
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-outfit font-bold text-gray-900 dark:text-white">

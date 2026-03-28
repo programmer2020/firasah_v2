@@ -110,12 +110,12 @@ export const Sidebar = () => {
       icon: IconMic,
     },
     {
-      label: 'الجدول الدراسي',
+      label: 'Schedule',
       href: '/schedule',
       icon: IconCalendar,
     },
     {
-      label: 'جدولة الـ Worker',
+      label: 'Worker Schedule',
       href: '/worker-jobs',
       icon: IconSettings,
     },

@@ -42,6 +42,13 @@ router.post('/', errorHandler, async (req: Request, res: Response) => {
     const teacher = await createTeacher({ school_id, teacher_name, teacher_email, teacher_phone });
     res.status(201).json({ success: true, data: teacher, message: 'Teacher created successfully' });
   } catch (error: any) {
+    // Handle duplicate key error
+    if (error.message && error.message.includes('duplicate key')) {
+      return res.status(409).json({ 
+        success: false, 
+        message: `Teacher email \"${req.body.teacher_email}\" is already in use. Please choose a different email.` 
+      });
+    }
     res.status(500).json({ success: false, message: 'Failed to create teacher', error: error.message });
   }
 });

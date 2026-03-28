@@ -134,13 +134,13 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
     });
 
     if (isText) {
-      // For text files, read content directly and save to speech table
+      // For text files, read content directly and save to lecture table
       updateProgress(soundFile.file_id, { status: 'saving', message: 'جاري حفظ النص...', percent: 50 });
       const textContent = fs.readFileSync(req.file.path, 'utf-8');
       const { saveSpeech } = await import('../services/speechService.js');
       await saveSpeech(soundFile.file_id, textContent, 'ar', null);
       updateProgress(soundFile.file_id, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
-      console.log(`[Upload] Text file saved to speech table for file ${soundFile.file_id}`);
+      console.log(`[Upload] Text file saved to lecture table for file ${soundFile.file_id}`);
 
       res.status(201).json({
         success: true,

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import ProtectedLayout from '../components/ProtectedLayout';
+import ConfirmModal from '../components/ConfirmModal';
 
 export const Teachers = () => {
   const location = useLocation();
@@ -18,6 +19,8 @@ export const Teachers = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState(initialFormData);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
 
   useEffect(() => {
     fetchTeachers();
@@ -62,6 +65,24 @@ export const Teachers = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validate all fields are filled
+    if (!formData.teacher_name.trim() || !formData.school_id.toString().trim() || !formData.teacher_email.trim() || !formData.teacher_phone.trim()) {
+      setError('All fields are required');
+      return;
+    }
+
+    // Check if email already exists when creating new teacher
+    if (!editingId) {
+      const emailExists = teachers.some(
+        (t) => t.teacher_email.toLowerCase() === formData.teacher_email.toLowerCase()
+      );
+      if (emailExists) {
+        setError(`Email "${formData.teacher_email}" is already in use. Choose a different email.`);
+        return;
+      }
+    }
+
     try {
       if (editingId) {
         await api.put(`/teachers/${editingId}`, formData);
@@ -93,20 +114,41 @@ export const Teachers = () => {
     setShowForm(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this teacher?'))
-      return;
+  const handleDelete = (id) => {
+    setDeleteId(id);
+    setShowConfirmModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
     try {
-      await api.delete(`/teachers/${id}`);
+      await api.delete(`/teachers/${deleteId}`);
       fetchTeachers();
+      setShowConfirmModal(false);
+      setDeleteId(null);
     } catch (err) {
       setError('Failed to delete teacher');
       console.error(err);
+      setShowConfirmModal(false);
+      setDeleteId(null);
     }
   };
 
   return (
     <ProtectedLayout>
+      <ConfirmModal
+        isOpen={showConfirmModal}
+        title="Delete Teacher"
+        message="Are you sure you want to delete this teacher?"
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          setShowConfirmModal(false);
+          setDeleteId(null);
+        }}
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDangerous
+      />
       <div>
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-outfit font-bold text-gray-900 dark:text-white">
@@ -159,6 +201,7 @@ export const Teachers = () => {
                   name="teacher_email"
                   value={formData.teacher_email}
                   onChange={handleChange}
+                  required
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                   placeholder="Enter email"
                 />
@@ -172,6 +215,7 @@ export const Teachers = () => {
                   name="teacher_phone"
                   value={formData.teacher_phone}
                   onChange={handleChange}
+                  required
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white"
                   placeholder="Enter phone number"
                 />

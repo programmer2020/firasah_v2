@@ -348,7 +348,7 @@ export const transcribeAudio = async (filePath: string, fileId?: number, slotInf
 };
 
 /**
- * Save transcription to speech table
+ * Save transcription to lecture table
  */
 export const saveSpeech = async (
   fileId: number,
@@ -359,9 +359,9 @@ export const saveSpeech = async (
   slotOrder: number = 0
 ) => {
   try {
-    console.log(`[Speech] Saving speech record: file_id=${fileId}, time_slot_id=${timeSlotId}, slot_order=${slotOrder}, transcript_len=${transcript.length}`);
+    console.log(`[Speech] Saving lecture record: file_id=${fileId}, time_slot_id=${timeSlotId}, slot_order=${slotOrder}, transcript_len=${transcript.length}`);
     
-    const result = await insert('speech', {
+    const result = await insert('lecture', {
       file_id: fileId,
       transcript,
       language,
@@ -372,9 +372,9 @@ export const saveSpeech = async (
       updated_at: new Date(),
     });
     
-    console.log(`[Speech] ✅ Speech saved successfully: id=${result.id}, file_id=${result.file_id}`);
+    console.log(`[Speech] ✅ Lecture saved successfully: id=${result.id}, file_id=${result.file_id}`);
     
-    // Automatically evaluate speech against KPIs asynchronously
+    // Automatically evaluate lecture against KPIs asynchronously
     // Do not await - let it process in background without delaying the response
     if (transcript && transcript.trim() && transcript !== '[transcription_pending]') {
       setImmediate(async () => {
@@ -402,12 +402,12 @@ export const saveSpeech = async (
 };
 
 /**
- * Get speech records by file_id
+ * Get lecture records by file_id
  */
 export const getSpeechByFileId = async (fileId: number) => {
   const query = `
     SELECT s.*, ts.start_time, ts.end_time, ts.day_of_week
-    FROM speech s
+    FROM lecture s
     LEFT JOIN section_time_slots ts ON s.time_slot_id = ts.time_slot_id
     WHERE s.file_id = $1
     ORDER BY s.slot_order ASC
@@ -416,12 +416,12 @@ export const getSpeechByFileId = async (fileId: number) => {
 };
 
 /**
- * Get all speech records
+ * Get all lecture records
  */
 export const getAllSpeech = async () => {
   const query = `
     SELECT s.*, sf.filename, ts.start_time, ts.end_time, ts.day_of_week
-    FROM speech s
+    FROM lecture s
     JOIN sound_files sf ON s.file_id = sf.file_id
     LEFT JOIN section_time_slots ts ON s.time_slot_id = ts.time_slot_id
     ORDER BY s.file_id DESC, s.slot_order ASC

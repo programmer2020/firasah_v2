@@ -29,11 +29,30 @@ router.get('/:id', errorHandler, async (req: Request, res: Response) => {
 
 router.post('/', errorHandler, async (req: Request, res: Response) => {
   try {
-    const { school_id, grade_name, grade_level } = req.body;
-    if (!school_id || !grade_name || !grade_level) return res.status(400).json({ success: false, message: 'Missing required fields' });
+    let { school_id, grade_name, grade_level } = req.body;
+    
+    // Validate required fields
+    if (!school_id || !grade_name || grade_level === undefined || grade_level === null) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    }
+
+    // Convert grade_level to integer
+    grade_level = parseInt(grade_level, 10);
+    
+    if (isNaN(grade_level)) {
+      return res.status(400).json({ success: false, message: 'Grade level must be a valid number' });
+    }
+
     const grade = await createGrade({ school_id, grade_name, grade_level });
     res.status(201).json({ success: true, data: grade, message: 'Grade created successfully' });
   } catch (error: any) {
+    // Handle duplicate key error
+    if (error.message && error.message.includes('duplicate key')) {
+      return res.status(409).json({ 
+        success: false, 
+        message: `A grade with level ${req.body.grade_level} already exists for this school. Please choose a different level.` 
+      });
+    }
     res.status(500).json({ success: false, message: 'Failed to create grade', error: error.message });
   }
 });

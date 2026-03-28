@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import ProtectedLayout from '../components/ProtectedLayout';
 import api from '../services/api';
+import ConfirmModal from '../components/ConfirmModal';
 
 const DAYS = [
   { key: 'Sunday', label: 'الأحد' },
@@ -19,6 +20,12 @@ export default function Schedule() {
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Confirm modals
+  const [showDeleteSlotModal, setShowDeleteSlotModal] = useState(false);
+  const [deleteSlotId, setDeleteSlotId] = useState(null);
+  const [showDeleteAssignModal, setShowDeleteAssignModal] = useState(false);
+  const [deleteAssignId, setDeleteAssignId] = useState(null);
 
   // Time slot form
   const [showSlotForm, setShowSlotForm] = useState(false);
@@ -88,14 +95,23 @@ export default function Schedule() {
     }
   };
 
-  const handleDeleteSlot = async (timeSlotId) => {
-    if (!confirm('هل تريد حذف هذه الحصة؟')) return;
+  const handleDeleteSlot = async () => {
+    if (!deleteSlotId) return;
     try {
-      await api.delete(`/schedule/time-slots/${timeSlotId}`);
+      await api.delete(`/schedule/time-slots/${deleteSlotId}`);
       loadSlots();
+      setShowDeleteSlotModal(false);
+      setDeleteSlotId(null);
     } catch (err) {
-      setError('فشل في حذف الحصة');
+      setError('Failed to delete time slot');
+      setShowDeleteSlotModal(false);
+      setDeleteSlotId(null);
     }
+  };
+
+  const openDeleteSlotModal = (timeSlotId) => {
+    setDeleteSlotId(timeSlotId);
+    setShowDeleteSlotModal(true);
   };
 
   const handleAssign = async (e) => {
@@ -115,14 +131,23 @@ export default function Schedule() {
     }
   };
 
-  const handleRemoveAssignment = async (scheduleId) => {
-    if (!confirm('هل تريد إزالة تعيين المادة والمدرس؟')) return;
+  const handleRemoveAssignment = async () => {
+    if (!deleteAssignId) return;
     try {
-      await api.delete(`/schedule/assign/${scheduleId}`);
+      await api.delete(`/schedule/assign/${deleteAssignId}`);
       loadSlots();
+      setShowDeleteAssignModal(false);
+      setDeleteAssignId(null);
     } catch (err) {
-      setError('فشل في الإزالة');
+      setError('Failed to remove assignment');
+      setShowDeleteAssignModal(false);
+      setDeleteAssignId(null);
     }
+  };
+
+  const openDeleteAssignModal = (scheduleId) => {
+    setDeleteAssignId(scheduleId);
+    setShowDeleteAssignModal(true);
   };
 
   const openAssignForm = (slot) => {
@@ -318,14 +343,14 @@ export default function Schedule() {
                           {slot.schedule_id && (
                             <button
                               className="bg-orange-100 text-orange-700 px-3 py-1 rounded hover:bg-orange-200 text-sm"
-                              onClick={() => handleRemoveAssignment(slot.schedule_id)}
+                              onClick={() => openDeleteAssignModal(slot.schedule_id)}
                             >
                               إزالة التعيين
                             </button>
                           )}
                           <button
                             className="bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 text-sm"
-                            onClick={() => handleDeleteSlot(slot.time_slot_id)}
+                            onClick={() => openDeleteSlotModal(slot.time_slot_id)}
                           >
                             حذف
                           </button>
@@ -339,6 +364,34 @@ export default function Schedule() {
           </>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={showDeleteSlotModal}
+        title="Delete Time Slot"
+        message="Are you sure you want to delete this time slot?"
+        onConfirm={handleDeleteSlot}
+        onCancel={() => {
+          setShowDeleteSlotModal(false);
+          setDeleteSlotId(null);
+        }}
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDangerous
+      />
+
+      <ConfirmModal
+        isOpen={showDeleteAssignModal}
+        title="Remove Assignment"
+        message="Are you sure you want to remove this assignment?"
+        onConfirm={handleRemoveAssignment}
+        onCancel={() => {
+          setShowDeleteAssignModal(false);
+          setDeleteAssignId(null);
+        }}
+        confirmText="Remove"
+        cancelText="Cancel"
+        isDangerous
+      />
     </ProtectedLayout>
   );
 }

@@ -14,17 +14,17 @@ const client = new Client({
 try {
   await client.connect();
   
-  console.log('📋 LOCAL SPEECH TABLE SCHEMA:\n');
+  console.log('📋 LOCAL LECTURE TABLE SCHEMA:\n');
   const localResult = await client.query(
-    "SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = 'speech' ORDER BY ordinal_position"
+    "SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = 'lecture' ORDER BY ordinal_position"
   );
   
   localResult.rows.forEach(row => {
     console.log(`   ${row.column_name.padEnd(20)} | ${row.data_type.padEnd(15)} | nullable: ${row.is_nullable}`);
   });
   
-  console.log('\n📊 LOCAL SPEECH DATA:\n');
-  const dataResult = await client.query('SELECT * FROM speech');
+  console.log('\n📊 LOCAL LECTURE DATA:\n');
+  const dataResult = await client.query('SELECT * FROM lecture');
   console.log(`   Total records: ${dataResult.rows.length}`);
   if (dataResult.rows.length > 0) {
     console.log('\n   Column names in data:');

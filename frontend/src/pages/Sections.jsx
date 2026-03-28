@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import ProtectedLayout from '../components/ProtectedLayout';
+import ConfirmModal from '../components/ConfirmModal';
 
 export const Sections = () => {
   const initialFormData = {
@@ -14,6 +15,8 @@ export const Sections = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState(initialFormData);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
 
   useEffect(() => {
     fetchSections();
@@ -42,6 +45,24 @@ export const Sections = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validate all fields are filled
+    if (!formData.section_name.trim()) {
+      setError('Section name is required');
+      return;
+    }
+
+    // Check if section name already exists when creating new section
+    if (!editingId) {
+      const nameExists = sections.some(
+        (s) => s.section_name.toLowerCase() === formData.section_name.toLowerCase()
+      );
+      if (nameExists) {
+        setError(`Section "${formData.section_name}" already exists. Choose a different name.`);
+        return;
+      }
+    }
+
     try {
       if (editingId) {
         await api.put(`/sections/${editingId}`, formData);
@@ -70,19 +91,41 @@ export const Sections = () => {
     setShowForm(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this section?')) return;
+  const handleDelete = (id) => {
+    setDeleteId(id);
+    setShowConfirmModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
     try {
-      await api.delete(`/sections/${id}`);
+      await api.delete(`/sections/${deleteId}`);
       fetchSections();
+      setShowConfirmModal(false);
+      setDeleteId(null);
     } catch (err) {
       setError('Failed to delete section');
       console.error(err);
+      setShowConfirmModal(false);
+      setDeleteId(null);
     }
   };
 
   return (
     <ProtectedLayout>
+      <ConfirmModal
+        isOpen={showConfirmModal}
+        title="Delete Section"
+        message="Are you sure you want to delete this section?"
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          setShowConfirmModal(false);
+          setDeleteId(null);
+        }}
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDangerous
+      />
       <div>
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-outfit font-bold text-gray-900 dark:text-white">

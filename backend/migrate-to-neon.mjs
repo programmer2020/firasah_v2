@@ -46,7 +46,8 @@ const TABLE_ORDER = [
   'kpi_domains',
   'kpis',
   'sound_files',
-  'speech',
+  'lecture',
+  'fragments',
   'evidences',
   'evaluations',
 ];
@@ -211,17 +212,34 @@ CREATE TABLE IF NOT EXISTS sound_files (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- speech table
-CREATE TABLE IF NOT EXISTS speech (
+-- lecture table
+CREATE TABLE IF NOT EXISTS lecture (
     id SERIAL PRIMARY KEY,
     file_id INTEGER NOT NULL REFERENCES sound_files(file_id) ON DELETE CASCADE,
+    time_slot_id INTEGER REFERENCES section_time_slots(time_slot_id) ON DELETE SET NULL,
     transcript TEXT,
     language VARCHAR(10),
     duration DECIMAL(10, 2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    time_slot_id INTEGER,
     slot_order INTEGER
+);
+
+-- fragments table
+CREATE TABLE IF NOT EXISTS fragments (
+    id SERIAL PRIMARY KEY,
+    file_id INTEGER NOT NULL REFERENCES sound_files(file_id) ON DELETE CASCADE,
+    lecture_id INTEGER REFERENCES lecture(id) ON DELETE CASCADE,
+    time_slot_id INTEGER REFERENCES section_time_slots(time_slot_id) ON DELETE SET NULL,
+    fragment_order INTEGER NOT NULL,
+    start_seconds DECIMAL(10, 2) NOT NULL,
+    end_seconds DECIMAL(10, 2) NOT NULL,
+    duration DECIMAL(10, 2) NOT NULL,
+    fragment_path VARCHAR(500),
+    transcript TEXT COLLATE "C",
+    language VARCHAR(10),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- evidences table
@@ -259,7 +277,12 @@ CREATE INDEX IF NOT EXISTS idx_evidences_kpi_id ON evidences(kpi_id);
 CREATE INDEX IF NOT EXISTS idx_evidences_file_id ON evidences(file_id);
 CREATE INDEX IF NOT EXISTS idx_evaluations_file_id ON evaluations(file_id);
 CREATE INDEX IF NOT EXISTS idx_evaluations_kpi_id ON evaluations(kpi_id);
-CREATE INDEX IF NOT EXISTS idx_speech_file_id ON speech(file_id);
+CREATE INDEX IF NOT EXISTS idx_lecture_file_id ON lecture(file_id);
+CREATE INDEX IF NOT EXISTS idx_lecture_time_slot_id ON lecture(time_slot_id);
+CREATE INDEX IF NOT EXISTS idx_fragments_file_id ON fragments(file_id);
+CREATE INDEX IF NOT EXISTS idx_fragments_lecture_id ON fragments(lecture_id);
+CREATE INDEX IF NOT EXISTS idx_fragments_time_slot_id ON fragments(time_slot_id);
+CREATE INDEX IF NOT EXISTS idx_fragments_order ON fragments(file_id, fragment_order);
 `;
 
 class MigrationManager {

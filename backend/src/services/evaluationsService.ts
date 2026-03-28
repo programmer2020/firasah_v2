@@ -394,7 +394,7 @@ export const evaluateSpeechAgainstKPIs = async (
     try {
       const speechQuery = `
         SELECT s.time_slot_id, ts.start_time, ts.end_time
-        FROM speech s
+        FROM lecture s
         LEFT JOIN section_time_slots ts ON s.time_slot_id = ts.time_slot_id
         WHERE s.file_id = $1
         LIMIT 1
