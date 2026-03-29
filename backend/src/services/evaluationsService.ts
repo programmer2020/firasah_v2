@@ -361,8 +361,9 @@ export const evaluateSpeechAgainstKPIs = async (
     // Get timeslot information for this file
     let slotStartTime: Date | null = null;
     let slotEndTime: Date | null = null;
-    
+
     try {
+      // First try: get scheduled timeslot from lecture → section_time_slots
       const speechQuery = `
         SELECT s.time_slot_id, ts.start_time, ts.end_time
         FROM lecture s
@@ -372,22 +373,37 @@ export const evaluateSpeechAgainstKPIs = async (
       `;
       const speechRecord = await getOne(speechQuery, [fileId]);
       if (speechRecord && speechRecord.start_time && speechRecord.end_time) {
-        // Convert TIME values to TIMESTAMP format (today's date + time)
         const today = new Date();
-        const timeStart = speechRecord.start_time; // Format: "HH:MM:SS"
-        const timeEnd = speechRecord.end_time;     // Format: "HH:MM:SS"
-        
-        // Parse time strings and create timestamps
-        const [startHours, startMins, startSecs] = timeStart.split(':').map(Number);
-        const [endHours, endMins, endSecs] = timeEnd.split(':').map(Number);
-        
+        const [startHours, startMins, startSecs] = speechRecord.start_time.split(':').map(Number);
+        const [endHours, endMins, endSecs] = speechRecord.end_time.split(':').map(Number);
         slotStartTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(), startHours, startMins, startSecs);
         slotEndTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(), endHours, endMins, endSecs);
-        
-        console.log(`[Evaluation] 📅 Found timeslot for file_id=${fileId}: ${slotStartTime.toISOString()} - ${slotEndTime.toISOString()}`);
+        console.log(`[Evaluation] 📅 Timeslot from schedule: ${slotStartTime.toISOString()} - ${slotEndTime.toISOString()}`);
       }
     } catch (err) {
-      console.warn(`[Evaluation] ⚠️ Could not fetch timeslot info for file_id=${fileId}:`, err);
+      console.warn(`[Evaluation] ⚠️ Could not fetch timeslot from lecture table:`, err);
+    }
+
+    // Fallback: use file upload time + total fragment duration
+    if (!slotStartTime || !slotEndTime) {
+      try {
+        const fileQuery = `
+          SELECT sf.created_at, COALESCE(SUM(f.duration), 0) as total_duration
+          FROM sound_files sf
+          LEFT JOIN fragments f ON f.file_id = sf.file_id
+          WHERE sf.file_id = $1
+          GROUP BY sf.created_at
+        `;
+        const fileRecord = await getOne(fileQuery, [fileId]);
+        if (fileRecord && fileRecord.created_at) {
+          slotStartTime = new Date(fileRecord.created_at);
+          const durationSecs = Math.round(Number(fileRecord.total_duration) || 0);
+          slotEndTime = new Date(slotStartTime.getTime() + durationSecs * 1000);
+          console.log(`[Evaluation] 📅 Timeslot from file upload: ${slotStartTime.toISOString()} - ${slotEndTime.toISOString()} (${durationSecs}s)`);
+        }
+      } catch (err) {
+        console.warn(`[Evaluation] ⚠️ Could not fetch file upload time:`, err);
+      }
     }
 
     // Get all KPIs for reference
