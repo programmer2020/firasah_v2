@@ -15,7 +15,7 @@ import {
   deleteSoundFile,
   getSoundFilesByCreator,
 } from '../services/soundFilesService.js';
-import { transcribeAndSave, convertVideoToAudio, getSpeechByFileId } from '../services/speechService.js';
+import { transcribeAndSave, convertVideoToAudio, getSpeechByFileId, retranscribePendingFragments } from '../services/speechService.js';
 import { getProgress, addSSEClient, updateProgress } from '../services/progressService.js';
 import { getEvaluationResults, generateEvaluationReport, testEvaluation, getEvaluationsWithFilters, exportEvaluationToJSON, generateComprehensiveReport } from '../services/evaluationsService.js';
 import { getMany, executeQuery } from '../helpers/database.js';
@@ -769,6 +769,50 @@ router.post('/:id/retranscribe', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: error instanceof Error ? error.message : 'Failed to start re-transcription',
+    });
+  }
+});
+
+/**
+ * POST /api/sound-files/:id/retranscribe-pending
+ * Re-transcribe only [transcription_pending] fragments without touching successful ones
+ */
+router.post('/:id/retranscribe-pending', async (req: Request, res: Response) => {
+  try {
+    const fileId = parseInt(req.params.id as string);
+    const soundFile = await getSoundFileById(fileId);
+    if (!soundFile) {
+      return res.status(404).json({ success: false, message: 'Sound file not found' });
+    }
+
+    let audioPath = path.isAbsolute(soundFile.filepath)
+      ? soundFile.filepath
+      : path.join(process.cwd(), soundFile.filepath);
+
+    // If video, convert to audio
+    const videoExts = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
+    if (videoExts.includes(path.extname(audioPath).toLowerCase())) {
+      const mp3Path = audioPath.replace(path.extname(audioPath), '.mp3');
+      audioPath = fs.existsSync(mp3Path) ? mp3Path : await convertVideoToAudio(audioPath);
+    }
+
+    const shouldDenoise = req.body.denoise === true;
+
+    // Run in background
+    retranscribePendingFragments(fileId, audioPath, shouldDenoise)
+      .then(({ retranscribed, failed }) =>
+        console.log(`[RetranscribePending] Done for file_id=${fileId}: ${retranscribed} ok, ${failed} failed`)
+      )
+      .catch((err) => console.error(`[RetranscribePending] Error for file_id=${fileId}:`, err));
+
+    res.status(200).json({
+      success: true,
+      message: 'Retranscription of pending fragments started in background',
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to start retranscription',
     });
   }
 });

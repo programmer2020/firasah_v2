@@ -545,9 +545,9 @@ ${kpiReference}
         }
 
         // Find KPI in database
-        const kpiRecord = allKPIs.find((kpi: any) => kpi.kpi_code.toLowerCase() === kpiCode.toLowerCase());
+        const kpiRecord = allKPIs.find((kpi: any) => kpi.kpi_code && kpi.kpi_code.toLowerCase() === kpiCode.toLowerCase());
         if (!kpiRecord) {
-          console.warn(`[Evaluation] ⚠️ KPI not found in database: ${kpiCode}`);
+          console.warn(`[Evaluation] ⚠️ KPI not found in database: "${kpiCode}" (available codes: ${allKPIs.map((k: any) => k.kpi_code).join(', ')})`);
           continue;
         }
 

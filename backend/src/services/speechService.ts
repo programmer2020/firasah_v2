@@ -11,7 +11,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 // @ts-ignore
 import ffprobeStatic from 'ffprobe-static';
-import { insert, getOne, getMany } from '../helpers/database.js';
+import { insert, getOne, getMany, executeQuery } from '../helpers/database.js';
 import { updateProgress } from './progressService.js';
 import { evaluateSpeechAgainstKPIs } from './evaluationsService.js';
 
@@ -195,6 +195,9 @@ const splitAudioSegment = (
     ffmpeg(inputPath)
       .setStartTime(startSec)
       .setDuration(durationSec)
+      .audioCodec('libmp3lame')
+      .audioBitrate(64)   // Fixed low bitrate → 15min = ~7MB, always under Whisper 25MB limit
+      .audioChannels(1)   // Mono is sufficient for transcription
       .output(outputPath)
       .on('start', (cmd) => {
         console.log(`[FFmpeg] FFmpeg command started: ${cmd}`);
@@ -313,14 +316,17 @@ export const transcribeAudio = async (filePath: string, fileId?: number, slotInf
           console.error(`[Speech] Error code: ${err.code}`);
           
           if (attempt < MAX_RETRIES) {
-            // Quick retry: 1 second, with progress updates every 250ms
-            const delay = 1000;
-            const updateInterval = 250;
+            // Use longer delay for rate limit errors (429), shorter for others
+            const isRateLimit = err.status === 429 || err.code === 'rate_limit_exceeded';
+            const delay = isRateLimit ? 30000 : 1000; // 30s for rate limit, 1s otherwise
+            const updateInterval = 1000;
             const steps = Math.ceil(delay / updateInterval);
-            
+
             if (fileId) {
               updateProgress(fileId, {
-                message: `فشلت المحاولة ${attemptNum}. إعادة المحاولة...`,
+                message: isRateLimit
+                  ? `تجاوز حد الطلبات. إعادة المحاولة خلال ${delay / 1000}s...`
+                  : `فشلت المحاولة ${attemptNum}. إعادة المحاولة...`,
               });
             }
 
@@ -331,7 +337,7 @@ export const transcribeAudio = async (filePath: string, fileId?: number, slotInf
                 const remaining = Math.max(0, (delay - (i + 1) * updateInterval) / 1000);
                 if (remaining > 0) {
                   updateProgress(fileId, {
-                    message: `إعادة المحاولة خلال ${remaining.toFixed(1)}s...`,
+                    message: `إعادة المحاولة خلال ${remaining.toFixed(0)}s...`,
                   });
                 }
               }
@@ -628,6 +634,11 @@ export const transcribeAndSave = async (
 
       console.log(`[Speech] ✅ Fragment ${slotOrder} saved: id=${fragment.id}`);
       results.push(fragment);
+
+      // Small delay between fragments to avoid hitting rate limits
+      if (slotOrder < totalFragments) {
+        await new Promise(r => setTimeout(r, 3000));
+      }
     } catch (err) {
       console.error(`[Speech] ❌ Error processing fragment ${slotOrder}:`, err);
       // Save a placeholder
@@ -668,4 +679,123 @@ export const transcribeAndSave = async (
       console.log(`[FFmpeg] Cleaned up denoised file`);
     }
   }
+};
+
+/**
+ * Retranscribe only [transcription_pending] fragments for a file
+ * without touching successfully transcribed fragments
+ */
+export const retranscribePendingFragments = async (
+  fileId: number,
+  filePath: string,
+  shouldDenoise: boolean = false
+): Promise<{ retranscribed: number; failed: number }> => {
+  const absolutePath = path.isAbsolute(filePath)
+    ? filePath
+    : path.join(process.cwd(), filePath);
+
+  // Get all pending fragments for this file
+  const pendingFragments: any[] = await getMany(
+    'SELECT * FROM fragments WHERE file_id = $1 AND transcript = $2 ORDER BY slot_order ASC',
+    [fileId, '[transcription_pending]']
+  );
+
+  if (pendingFragments.length === 0) {
+    console.log(`[Retranscribe] No pending fragments for file_id=${fileId}`);
+    return { retranscribed: 0, failed: 0 };
+  }
+
+  console.log(`[Retranscribe] Found ${pendingFragments.length} pending fragment(s) for file_id=${fileId}`);
+  updateProgress(fileId, {
+    status: 'transcribing',
+    message: `إعادة تحويل ${pendingFragments.length} مقطع معلق...`,
+    percent: 10,
+    totalSlots: pendingFragments.length,
+  });
+
+  // Optionally denoise
+  let audioPath = absolutePath;
+  let denoisedCleanup = false;
+  if (shouldDenoise) {
+    audioPath = await denoiseAudio(absolutePath, fileId);
+    denoisedCleanup = audioPath !== absolutePath;
+  }
+
+  const tempDir = path.join(path.dirname(audioPath), 'temp_segments_retry');
+  if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+  let retranscribed = 0;
+  let failed = 0;
+  const ext = path.extname(absolutePath);
+
+  try {
+    for (let idx = 0; idx < pendingFragments.length; idx++) {
+      const frag = pendingFragments[idx];
+      const startSec = frag.start_time ?? 0;
+      const duration = frag.duration ?? (frag.end_time - frag.start_time);
+      const endSec = frag.end_time ?? (startSec + duration);
+      const slotOrder = frag.slot_order;
+      const segmentFile = path.join(tempDir, `retry_${slotOrder}${ext}`);
+
+      const pct = Math.round(10 + ((idx / pendingFragments.length) * 85));
+      updateProgress(fileId, {
+        status: 'transcribing',
+        message: `إعادة تحويل المقطع ${idx + 1} من ${pendingFragments.length}...`,
+        percent: pct,
+        currentSlot: idx + 1,
+        totalSlots: pendingFragments.length,
+      });
+
+      try {
+        await splitAudioSegment(audioPath, segmentFile, startSec, duration);
+
+        if (!fs.existsSync(segmentFile)) {
+          throw new Error(`Segment file not created for fragment ${frag.id}`);
+        }
+
+        const result = await transcribeAudio(segmentFile, fileId, { current: idx + 1, total: pendingFragments.length });
+
+        // Update fragment transcript in DB
+        await executeQuery(
+          'UPDATE fragments SET transcript = $1, language = $2, updated_at = $3 WHERE id = $4',
+          [result.text, result.language, new Date(), frag.id]
+        );
+
+        console.log(`[Retranscribe] ✅ Fragment id=${frag.id} retranscribed: ${result.text.length} chars`);
+        retranscribed++;
+
+        // Trigger KPI evaluation
+        if (result.text && result.text.trim()) {
+          setImmediate(async () => {
+            try {
+              await evaluateSpeechAgainstKPIs(result.text, fileId, frag.id, undefined);
+            } catch (evalErr) {
+              console.error(`[Evaluation] ⚠️ Eval error for fragment_id=${frag.id}:`, evalErr);
+            }
+          });
+        }
+
+        // Delay between fragments to avoid rate limit
+        if (idx < pendingFragments.length - 1) {
+          await new Promise(r => setTimeout(r, 3000));
+        }
+      } catch (err) {
+        console.error(`[Retranscribe] ❌ Failed for fragment id=${frag.id}:`, err);
+        failed++;
+      } finally {
+        if (fs.existsSync(segmentFile)) fs.unlinkSync(segmentFile);
+      }
+    }
+  } finally {
+    try { fs.rmdirSync(tempDir); } catch { /* ignore */ }
+    if (denoisedCleanup && fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
+  }
+
+  updateProgress(fileId, {
+    status: 'completed',
+    message: `تم! أُعيد تحويل ${retranscribed} مقطع، فشل ${failed} مقطع.`,
+    percent: 100,
+  });
+
+  return { retranscribed, failed };
 };
