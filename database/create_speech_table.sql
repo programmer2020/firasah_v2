@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS lecture (
     transcript TEXT COLLATE "C",
     language VARCHAR(10),
     duration DECIMAL(10, 2),
+    slot_order INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

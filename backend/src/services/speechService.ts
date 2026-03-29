@@ -350,6 +350,60 @@ export const transcribeAudio = async (filePath: string, fileId?: number, slotInf
 /**
  * Save transcription to lecture table
  */
+/**
+ * Save fragment (audio segment excerpt with transcription)
+ */
+export const saveFragment = async (
+  fileId: number,
+  transcript: string,
+  language: string,
+  duration: number | null,
+  startTime: number = 0,
+  endTime: number = 0,
+  slotOrder: number = 0
+) => {
+  try {
+    console.log(`[Fragment] Saving fragment: file_id=${fileId}, start=${startTime}s, end=${endTime}s, order=${slotOrder}, transcript_len=${transcript.length}`);
+    
+    const result = await insert('fragments', {
+      file_id: fileId,
+      transcript,
+      language,
+      duration,
+      start_time: startTime,
+      end_time: endTime,
+      slot_order: slotOrder,
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+    
+    console.log(`[Fragment] ✅ Fragment saved successfully: id=${result.id}, file_id=${result.file_id}`);
+    
+    // Automatically evaluate fragment against KPIs asynchronously
+    if (transcript && transcript.trim() && transcript !== '[transcription_pending]') {
+      setImmediate(async () => {
+        try {
+          console.log(`[Evaluation] 🔄 Starting automatic KPI evaluation for fragment_id=${result.id}...`);
+          const evaluations = await evaluateSpeechAgainstKPIs(
+            transcript,
+            fileId,
+            result.id,
+            undefined
+          );
+          console.log(`[Evaluation] ✅ Completed: Evaluated against all KPIs, found ${evaluations.length} evidence records`);
+        } catch (evalErr) {
+          console.error(`[Evaluation] ⚠️ Non-blocking evaluation error for fragment_id=${result.id}:`, evalErr);
+        }
+      });
+    }
+    
+    return result;
+  } catch (err) {
+    console.error(`[Fragment] ❌ Failed to save fragment:`, err);
+    throw err;
+  }
+};
+
 export const saveSpeech = async (
   fileId: number,
   transcript: string,
@@ -430,16 +484,18 @@ export const getAllSpeech = async () => {
 };
 
 /**
- * Split audio by class schedule time slots, transcribe each segment, and save to DB.
+ * Split audio into fixed 15-minute fragments, transcribe each, and save to DB.
  *
  * @param fileId     Sound file ID in sound_files table
  * @param filePath   Path to the uploaded audio file
- * @param classId    Class ID to look up time slots
- * @param dayOfWeek  Day of week (e.g. 'Sunday', 'Monday')
- * @param slotDate   Specific date (e.g. '2026-03-08')
+ * @param classId    Class ID (unused now, kept for API compat)
+ * @param dayOfWeek  Day of week (unused now, kept for API compat)
+ * @param slotDate   Specific date (unused now, kept for API compat)
  * @param shouldDenoise Whether to apply audio denoising (default: true)
- * @returns Array of created speech records
+ * @returns Array of created fragment records
  */
+const FRAGMENT_DURATION_SEC = 15 * 60; // 15 minutes in seconds
+
 export const transcribeAndSave = async (
   fileId: number,
   filePath: string,
@@ -467,101 +523,25 @@ export const transcribeAndSave = async (
   }
 
   try {
-  // If no class/day provided, transcribe the whole file (legacy behavior)
-  if (!classId || !dayOfWeek) {
-    console.log(`[Speech] No class/day provided — transcribing full file (file_id=${fileId})`);
-    updateProgress(fileId, { status: 'transcribing', message: 'جاري تحويل الصوت إلى نص...', percent: 30 });
-    const result = await transcribeAudio(denoisedPath, fileId);
-    updateProgress(fileId, { status: 'saving', message: 'جاري حفظ النص...', percent: 90 });
-    const speech = await saveSpeech(fileId, result.text, result.language, result.duration);
-    updateProgress(fileId, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
-    return [speech];
-  }
-
-  // Get time slots for this class + day/date
-  const slots = await getTimeSlots(classId, dayOfWeek, slotDate);
-  if (slots.length === 0) {
-    console.log(`[Speech] No time slots found for class=${classId}, day=${dayOfWeek}, date=${slotDate} — transcribing full file`);
-    updateProgress(fileId, { status: 'transcribing', message: 'جاري تحويل الصوت إلى نص...', percent: 30 });
-    const result = await transcribeAudio(denoisedPath, fileId);
-    updateProgress(fileId, { status: 'saving', message: 'جاري حفظ النص...', percent: 90 });
-    const speech = await saveSpeech(fileId, result.text, result.language, result.duration);
-    updateProgress(fileId, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
-    return [speech];
-  }
-
-  console.log(`[Speech] Found ${slots.length} time slots for class=${classId}, day=${dayOfWeek}`);
-  updateProgress(fileId, { status: 'analyzing', message: `تم العثور على ${slots.length} حصص. جاري تحليل الملف...`, percent: 20, totalSlots: slots.length });
-
   // Get total audio duration
   const totalDuration = await getAudioDuration(denoisedPath);
   console.log(`[Speech] Total audio duration: ${totalDuration}s`);
 
-  // Calculate segment timings from time slots.
-  // If slot times are malformed/duplicated, fallback to sequential slicing by duration.
-  const parsedSlots = slots.map((slot, index) => {
-    const startAbs = timeToSeconds(slot.start_time);
-    const endAbs = timeToSeconds(slot.end_time);
-    const durationRaw = endAbs - startAbs;
+  // Calculate 15-minute fragments
+  const totalFragments = Math.ceil(totalDuration / FRAGMENT_DURATION_SEC);
+  console.log(`[Speech] Splitting into ${totalFragments} fragment(s) of ${FRAGMENT_DURATION_SEC / 60} minutes each`);
+  updateProgress(fileId, { status: 'analyzing', message: `جاري تقسيم الملف إلى ${totalFragments} مقطع...`, percent: 20, totalSlots: totalFragments });
 
-    console.log(
-      `[Speech] Slot ${index + 1} raw: start_time=${slot.start_time}, end_time=${slot.end_time}, startAbs=${startAbs}, endAbs=${endAbs}, durationRaw=${durationRaw}`
-    );
-
-    return {
-      timeSlotId: slot.time_slot_id,
-      slotOrder: index + 1,
-      startAbs,
-      durationRaw,
-    };
-  });
-
-  const hasInvalidTimes = parsedSlots.some((s) => !Number.isFinite(s.startAbs) || !Number.isFinite(s.durationRaw) || s.durationRaw <= 0);
-  const firstSlotStart = parsedSlots[0]?.startAbs ?? NaN;
-  const relativeStarts = parsedSlots.map((s) => s.startAbs - firstSlotStart);
-  const nonIncreasingRelativeStarts = relativeStarts.some((start, idx) => idx > 0 && start <= relativeStarts[idx - 1]);
-  const allRelativeStartsZero = relativeStarts.length > 1 && relativeStarts.every((start) => Math.abs(start) < 1e-6);
-
-  const useProportionalFallback = hasInvalidTimes || !Number.isFinite(firstSlotStart) || nonIncreasingRelativeStarts || allRelativeStartsZero;
-
-  if (useProportionalFallback) {
-    console.warn('[Speech] Slot times are invalid or not increasing. Using proportional segmentation fallback.');
-    console.warn(`[Speech] hasInvalidTimes=${hasInvalidTimes}, nonIncreasingRelativeStarts=${nonIncreasingRelativeStarts}, allRelativeStartsZero=${allRelativeStartsZero}`);
+  // If file is shorter than 15 min, transcribe as single fragment
+  if (totalDuration <= FRAGMENT_DURATION_SEC) {
+    console.log(`[Speech] File is short (${totalDuration}s) — transcribing as single fragment`);
+    updateProgress(fileId, { status: 'transcribing', message: 'جاري تحويل الصوت إلى نص...', percent: 30 });
+    const result = await transcribeAudio(denoisedPath, fileId);
+    updateProgress(fileId, { status: 'saving', message: 'جاري حفظ النص...', percent: 90 });
+    const fragment = await saveFragment(fileId, result.text, result.language, totalDuration, 0, totalDuration, 1);
+    updateProgress(fileId, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
+    return [fragment];
   }
-
-  const slotDurations = parsedSlots.map((slot) =>
-    Number.isFinite(slot.durationRaw) && slot.durationRaw > 0 ? slot.durationRaw : 900
-  );
-
-  const totalSlotDuration = slotDurations.reduce((sum, dur) => sum + dur, 0);
-
-  let consumedDuration = 0;
-  const segments = parsedSlots.map((slot, index) => {
-    const safeDuration = slotDurations[index];
-
-    let startSec: number;
-    let durationSec: number;
-
-    if (useProportionalFallback) {
-      // Map slot durations onto the actual audio timeline so each slot gets a unique segment.
-      const ratioStart = consumedDuration / totalSlotDuration;
-      const ratioEnd = (consumedDuration + safeDuration) / totalSlotDuration;
-      startSec = totalDuration * ratioStart;
-      const endSec = totalDuration * ratioEnd;
-      durationSec = Math.max(0.001, endSec - startSec);
-      consumedDuration += safeDuration;
-    } else {
-      startSec = slot.startAbs - firstSlotStart;
-      durationSec = safeDuration;
-    }
-
-    return {
-      timeSlotId: slot.timeSlotId,
-      startSec,
-      durationSec,
-      slotOrder: slot.slotOrder,
-    };
-  });
 
   // Create temp directory for segments
   const tempDir = path.join(path.dirname(denoisedPath), 'temp_segments');
@@ -572,140 +552,97 @@ export const transcribeAndSave = async (
   const results: any[] = [];
   const ext = path.extname(absolutePath);
 
-  for (const seg of segments) {
-    if (!Number.isFinite(seg.startSec) || !Number.isFinite(seg.durationSec) || seg.durationSec <= 0) {
-      console.warn(`[Speech] Skipping slot ${seg.slotOrder} due to invalid segment timing: start=${seg.startSec}, duration=${seg.durationSec}`);
-      continue;
-    }
+  for (let i = 0; i < totalFragments; i++) {
+    const slotOrder = i + 1;
+    const startSec = i * FRAGMENT_DURATION_SEC;
+    const remainingDuration = totalDuration - startSec;
+    const effectiveDuration = Math.min(FRAGMENT_DURATION_SEC, remainingDuration);
+    const endSec = startSec + effectiveDuration;
 
-    // Skip if segment starts beyond audio duration
-    if (seg.startSec >= totalDuration) {
-      console.log(`[Speech] Slot ${seg.slotOrder} starts at ${seg.startSec}s which is beyond audio duration ${totalDuration}s — skipping`);
-      continue;
-    }
+    if (effectiveDuration <= 0) break;
 
-    // Clamp duration to not exceed audio end
-    const effectiveDuration = Math.min(seg.durationSec, totalDuration - seg.startSec);
-    if (!Number.isFinite(effectiveDuration) || effectiveDuration <= 0) {
-      console.log(`[Speech] Slot ${seg.slotOrder} computed non-positive effective duration (${effectiveDuration}) — skipping`);
-      continue;
-    }
+    const segmentFile = path.join(tempDir, `fragment_${slotOrder}${ext}`);
+    console.log(`[Speech] 📌 Processing fragment ${slotOrder}/${totalFragments}: ${startSec}s → ${endSec}s (${effectiveDuration}s)`);
 
-    const segmentFile = path.join(tempDir, `segment_${seg.slotOrder}${ext}`);
-    console.log(`[Speech] 📌 Processing slot ${seg.slotOrder}/${segments.length}: start=${seg.startSec}s, duration=${effectiveDuration}s, time_slot_id=${seg.timeSlotId}`);
-
-    // Calculate progress: slots spread across 25%-95%
-    const slotProgressBase = 25;
-    const slotProgressRange = 70; // 25% to 95%
-    const perSlotRange = slotProgressRange / segments.length;
-    const slotStart = slotProgressBase + (seg.slotOrder - 1) * perSlotRange;
+    // Calculate progress: fragments spread across 25%-95%
+    const progressBase = 25;
+    const progressRange = 70;
+    const perFragRange = progressRange / totalFragments;
+    const fragStart = progressBase + i * perFragRange;
 
     try {
       // Split audio segment
       updateProgress(fileId, {
         status: 'splitting',
-        message: `جاري تقسيم الحصة ${seg.slotOrder} من ${segments.length}...`,
-        percent: Math.round(slotStart),
-        currentSlot: seg.slotOrder,
-        totalSlots: segments.length,
+        message: `جاري تقسيم المقطع ${slotOrder} من ${totalFragments}...`,
+        percent: Math.round(fragStart),
+        currentSlot: slotOrder,
+        totalSlots: totalFragments,
       });
-      console.log(`[Speech] 🔀 Splitting segment ${seg.slotOrder}...`);
-      console.log(`[Speech] Source file: ${denoisedPath} (exists: ${fs.existsSync(denoisedPath)})`);
-      console.log(`[Speech] Target segment: ${segmentFile}`);
-      console.log(`[Speech] Split params: start=${seg.startSec}s, duration=${effectiveDuration}s`);
+      console.log(`[Speech] 🔀 Splitting fragment ${slotOrder}...`);
       
-      console.log(`[Speech] About to call splitAudioSegment...`);
-      await splitAudioSegment(denoisedPath, segmentFile, seg.startSec, effectiveDuration);
+      await splitAudioSegment(denoisedPath, segmentFile, startSec, effectiveDuration);
       
-      console.log(`[Speech] ✂️ splitAudioSegment completed`);
-      const segmentExists = fs.existsSync(segmentFile);
-      console.log(`[Speech] Segment file exists check: ${segmentExists}`);
-      
-      if (!segmentExists) {
-        console.error(`[Speech] ❌ CRITICAL: Segment file was NOT created!`);
-        console.error(`[Speech] Expected path: ${segmentFile}`);
-        console.error(`[Speech] Files in temp_dir:`);
-        try {
-          const tempFiles = fs.readdirSync(tempDir);
-          console.error(`[Speech] Temp dir contents: ${JSON.stringify(tempFiles)}`);
-        } catch (e) {
-          console.error(`[Speech] Could not read temp dir: ${(e as any).message}`);
-        }
-        throw new Error(`Segment file not created: ${segmentFile}`);
+      if (!fs.existsSync(segmentFile)) {
+        throw new Error(`Fragment file not created: ${segmentFile}`);
       }
       
       const segmentSize = (fs.statSync(segmentFile).size / 1024).toFixed(1);
-      console.log(`[Speech] ✂️ Segment split: ${path.basename(segmentFile)} (size: ${segmentSize}KB)`);
+      console.log(`[Speech] ✂️ Fragment split: ${path.basename(segmentFile)} (size: ${segmentSize}KB)`);
 
       // Transcribe segment
-      console.log(`[Speech] 🗣️ Transcribing segment ${seg.slotOrder}...`);
-      console.log(`[Speech] Segment file to transcribe: ${segmentFile} (exists: ${fs.existsSync(segmentFile)})`);
       updateProgress(fileId, {
         status: 'transcribing',
-        message: `جاري تحويل الحصة ${seg.slotOrder} من ${segments.length} إلى نص...`,
-        percent: Math.round(slotStart + perSlotRange * 0.3),
-        currentSlot: seg.slotOrder,
-        totalSlots: segments.length,
+        message: `جاري تحويل المقطع ${slotOrder} من ${totalFragments} إلى نص...`,
+        percent: Math.round(fragStart + perFragRange * 0.3),
+        currentSlot: slotOrder,
+        totalSlots: totalFragments,
       });
       
-      
-      let result;
-      try {
-        console.log(`[Speech] Calling transcribeAudio...`);
-        result = await transcribeAudio(segmentFile, fileId, { current: seg.slotOrder, total: segments.length });
-        console.log(`[Speech] ✅ Transcription result received`);
-        console.log(`[Speech] Segment ${seg.slotOrder} text length: ${result.text.length} chars`);
-        console.log(`[Speech] First 200 chars: "${result.text.substring(0, 200)}"`);
-        console.log(`[Speech] Last 200 chars: "${result.text.substring(Math.max(0, result.text.length - 200))}"`);
-      } catch (transcribeErr) {
-        console.error(`[Speech] ❌ transcribeAudio threw error:`, transcribeErr);
-        throw transcribeErr;
-      }
+      console.log(`[Speech] 🗣️ Transcribing fragment ${slotOrder}...`);
+      const result = await transcribeAudio(segmentFile, fileId, { current: slotOrder, total: totalFragments });
+      console.log(`[Speech] ✅ Fragment ${slotOrder} transcribed: ${result.text.length} chars`);
 
       // Save to DB
       updateProgress(fileId, {
         status: 'saving',
-        message: `جاري حفظ الحصة ${seg.slotOrder} من ${segments.length}...`,
-        percent: Math.round(slotStart + perSlotRange * 0.8),
-        currentSlot: seg.slotOrder,
-        totalSlots: segments.length,
+        message: `جاري حفظ المقطع ${slotOrder} من ${totalFragments}...`,
+        percent: Math.round(fragStart + perFragRange * 0.8),
+        currentSlot: slotOrder,
+        totalSlots: totalFragments,
       });
-      console.log(`[Speech] 💾 Saving paragraph ${seg.slotOrder}...`);
-      const speech = await saveSpeech(
+      
+      const fragment = await saveFragment(
         fileId,
         result.text,
         result.language,
         effectiveDuration,
-        seg.timeSlotId,
-        seg.slotOrder
+        startSec,
+        endSec,
+        slotOrder
       );
 
-      console.log(`[Speech] ✅ Slot ${seg.slotOrder} saved: speech.id=${speech.id}`);
-      results.push(speech);
+      console.log(`[Speech] ✅ Fragment ${slotOrder} saved: id=${fragment.id}`);
+      results.push(fragment);
     } catch (err) {
-      console.error(`[Speech] ❌ Error processing slot ${seg.slotOrder}:`, err);
-      console.error(`[Speech] Error type: ${err instanceof Error ? err.name : typeof err}`);
-      console.error(`[Speech] Error message: ${(err as any).message}`);
-      console.error(`[Speech] Error status: ${(err as any).status}`);
-      console.error(`[Speech] Error code: ${(err as any).code}`);
-      console.error(`[Speech] Full error:`, JSON.stringify(err, null, 2));
-      // Save a placeholder record so the time_slot link is preserved
+      console.error(`[Speech] ❌ Error processing fragment ${slotOrder}:`, err);
+      // Save a placeholder
       try {
-        const speech = await saveSpeech(
+        const fragment = await saveFragment(
           fileId,
           '[transcription_pending]',
           'ar',
           effectiveDuration,
-          seg.timeSlotId,
-          seg.slotOrder
+          startSec,
+          endSec,
+          slotOrder
         );
-        console.log(`[Speech] ⚠️ Slot ${seg.slotOrder} saved as pending: speech.id=${speech.id}`);
-        results.push(speech);
+        console.log(`[Speech] ⚠️ Fragment ${slotOrder} saved as pending: id=${fragment.id}`);
+        results.push(fragment);
       } catch (saveErr) {
-        console.error(`[Speech] ❌ Failed to save placeholder for slot ${seg.slotOrder}:`, saveErr);
+        console.error(`[Speech] ❌ Failed to save placeholder for fragment ${slotOrder}:`, saveErr);
       }
     } finally {
-      // Clean up segment file
       if (fs.existsSync(segmentFile)) {
         fs.unlinkSync(segmentFile);
       }
@@ -717,8 +654,8 @@ export const transcribeAndSave = async (
     fs.rmdirSync(tempDir);
   } catch { /* ignore if not empty */ }
 
-  console.log(`[Speech] Completed: ${results.length}/${segments.length} slots transcribed for file_id=${fileId}`);
-  updateProgress(fileId, { status: 'completed', message: `تم الانتهاء! تم معالجة ${results.length} من ${segments.length} حصة.`, percent: 100 });
+  console.log(`[Speech] ✅ Completed: ${results.length}/${totalFragments} fragments transcribed for file_id=${fileId}`);
+  updateProgress(fileId, { status: 'completed', message: `تم الانتهاء! تم معالجة ${results.length} من ${totalFragments} مقطع.`, percent: 100 });
   return results;
   } finally {
     // Clean up denoised file

@@ -70,6 +70,12 @@ export const ensureAggregationSchemaForCurrentDb = async (): Promise<void> => {
       ADD COLUMN IF NOT EXISTS iscalculated BOOLEAN NOT NULL DEFAULT FALSE;
     `);
 
+    // Add fragment_id column if it doesn't exist
+    await client.query(`
+      ALTER TABLE evidences
+      ADD COLUMN IF NOT EXISTS fragment_id INTEGER REFERENCES fragments(id) ON DELETE CASCADE;
+    `);
+
     // Ensure the mark column in evaluations is VARCHAR(1) (not numeric).
     await client.query(`
       DO $$ BEGIN
@@ -97,9 +103,11 @@ export const ensureAggregationSchemaForCurrentDb = async (): Promise<void> => {
       WHERE mark IS NULL OR mark NOT IN ('s', 'g', 'l', 'n');
     `);
 
+    // Safely create index, handling case where fragment_id column exists
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_evidences_fragment_kpi_iscalculated
-      ON evidences(fragment_id, kpi_id, iscalculated);
+      ON evidences(fragment_id, kpi_id, iscalculated)
+      WHERE fragment_id IS NOT NULL;
     `);
 
     // Merge duplicated evaluations rows before enforcing uniqueness.

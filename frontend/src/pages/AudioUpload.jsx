@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import api from '../services/api';
 import ProtectedLayout from '../components/ProtectedLayout';
 import useAutoHideMessage from '../hooks/useAutoHideMessage';
+import usePagination from '../hooks/usePagination';
+import PaginationControls from '../components/PaginationControls';
 import '../pages/AudioUpload.css';
 
 export const AudioUpload = () => {
@@ -24,6 +26,13 @@ export const AudioUpload = () => {
   const [selectedClassId, setSelectedClassId] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [shouldDenoise, setShouldDenoise] = useState(null);
+
+  // Uploaded files list
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [loadingFiles, setLoadingFiles] = useState(false);
+
+  // Pagination
+  const pagination = usePagination(uploadedFiles, 10);
 
   const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2 GB in bytes
   const ALLOWED_AUDIO_TYPES = [
@@ -60,7 +69,23 @@ export const AudioUpload = () => {
       }
     };
     fetchClasses();
+
+    // Fetch uploaded files
+    fetchUploadedFiles();
   }, []);
+
+  const fetchUploadedFiles = async () => {
+    setLoadingFiles(true);
+    try {
+      const response = await api.get('/sound-files');
+      const files = Array.isArray(response.data) ? response.data : response.data.data || [];
+      setUploadedFiles(files);
+    } catch (err) {
+      console.error('Failed to fetch uploaded files:', err);
+    } finally {
+      setLoadingFiles(false);
+    }
+  };
 
   // Start polling for pipeline progress
   const startPipelineProgress = (fileId) => {
@@ -199,6 +224,9 @@ export const AudioUpload = () => {
       setSuccess(`تم تحميل الملف بنجاح: ${selectedFile.name}`);
       setUploadedFile(response.data.data);
 
+      // Refresh the uploaded files list
+      fetchUploadedFiles();
+
       // Start listening for pipeline progress (audio files)
       const ext = selectedFile.name.split('.').pop()?.toLowerCase();
       const isText = selectedFile.type === 'text/plain' || ext === 'txt';
@@ -231,6 +259,17 @@ export const AudioUpload = () => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const getStatusBadge = (status) => {
+    const statusMap = {
+      'completed': { bg: 'bg-success-100 dark:bg-success-900/30', border: 'border-success-200 dark:border-success-700', text: 'text-success-700 dark:text-success-300', label: 'نجح', icon: '✓' },
+      'processing': { bg: 'bg-blue-100 dark:bg-blue-900/30', border: 'border-blue-200 dark:border-blue-700', text: 'text-blue-700 dark:text-blue-300', label: 'قيد المعالجة', icon: '⟳' },
+      'pending': { bg: 'bg-yellow-100 dark:bg-yellow-900/30', border: 'border-yellow-200 dark:border-yellow-700', text: 'text-yellow-700 dark:text-yellow-300', label: 'في الانتظار', icon: '⏳' },
+      'failed': { bg: 'bg-error-100 dark:bg-error-900/30', border: 'border-error-200 dark:border-error-700', text: 'text-error-700 dark:text-error-300', label: 'فشل', icon: '✗' },
+      'uploaded': { bg: 'bg-gray-100 dark:bg-gray-900/30', border: 'border-gray-200 dark:border-gray-700', text: 'text-gray-700 dark:text-gray-300', label: 'محمل', icon: '📁' },
+    };
+    return statusMap[status] || statusMap['pending'];
   };
 
   return (
@@ -524,7 +563,7 @@ export const AudioUpload = () => {
 
         {/* Uploaded File Info */}
         {uploadedFile && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
             <h2 className="text-xl font-outfit font-bold text-gray-900 dark:text-white mb-4">
               تفاصيل الملف المحمل
             </h2>
@@ -560,6 +599,80 @@ export const AudioUpload = () => {
             </div>
           </div>
         )}
+
+        {/* Uploaded Files Table */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+          <h2 className="text-xl font-outfit font-bold text-gray-900 dark:text-white mb-4">
+            الملفات المرفوعة
+          </h2>
+
+          {loadingFiles ? (
+            <div className="flex justify-center items-center py-8">
+              <svg className="h-8 w-8 text-brand-600 dark:text-brand-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+              <span className="text-gray-600 dark:text-gray-400 mr-2">جاري التحميل...</span>
+            </div>
+          ) : uploadedFiles.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-600 dark:text-gray-400">لا توجد ملفات مرفوعة حتى الآن</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+                    <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">اسم الملف</th>
+                    <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">تحميل بواسطة</th>
+                    <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">التاريخ</th>
+                    <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">الحالة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagination.paginatedItems.map((file, index) => {
+                    const status = file.status || 'uploaded';
+                    const statusBadge = getStatusBadge(status);
+                    return (
+                      <tr key={index} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                          <div className="flex items-center gap-2">
+                            <svg className="h-4 w-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
+                            </svg>
+                            <span className="truncate font-medium" title={file.filename}>{file.filename || 'ملف بدون اسم'}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                          {file.createdBy || '-'}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                          {file.createdAt ? new Date(file.createdAt).toLocaleDateString('ar-SA') : '-'}
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full border text-xs font-semibold ${statusBadge.bg} ${statusBadge.border} ${statusBadge.text}`}>
+                            <span>{statusBadge.icon}</span>
+                            <span>{statusBadge.label}</span>
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {/* Pagination */}
+              <PaginationControls
+                currentPage={pagination.currentPage}
+                totalPages={pagination.totalPages}
+                totalItems={pagination.totalItems}
+                itemsPerPage={pagination.itemsPerPage}
+                onPrevPage={pagination.prevPage}
+                onNextPage={pagination.nextPage}
+                onGoToPage={pagination.goToPage}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </ProtectedLayout>
   );

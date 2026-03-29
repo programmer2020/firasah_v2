@@ -18,6 +18,7 @@ import {
 import { transcribeAndSave, convertVideoToAudio, getSpeechByFileId } from '../services/speechService.js';
 import { getProgress, addSSEClient, updateProgress } from '../services/progressService.js';
 import { getEvaluationResults, generateEvaluationReport, testEvaluation, getEvaluationsWithFilters, exportEvaluationToJSON, generateComprehensiveReport } from '../services/evaluationsService.js';
+import { getMany, executeQuery } from '../helpers/database.js';
 
 // Configure multer for audio uploads
 const uploadDir = path.join(process.cwd(), 'uploads', 'audio');
@@ -134,13 +135,13 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
     });
 
     if (isText) {
-      // For text files, read content directly and save to lecture table
+      // For text files, read content directly and save to fragments table
       updateProgress(soundFile.file_id, { status: 'saving', message: 'جاري حفظ النص...', percent: 50 });
       const textContent = fs.readFileSync(req.file.path, 'utf-8');
-      const { saveSpeech } = await import('../services/speechService.js');
-      await saveSpeech(soundFile.file_id, textContent, 'ar', null);
+      const { saveFragment } = await import('../services/speechService.js');
+      await saveFragment(soundFile.file_id, textContent, 'ar', null, 0, 0, 1);
       updateProgress(soundFile.file_id, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
-      console.log(`[Upload] Text file saved to lecture table for file ${soundFile.file_id}`);
+      console.log(`[Upload] Text file saved to fragments table for file ${soundFile.file_id}`);
 
       res.status(201).json({
         success: true,
@@ -379,6 +380,96 @@ router.get('/:id/evaluation', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: error instanceof Error ? error.message : 'Failed to retrieve evaluation results',
+    });
+  }
+});
+
+/**
+ * GET /api/sound-files/:id/fragments
+ * Get all fragments for a sound file
+ */
+router.get('/:id/fragments', async (req: Request, res: Response) => {
+  try {
+    const fileId = parseInt(req.params.id as string);
+
+    if (!fileId || isNaN(fileId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid file ID',
+      });
+    }
+
+    const soundFile = await getSoundFileById(fileId);
+    if (!soundFile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sound file not found',
+      });
+    }
+
+    const fragments = await getMany(`
+      SELECT * FROM fragments
+      WHERE file_id = $1
+      ORDER BY slot_order ASC
+    `, [fileId]);
+
+    res.status(200).json({
+      success: true,
+      message: 'Fragments retrieved successfully',
+      data: {
+        file_id: fileId,
+        filename: soundFile.filename,
+        total_fragments: fragments.length,
+        fragments: fragments,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to retrieve fragments',
+    });
+  }
+});
+
+/**
+ * GET /api/sound-files/:id/lectures
+ * Get all lecture/speech records for a sound file
+ */
+router.get('/:id/lectures', async (req: Request, res: Response) => {
+  try {
+    const fileId = parseInt(req.params.id as string);
+
+    if (!fileId || isNaN(fileId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid file ID',
+      });
+    }
+
+    const soundFile = await getSoundFileById(fileId);
+    if (!soundFile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sound file not found',
+      });
+    }
+
+    const lectures = await getSpeechByFileId(fileId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Lectures retrieved successfully',
+      data: {
+        file_id: fileId,
+        filename: soundFile.filename,
+        total_lectures: lectures.length,
+        lectures: lectures,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to retrieve lectures',
     });
   }
 });
@@ -641,11 +732,9 @@ router.post('/:id/retranscribe', async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: 'Sound file not found' });
     }
 
-    // Check if speech records already exist
-    const existing = await getSpeechByFileId(fileId);
-    if (existing.length > 0) {
-      return res.status(400).json({ success: false, message: 'Transcription already exists. Delete existing speech records first.' });
-    }
+    // Delete any existing fragments for this file (e.g. [transcription_pending] placeholders)
+    await executeQuery('DELETE FROM fragments WHERE file_id = $1', [fileId]);
+    console.log(`[Retranscribe] Cleared existing fragments for file_id=${fileId}`);
 
     const classId = req.body.class_id ? Number(req.body.class_id) : undefined;
     const dayOfWeek = req.body.day_of_week || undefined;

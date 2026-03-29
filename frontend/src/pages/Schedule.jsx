@@ -3,6 +3,8 @@ import ProtectedLayout from '../components/ProtectedLayout';
 import api from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
 import useAutoHideMessage from '../hooks/useAutoHideMessage';
+import usePagination from '../hooks/usePagination';
+import PaginationControls from '../components/PaginationControls';
 
 const DAYS = [
   { key: 'Sunday', label: 'الأحد' },
@@ -35,9 +37,6 @@ export default function Schedule() {
   // Assignment form
   const [assignForm, setAssignForm] = useState({ time_slot_id: '', subject_id: '', teacher_id: '' });
   const [showAssignForm, setShowAssignForm] = useState(false);
-
-  // Auto-hide error message after 5 seconds
-  useAutoHideMessage(error, setError);
 
   // Load lookups
   useEffect(() => {
@@ -81,6 +80,9 @@ export default function Schedule() {
   };
 
   const filteredSlots = slots.filter((s) => s.day_of_week === selectedDay);
+
+  // Pagination
+  const pagination = usePagination(filteredSlots, 10);
 
   const handleAddSlot = async (e) => {
     e.preventDefault();
@@ -326,9 +328,9 @@ export default function Schedule() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredSlots.map((slot, idx) => (
+                    {pagination.paginatedItems.map((slot, idx) => (
                       <tr key={slot.time_slot_id} className="border-b hover:bg-gray-50">
-                        <td className="px-4 py-3 text-gray-500">{idx + 1}</td>
+                        <td className="px-4 py-3 text-gray-500">{pagination.startIndex + idx + 1}</td>
                         <td className="px-4 py-3 font-mono">{slot.start_time?.slice(0, 5)}</td>
                         <td className="px-4 py-3 font-mono">{slot.end_time?.slice(0, 5)}</td>
                         <td className="px-4 py-3">
@@ -363,6 +365,18 @@ export default function Schedule() {
                     ))}
                   </tbody>
                 </table>
+                {/* Pagination */}
+                {filteredSlots.length > 0 && (
+                  <PaginationControls
+                    currentPage={pagination.currentPage}
+                    totalPages={pagination.totalPages}
+                    totalItems={pagination.totalItems}
+                    itemsPerPage={pagination.itemsPerPage}
+                    onPrevPage={pagination.prevPage}
+                    onNextPage={pagination.nextPage}
+                    onGoToPage={pagination.goToPage}
+                  />
+                )}
               </div>
             )}
           </>

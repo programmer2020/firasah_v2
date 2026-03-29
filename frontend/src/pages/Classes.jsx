@@ -3,8 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import ProtectedLayout from '../components/ProtectedLayout';
 import ConfirmModal from '../components/ConfirmModal';
-import useAutoHideMessage from '../hooks/useAutoHideMessage';
-
+import useAutoHideMessage from '../hooks/useAutoHideMessage';import usePagination from '../hooks/usePagination';
+import PaginationControls from '../components/PaginationControls';
 export const Classes = () => {
   const location = useLocation();
   const initialFormData = {
@@ -23,7 +23,8 @@ export const Classes = () => {
   const [formData, setFormData] = useState(initialFormData);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
-
+  // Pagination
+  const pagination = usePagination(classes, 10);
   // Auto-hide error message after 5 seconds
   useAutoHideMessage(error, setError);
 
@@ -288,7 +289,7 @@ export const Classes = () => {
               </thead>
               <tbody>
                 {classes.length > 0 ? (
-                  classes.map((classItem) => (
+                  pagination.paginatedItems.map((classItem) => (
                     <tr
                       key={classItem.class_id}
                       className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
@@ -327,6 +328,18 @@ export const Classes = () => {
                 )}
               </tbody>
             </table>
+            {/* Pagination */}
+            {classes.length > 0 && (
+              <PaginationControls
+                currentPage={pagination.currentPage}
+                totalPages={pagination.totalPages}
+                totalItems={pagination.totalItems}
+                itemsPerPage={pagination.itemsPerPage}
+                onPrevPage={pagination.prevPage}
+                onNextPage={pagination.nextPage}
+                onGoToPage={pagination.goToPage}
+              />
+            )}
           </div>
         )}
       </div>
