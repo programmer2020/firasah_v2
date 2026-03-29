@@ -302,54 +302,25 @@ const determineStatus = (evidenceCount: number, confidence: number): EvaluationS
 const FIRASAH_SYSTEM_PROMPT = `أنت "مشرف فراسة" - خبير تقويم تعليمي متخصص في تقييم جودة التدريس.
 
 **دورك:**
-تحليل نصوص الحوار الصفي وتقييمها مقابل معايير الأداء التدريسي المحددة. 
+تحليل نصوص الحوار الصفي وتقييمها مقابل معايير الأداء التدريسي المحددة.
 
 **مبادئ التقويم:**
-1. **التركيز على الأدلة الصفية فقط**: قيّم فقط ما يظهر في النص المقدم من الحوار الفعلي داخل الحصة.
-2. **منهج تنموي**: الهدف تقديم تغذية راجعة لتطوير الأداء، وليس للحكم الختامي.
-3. **الانضباط في الأدلة**: يجب أن يكون لكل ملاحظة أدلة واضحة من النص. تجنب الافتراضات أو الاستنتاجات غير المدعومة.
-4. **العدل والتفسير**: اعتبر السياق الكامل. اختلاف الأسلوب ليس نقصاً.
-5. **الإيجابية**: ركز على نقاط القوة والفرص للتحسين.
+1. ابحث عن أي إشارة ولو ضعيفة في النص لكل معيار.
+2. إذا وُجد أي دليل ولو بسيط، لا تضع "Insufficient" — ضع "Limited" على الأقل.
+3. "Insufficient" فقط عند الغياب الكامل للدليل في النص.
+4. النص المقدم قد يكون مقتطفاً قصيراً من حصة أطول — قيّم ما هو موجود فقط.
+5. الهدف تقديم تغذية راجعة تنموية بناءة، وليس الحكم القاطع.
 
-**معايير الحالة (Status Levels):**
+**معايير الحالة:**
+- Strong: دليلان مستقلان أو أكثر، ثقة 70% فأعلاه
+- Emerging: دليل واحد واضح، ثقة 40-70%
+- Limited: إشارة ضعيفة أو غير مباشرة، ثقة 15-40%
+- Insufficient: غياب كامل للدليل في النص، ثقة أقل من 15%
 
-🟢 **Strong (قوي)**
-   - ✅ أدلة متعددة ومستقلة (2-3 على الأقل)
-   - ✅ نمط واضح ومتسق متكرر
-   - ✅ بيانات موثوقة من النص مباشرة
-   - ✅ ثقة عالية جداً (75-100%)
-
-🟡 **Emerging (ناشئ)**
-   - ⚠️ بعض الأدلة (دليل واحد أو أكثر لكن ضعيف)
-   - ⚠️ نمط غير متسق - يظهر أحياناً لكن ليس دائماً
-   - ⚠️ بيانات جزئية أو غير مكتملة
-   - ⚠️ ثقة متوسطة (50-75%)
-
-🔴 **Limited (محدود)**
-   - ❌ شواهد ضعيفة جداً أو غير مباشرة
-   - ❌ دليل واحد فقط وضعيف
-   - ❌ قد يكون بسبب جودة النص أو غموضه
-   - ❌ ثقة منخفضة (25-50%)
-
-⚪ **Insufficient (غير كافي)**
-   - ⛔ لا توجد شواهد موثوقة على الإطلاق
-   - ⛔ غياب كامل للدليل في النص
-   - ⛔ لا يمكن تقييم هذا المعيار
-   - ⛔ ثقة منخفضة جداً (0-25%)
-
-**اللغة والمخرجات:**
-- أجب باللغة العربية (السعودية)
-- قدم تقييماً واقعياً بدون تضخيم أو تقليل
-- كل تقييم يجب أن يحتوي على:
-  • kpi_code: كود المعيار
-  • Evidence Found: true/false
-  • Status: Strong/Emerging/Limited/Insufficient
-  • Confidence: 0-100 حسب قوة الأدلة
-  • Evidence Count: عدد الأدلة المستقلة من النص
-  • Facts: 1-2 جملة توصيفية مباشرة من النص WITHOUT استنتاجات
-  • Interpretation: جملة واحدة عن المعنى (فقط إذا Status ≠ Insufficient)
-  • Limitations: جملة واحدة عن قيود التقييم إن وجدت
-  • Justification: الشرح الكامل بالعربية`;
+**صيغة الإجابة:**
+- أجب دائماً بـ JSON object يحتوي على مفتاح "evaluations" وقيمته مصفوفة.
+- لا تضف أي نص خارج الـ JSON.
+- استخدم اللغة العربية في الحقول النصية.`;
 
 /**
  * Get all KPIs for evaluation context
@@ -433,50 +404,40 @@ export const evaluateSpeechAgainstKPIs = async (
       return `${kpi.kpi_code}: ${kpi.kpi_name}\n   التفاصيل: ${kpi.kpi_description}`;
     }).join('\n\n');
 
-    // Build user prompt
-    const userPrompt = `قيّم نص الحوار الصفي التالي مقابل معايير الأداء التدريسي:
-
-**معايير التقويم:**
-${kpiReference}
-
-**نص الحوار الصفي:**
+    // Build user prompt — speech text FIRST so the model reads it before KPI definitions
+    const userPrompt = `**نص الحوار الصفي المراد تقييمه:**
 "${speechText}"
 
-**المطلوب:**
-قيّم كل معيار بناءً على ما يظهر في النص فقط. أرسل الإجابة فقط بصيغة JSON (مصفوفة من الكائنات)، بدون أي نص إضافي.
+---
 
-كل كائن JSON يجب أن يحتوي على:
+**معايير الأداء التدريسي (قيّم النص أعلاه مقابل كل معيار):**
+${kpiReference}
+
+---
+
+**المطلوب:**
+قيّم النص الصفي أعلاه مقابل كل معيار من المعايير. ابحث عن أي دليل ولو بسيط.
+أرسل الإجابة فقط بصيغة JSON object يحتوي على مفتاح "evaluations" وقيمته مصفوفة من الكائنات.
+
+كل كائن في المصفوفة:
 {
-  "kpi_code": "رمز المعيار (مثل 1.1)",
+  "kpi_code": "رمز المعيار",
   "Evidence Found": true أو false,
   "Status": "Strong" أو "Emerging" أو "Limited" أو "Insufficient",
-  "Confidence": عدد من 0-100 يعكس قوة الأدلة,
-  "Evidence Count": عدد الأدلة المستقلة التي عثرت عليها (0-3),
-  "Facts": "وصف موضوعي مباشر من النص 1-2 جملة فقط، بدون استنتاج",
-  "Interpretation": "معنى هذه الحقائق في جملة واحدة (فقط إذا كان Status ≠ Insufficient)",
-  "Limitations": "أي قيود على هذا التقييم (اختياري)",
-  "Justification": "الشرح الكامل بالعربية مع أمثلة من النص"
-}
-
-**مثال:**
-{
-  "kpi_code": "1.1",
-  "Evidence Found": true,
-  "Status": "Strong",
-  "Confidence": 85,
-  "Evidence Count": 2,
-  "Facts": "المعلم قال في البداية: 'اليوم سنتعلم...' وكتب الهدف على السبورة",
-  "Interpretation": "هذا يشير إلى وضوح الأهداف التعليمية وتواصلها للطلاب",
-  "Limitations": "التسجيل لا يشمل حوار الطلاب",
-  "Justification": "شاهد 1: في الدقيقة 2:00 نص المعلم: 'الهدف...' - شاهد 2: الهدف المكتوب على السبورة"
+  "Confidence": عدد من 0-100,
+  "Evidence Count": عدد الأدلة (0-3),
+  "Facts": "وصف موضوعي من النص",
+  "Interpretation": "المعنى (إذا Status لم يكن Insufficient)",
+  "Limitations": "قيود التقييم (اختياري)",
+  "Justification": "الشرح الكامل بالعربية"
 }`;
 
 
-    console.log(`[Evaluation] Sending to OpenAI with model: gpt-4o-mini`);
+    console.log(`[Evaluation] Sending to OpenAI with model: gpt-4o`);
 
-    // Call OpenAI
+    // Call OpenAI — response_format: json_object guarantees valid JSON output
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4o',
       messages: [
         {
           role: 'system',
@@ -487,38 +448,40 @@ ${kpiReference}
           content: userPrompt,
         },
       ],
-      temperature: 0.7,
-      max_tokens: 3000,
+      temperature: 0.2,
+      max_tokens: 4000,
+      response_format: { type: 'json_object' },
     });
 
     console.log(`[Evaluation] ✅ OpenAI response received`);
 
-    // Parse response
+    // Parse response — model returns { "evaluations": [...] }
     const responseText = response.choices[0]?.message?.content?.trim() || '';
     console.log(`[Evaluation] Response length: ${responseText.length} chars`);
     console.log(`[Evaluation] First 300 chars: ${responseText.substring(0, 300)}`);
 
-    // Try to extract JSON from response
+    // Extract evaluations array from JSON object
     let evaluations: any[] = [];
     try {
-      evaluations = JSON.parse(responseText);
-    } catch (e) {
-      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        try {
-          evaluations = JSON.parse(jsonMatch[0]);
-        } catch (e2) {
-          console.error(`[Evaluation] ❌ Failed to parse extracted JSON:`, (e2 as any).message);
-          return [];
-        }
+      const parsed = JSON.parse(responseText);
+      // Accept {"evaluations": [...]} or a bare array
+      if (Array.isArray(parsed)) {
+        evaluations = parsed;
+      } else if (Array.isArray(parsed.evaluations)) {
+        evaluations = parsed.evaluations;
       } else {
-        console.error(`[Evaluation] ❌ Could not find JSON in response:`, responseText.substring(0, 500));
-        return [];
+        // Fallback: look for any array-valued key
+        const arrayKey = Object.keys(parsed).find(k => Array.isArray(parsed[k]));
+        evaluations = arrayKey ? parsed[arrayKey] : [];
       }
+    } catch (e) {
+      console.error(`[Evaluation] ❌ Failed to parse JSON response:`, (e as any).message);
+      console.error(`[Evaluation] Raw response:`, responseText.substring(0, 500));
+      return [];
     }
 
-    if (!Array.isArray(evaluations)) {
-      console.error(`[Evaluation] ❌ Response is not an array:`, typeof evaluations);
+    if (!Array.isArray(evaluations) || evaluations.length === 0) {
+      console.error(`[Evaluation] ❌ No evaluations array in response. Keys: ${Object.keys(JSON.parse(responseText) || {}).join(', ')}`);
       return [];
     }
 
@@ -545,9 +508,9 @@ ${kpiReference}
         }
 
         // Find KPI in database
-        const kpiRecord = allKPIs.find((kpi: any) => kpi.kpi_code && kpi.kpi_code.toLowerCase() === kpiCode.toLowerCase());
+        const kpiRecord = allKPIs.find((kpi: any) => kpi.kpi_code.toLowerCase() === kpiCode.toLowerCase());
         if (!kpiRecord) {
-          console.warn(`[Evaluation] ⚠️ KPI not found in database: "${kpiCode}" (available codes: ${allKPIs.map((k: any) => k.kpi_code).join(', ')})`);
+          console.warn(`[Evaluation] ⚠️ KPI not found in database: ${kpiCode}`);
           continue;
         }
 
@@ -620,11 +583,10 @@ ${kpiReference}
  */
 export const getEvaluationResults = async (fileId: number) => {
   const query = `
-    SELECT 
+    SELECT
       e.id as evidence_id,
       e.kpi_id,
-      e.fragment_id,
-      f.file_id,
+      e.file_id,
       e.evidence_txt,
       e.start_time,
       e.end_time,
@@ -636,8 +598,7 @@ export const getEvaluationResults = async (fileId: number) => {
     FROM evidences e
     JOIN kpis k ON e.kpi_id = k.kpi_id
     LEFT JOIN kpi_domains d ON k.domain_id = d.domain_id
-    LEFT JOIN fragments f ON e.fragment_id = f.id
-    WHERE f.file_id = $1
+    WHERE e.file_id = $1
     ORDER BY d.sort_order ASC, k.kpi_code ASC
   `;
   return await getMany(query, [fileId]);
@@ -737,11 +698,10 @@ export const getEvaluationsWithFilters = async (options: {
 
   try {
     let query = `
-      SELECT 
+      SELECT
         e.id as evidence_id,
         e.kpi_id,
-        e.fragment_id,
-        f.file_id,
+        e.file_id,
         e.evidence_txt,
         e.start_time,
         e.end_time,
@@ -754,8 +714,7 @@ export const getEvaluationsWithFilters = async (options: {
       FROM evidences e
       JOIN kpis k ON e.kpi_id = k.kpi_id
       LEFT JOIN kpi_domains d ON k.domain_id = d.domain_id
-      LEFT JOIN fragments f ON e.fragment_id = f.id
-      LEFT JOIN sound_files s ON f.file_id = s.file_id
+      LEFT JOIN sound_files s ON e.file_id = s.file_id
       WHERE 1=1
     `;
 
@@ -763,7 +722,7 @@ export const getEvaluationsWithFilters = async (options: {
 
     // File ID filter
     if (fileId) {
-      query += ` AND f.file_id = $${params.length + 1}`;
+      query += ` AND e.file_id = $${params.length + 1}`;
       params.push(fileId);
     }
 
@@ -803,14 +762,13 @@ export const getEvaluationsWithFilters = async (options: {
       FROM evidences e
       JOIN kpis k ON e.kpi_id = k.kpi_id
       LEFT JOIN kpi_domains d ON k.domain_id = d.domain_id
-      LEFT JOIN fragments f ON e.fragment_id = f.id
-      LEFT JOIN sound_files s ON f.file_id = s.file_id
+      LEFT JOIN sound_files s ON e.file_id = s.file_id
       WHERE 1=1
     `;
 
     const countParams: any[] = [];
     if (fileId) {
-      countQuery += ` AND f.file_id = $${countParams.length + 1}`;
+      countQuery += ` AND e.file_id = $${countParams.length + 1}`;
       countParams.push(fileId);
     }
     if (status) {
