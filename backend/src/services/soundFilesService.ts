@@ -9,7 +9,6 @@ interface SoundFile {
   file_id?: number;
   filename: string;
   filepath: string;
-  createdAt?: string;
   createdBy: string;
   note?: string;
 }
@@ -32,7 +31,7 @@ export const getAllSoundFiles = async () => {
   try {
     const query = `
       SELECT * FROM sound_files
-      ORDER BY createdAt DESC
+      ORDER BY created_at DESC
     `;
     return await getMany(query);
   } catch (error) {
@@ -73,7 +72,6 @@ export const createSoundFile = async (data: SoundFile) => {
     const createRecord = () => insert('sound_files', {
       filename: data.filename,
       filepath: data.filepath,
-      createdAt: new Date(),
       createdBy: data.createdBy,
       note: data.note || null,
     });
@@ -147,7 +145,7 @@ export const getSoundFilesByCreator = async (createdBy: string) => {
     const query = `
       SELECT * FROM sound_files
       WHERE createdBy = $1
-      ORDER BY createdAt DESC
+      ORDER BY created_at DESC
     `;
     return await getMany(query, [createdBy]);
   } catch (error) {
