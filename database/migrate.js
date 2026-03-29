@@ -19,7 +19,6 @@ async function runMigration() {
         file_id SERIAL PRIMARY KEY,
         filename VARCHAR(255) NOT NULL,
         filepath VARCHAR(500) NOT NULL,
-        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         createdBy VARCHAR(255),
         note TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

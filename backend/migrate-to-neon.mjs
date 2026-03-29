@@ -202,14 +202,13 @@ CREATE TABLE IF NOT EXISTS kpis (
 
 -- sound_files table
 CREATE TABLE IF NOT EXISTS sound_files (
-    file_id SERIAL PRIMARY KEY,
-    filename VARCHAR(255) NOT NULL,
-    filepath VARCHAR(500) NOT NULL,
-    createdAt TIMESTAMP,
-    createdBy VARCHAR(255),
-    note TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  file_id SERIAL PRIMARY KEY,
+  filename VARCHAR(255) NOT NULL,
+  filepath VARCHAR(500) NOT NULL,
+  createdBy VARCHAR(255),
+  note TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- lecture table
