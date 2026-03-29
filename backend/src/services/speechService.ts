@@ -265,7 +265,7 @@ export const transcribeAudio = async (filePath: string, fileId?: number, slotInf
   console.log(`[Speech] Using audio path: ${audioPath} (cleanup needed: ${needsCleanup})`);
 
   const models = ['gpt-4o-transcribe', 'whisper-1'];
-  const MAX_RETRIES = 1;
+  const MAX_RETRIES = 2;
   const slotLabel = slotInfo ? `الحصة ${slotInfo.current} من ${slotInfo.total}` : 'الملف';
 
   try {
@@ -286,20 +286,24 @@ export const transcribeAudio = async (filePath: string, fileId?: number, slotInf
 
           const file = fs.createReadStream(audioPath);
 
-          const isGpt4o = model === 'gpt-4o-transcribe';
+          // gpt-4o-transcribe only supports 'json' or 'text'; whisper-1 supports 'verbose_json'
+          const isGpt4o = model.startsWith('gpt-4o');
           const transcription = await openai.audio.transcriptions.create({
             file,
             model,
-            language: 'ar',
             response_format: isGpt4o ? 'json' : 'verbose_json',
           });
 
           const duration = Date.now() - startTime;
           console.log(`[Speech] ✅ Transcription succeeded with ${model} (${duration}ms)`);
           console.log(`[Speech] Transcript length: ${transcription.text.length} chars`);
+          
+          // gpt-4o returns only text in json mode; whisper-1 verbose_json includes language & duration
+          const detectedLang = (transcription as any).language || null;
+          console.log(`[Speech] Detected language: ${detectedLang}`);
           return {
             text: transcription.text,
-            language: (transcription as any).language || 'ar',
+            language: detectedLang || 'auto',
             duration: (transcription as any).duration || null,
           };
         } catch (err: any) {
