@@ -12,19 +12,26 @@ interface QueryOptions {
 }
 
 /**
- * Safe query wrapper that retries if pool was ended
+ * Safe query wrapper that retries on connection/pool errors with exponential backoff
  */
 const executeWithRetry = async (
   fn: (pool: any) => Promise<any>,
-  retries: number = 1
+  retries: number = 3,
+  delayMs: number = 500
 ): Promise<any> => {
   try {
     const pool = getPool();
     return await fn(pool);
   } catch (error: any) {
-    if (retries > 0 && error.message?.includes('pool')) {
-      console.warn('Pool error detected, retrying with fresh pool...');
-      return executeWithRetry(fn, retries - 1);
+    const isPoolError = error.message?.includes('pool');
+    const isConnectionError = error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.message?.includes('connection');
+    const isRetryable = isPoolError || isConnectionError;
+
+    if (retries > 0 && isRetryable) {
+      console.warn(`[DB] Retryable error detected (${error.code || error.message}). Retrying in ${delayMs}ms... (${retries} attempts left)`);
+      await new Promise(r => setTimeout(r, delayMs));
+      // Exponential backoff: 500ms → 1s → 2s
+      return executeWithRetry(fn, retries - 1, delayMs * 2);
     }
     throw error;
   }
@@ -81,7 +88,7 @@ export const getMany = async (query: string, values?: any[]) => {
 };
 
 /**
- * Insert data into database
+ * Insert data into database with automatic retry on connection errors
  * @param tableName Table name
  * @param data Object with column names and values
  * @returns Promise with inserted row
@@ -91,17 +98,19 @@ export const insert = async (tableName: string, data: Record<string, any>) => {
     const columns = Object.keys(data);
     const values = Object.values(data);
     const placeholders = columns.map((_, i) => `$${i + 1}`).join(',');
-    
+
     const query = `
       INSERT INTO ${tableName} (${columns.join(',')})
       VALUES (${placeholders})
       RETURNING *;
     `;
-    
-    const result = await executeWithRetry((pool) => pool.query(query, values));
+
+    console.log(`[DB] Inserting into ${tableName} with ${columns.length} columns...`);
+    const result = await executeWithRetry((pool) => pool.query(query, values), 3, 500);
+    console.log(`[DB] ✅ Insert successful: ${tableName} row id=${result.rows[0]?.id || 'unknown'}`);
     return result.rows[0];
   } catch (error) {
-    console.error('Database Insert Error:', error);
+    console.error(`[DB] ❌ Insert failed for ${tableName}:`, error);
     throw error;
   }
 };

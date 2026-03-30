@@ -307,20 +307,31 @@ export const transcribeAudio = async (filePath: string, fileId?: number, slotInf
             duration: (transcription as any).duration || null,
           };
         } catch (err: any) {
+          const isTimeout = err.code === 'ETIMEDOUT' || err.message?.includes('timeout') || err.message?.includes('ENOTFOUND');
+          const isRateLimit = err.status === 429 || err.code === 'rate_limit_exceeded';
+          const isConnectionError = err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.message?.includes('Connection error');
+
           console.error(`[Speech] ❌ ${model} attempt ${attempt} failed:`);
           console.error(`[Speech] Error status: ${err.status}`);
           console.error(`[Speech] Error message: ${err.message}`);
           console.error(`[Speech] Error code: ${err.code}`);
-          
+          console.error(`[Speech] Error type: ${isRateLimit ? 'RATE_LIMIT' : isTimeout ? 'TIMEOUT' : isConnectionError ? 'CONNECTION' : 'OTHER'}`);
+
           if (attempt < MAX_RETRIES) {
-            // Quick retry: 1 second, with progress updates every 250ms
-            const delay = 1000;
+            // Exponential backoff: rate limit (30s) > timeout/connection (5s) > other (1s)
+            let delay = 1000; // default: 1 second
+            if (isRateLimit) {
+              delay = 30000; // 30 seconds for rate limits
+            } else if (isTimeout || isConnectionError) {
+              delay = 5000; // 5 seconds for timeouts/connection errors
+            }
+
             const updateInterval = 250;
             const steps = Math.ceil(delay / updateInterval);
-            
+
             if (fileId) {
               updateProgress(fileId, {
-                message: `فشلت المحاولة ${attemptNum}. إعادة المحاولة...`,
+                message: `فشلت المحاولة ${attemptNum}. إعادة المحاولة خلال ${(delay / 1000).toFixed(1)}s...`,
               });
             }
 
