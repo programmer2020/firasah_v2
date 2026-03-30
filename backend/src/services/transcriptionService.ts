@@ -21,6 +21,34 @@ interface FragmentWithOrder {
   file_id: number;
 }
 
+const rebuildFileTranscriptFromFragments = async (fileId: number, preferredLanguage: string = 'ar') => {
+  const fragments = await getMany(`
+    SELECT transcript, language
+    FROM fragments
+    WHERE file_id = $1
+      AND transcript IS NOT NULL
+      AND BTRIM(transcript) <> ''
+      AND transcript <> '[transcription_pending]'
+    ORDER BY fragment_order ASC
+  `, [fileId]);
+
+  const transcript = fragments
+    .map((fragment: any) => (fragment.transcript || '').trim())
+    .filter(Boolean)
+    .join('\n\n')
+    .trim();
+
+  const language = fragments.find((fragment: any) => fragment.language)?.language || preferredLanguage || 'ar';
+
+  return await update('sound_files', {
+    transcript: transcript || null,
+    transcript_language: transcript ? language : null,
+    transcript_updated_at: transcript ? new Date() : null,
+    updated_at: new Date(),
+  }, 'file_id = $1', [fileId]);
+};
+
+
 /**
  * Transcribe a single audio fragment using OpenAI Whisper API
  * @param fragmentPath Path to the audio file
@@ -158,6 +186,10 @@ export const processLectureTranscription = async (
 
     // Update lecture record
     const updatedLecture = await updateLectureTranscript(lectureId, fullTranscript, language);
+
+    if (updatedLecture?.file_id) {
+      await rebuildFileTranscriptFromFragments(updatedLecture.file_id, language);
+    }
 
     console.log(`[Transcription] ✅ Lecture ${lectureId} processing complete`);
 

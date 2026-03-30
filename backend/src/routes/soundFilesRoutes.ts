@@ -14,6 +14,7 @@ import {
   updateSoundFile,
   deleteSoundFile,
   getSoundFilesByCreator,
+  updateSoundFileTranscript,
 } from '../services/soundFilesService.js';
 import { transcribeAndSave, convertVideoToAudio, getSpeechByFileId } from '../services/speechService.js';
 import { getProgress, addSSEClient, updateProgress } from '../services/progressService.js';
@@ -140,6 +141,7 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       const textContent = fs.readFileSync(req.file.path, 'utf-8');
       const { saveFragment } = await import('../services/speechService.js');
       await saveFragment(soundFile.file_id, textContent, 'ar', null, 0, 0, 1);
+      await updateSoundFileTranscript(soundFile.file_id, textContent, 'ar');
       updateProgress(soundFile.file_id, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
       console.log(`[Upload] Text file saved to fragments table for file ${soundFile.file_id}`);
 
@@ -410,7 +412,7 @@ router.get('/:id/fragments', async (req: Request, res: Response) => {
     const fragments = await getMany(`
       SELECT * FROM fragments
       WHERE file_id = $1
-      ORDER BY slot_order ASC
+      ORDER BY fragment_order ASC
     `, [fileId]);
 
     res.status(200).json({

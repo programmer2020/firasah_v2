@@ -11,7 +11,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 // @ts-ignore
 import ffprobeStatic from 'ffprobe-static';
-import { insert, getOne, getMany } from '../helpers/database.js';
+import { insert, getOne, getMany, update } from '../helpers/database.js';
 import { updateProgress } from './progressService.js';
 import { evaluateSpeechAgainstKPIs } from './evaluationsService.js';
 
@@ -380,14 +380,16 @@ export const saveFragment = async (
   try {
     console.log(`[Fragment] Saving fragment: file_id=${fileId}, start=${startTime}s, end=${endTime}s, order=${slotOrder}, transcript_len=${transcript.length}`);
     
+    const normalizedDuration = duration ?? Math.max(0, endTime - startTime);
+
     const result = await insert('fragments', {
       file_id: fileId,
       transcript,
-      language,
-      duration,
-      start_time: startTime,
-      end_time: endTime,
-      slot_order: slotOrder,
+      language: language || 'ar',
+      duration: normalizedDuration,
+      fragment_order: slotOrder,
+      start_seconds: startTime,
+      end_seconds: endTime,
       created_at: new Date(),
       updated_at: new Date(),
     });
@@ -415,6 +417,45 @@ export const saveFragment = async (
     return result;
   } catch (err) {
     console.error(`[Fragment] ❌ Failed to save fragment:`, err);
+    throw err;
+  }
+};
+
+
+/**
+ * Rebuild the full transcript for a file from all successful fragments and save it to sound_files.transcript
+ */
+export const updateAggregatedTranscriptForFile = async (fileId: number, preferredLanguage: string = 'ar') => {
+  try {
+    const fragments = await getMany(`
+      SELECT transcript, language
+      FROM fragments
+      WHERE file_id = $1
+        AND transcript IS NOT NULL
+        AND BTRIM(transcript) <> ''
+        AND transcript <> '[transcription_pending]'
+      ORDER BY fragment_order ASC
+    `, [fileId]);
+
+    const fullTranscript = fragments
+      .map((fragment: any) => (fragment.transcript || '').trim())
+      .filter(Boolean)
+      .join('\n\n')
+      .trim();
+
+    const language = fragments.find((fragment: any) => fragment.language)?.language || preferredLanguage || 'ar';
+
+    const updated = await update('sound_files', {
+      transcript: fullTranscript || null,
+      transcript_language: fullTranscript ? language : null,
+      transcript_updated_at: fullTranscript ? new Date() : null,
+      updated_at: new Date(),
+    }, 'file_id = $1', [fileId]);
+
+    console.log(`[Speech] ✅ Aggregated transcript updated for file_id=${fileId}, chars=${fullTranscript.length}`);
+    return updated;
+  } catch (err) {
+    console.error(`[Speech] ❌ Failed to update aggregated transcript for file_id=${fileId}:`, err);
     throw err;
   }
 };
@@ -554,6 +595,7 @@ export const transcribeAndSave = async (
     const result = await transcribeAudio(denoisedPath, fileId);
     updateProgress(fileId, { status: 'saving', message: 'جاري حفظ النص...', percent: 90 });
     const fragment = await saveFragment(fileId, result.text, result.language, totalDuration, 0, totalDuration, 1);
+    await updateAggregatedTranscriptForFile(fileId, result.language || 'ar');
     updateProgress(fileId, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
     return [fragment];
   }
@@ -670,6 +712,7 @@ export const transcribeAndSave = async (
   } catch { /* ignore if not empty */ }
 
   console.log(`[Speech] ✅ Completed: ${results.length}/${totalFragments} fragments transcribed for file_id=${fileId}`);
+  await updateAggregatedTranscriptForFile(fileId);
   updateProgress(fileId, { status: 'completed', message: `تم الانتهاء! تم معالجة ${results.length} من ${totalFragments} مقطع.`, percent: 100 });
   return results;
   } finally {

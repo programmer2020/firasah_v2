@@ -11,6 +11,9 @@ interface SoundFile {
   filepath: string;
   createdBy: string;
   note?: string;
+  transcript?: string | null;
+  transcript_language?: string | null;
+  transcript_updated_at?: Date | null;
 }
 
 const syncSoundFilesIdSequence = async () => {
@@ -101,6 +104,32 @@ export const createSoundFile = async (data: SoundFile) => {
  * @param data Data to update
  * @returns Promise with updated sound file
  */
+
+/**
+ * Update the aggregated transcript for a sound file
+ * @param fileId Sound file ID
+ * @param transcript Concatenated transcript text
+ * @param language Detected or selected language code
+ * @returns Promise with updated sound file
+ */
+export const updateSoundFileTranscript = async (
+  fileId: number,
+  transcript: string | null,
+  language: string | null = 'ar'
+) => {
+  try {
+    return await update('sound_files', {
+      transcript,
+      transcript_language: language,
+      transcript_updated_at: transcript ? new Date() : null,
+      updated_at: new Date(),
+    }, 'file_id = $1', [fileId]);
+  } catch (error) {
+    console.error('Error updating sound file transcript:', error);
+    throw error;
+  }
+};
+
 export const updateSoundFile = async (fileId: number, data: Partial<SoundFile>) => {
   try {
     const updateData: Record<string, any> = {};

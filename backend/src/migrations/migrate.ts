@@ -15,6 +15,9 @@ async function runMigration() {
         filepath VARCHAR(500) NOT NULL,
         createdBy VARCHAR(255),
         note TEXT,
+        transcript TEXT,
+        transcript_language VARCHAR(10),
+        transcript_updated_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
