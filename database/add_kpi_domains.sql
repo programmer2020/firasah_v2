@@ -35,66 +35,116 @@ VALUES
     ('D8', 'تحسين نتائج المتعلمين', 
      'Improving learner outcomes and achievement', 8)
 ON CONFLICT (domain_code) DO NOTHING;
-ON CONFLICT (domain_code) DO NOTHING;
 
 -- Insert KPIs for Domain 1: إعداد وتنفيذ خطة التعلم داخل الحصة (D1)
 INSERT INTO kpis (domain_id, kpi_code, kpi_name, kpi_description) 
-VALUES ((SELECT domain_id FROM kpi_domains WHERE domain_code = 'D1'), '1.1', 'وضوح هدف الدرس ومعيار النجاح', 'Clarity of lesson objectives and success criteria and linking them to student work') ON CONFLICT (kpi_code) DO NOTHING;
+SELECT domain_id, '1.1', 'وضوح هدف الدرس ومعيار النجاح', 'Clarity of lesson objectives and success criteria and linking them to student work'
+FROM kpi_domains
+WHERE domain_code = 'D1'
+  AND NOT EXISTS (SELECT 1 FROM kpis WHERE kpi_code = '1.1');
 
 INSERT INTO kpis (domain_id, kpi_code, kpi_name, kpi_description) 
-VALUES ((SELECT domain_id FROM kpi_domains WHERE domain_code = 'D1'), '1.2', 'تسلسل الدرس وإيقاعه وإدارة الوقت', 'Lesson sequence, pace, and time management') ON CONFLICT (kpi_code) DO NOTHING;
+SELECT domain_id, '1.2', 'تسلسل الدرس وإيقاعه وإدارة الوقت', 'Lesson sequence, pace, and time management'
+FROM kpi_domains
+WHERE domain_code = 'D1'
+  AND NOT EXISTS (SELECT 1 FROM kpis WHERE kpi_code = '1.2');
 
 -- Insert KPIs for Domain 2: تنوع استراتيجيات التدريس (D2)
 INSERT INTO kpis (domain_id, kpi_code, kpi_name, kpi_description) 
-VALUES ((SELECT domain_id FROM kpi_domains WHERE domain_code = 'D2'), '2.1', 'النمذجة + الممارسة الموجهة', 'Modeling and guided practice strategies') ON CONFLICT (kpi_code) DO NOTHING;
+SELECT domain_id, '2.1', 'النمذجة + الممارسة الموجهة', 'Modeling and guided practice strategies'
+FROM kpi_domains
+WHERE domain_code = 'D2'
+  AND NOT EXISTS (SELECT 1 FROM kpis WHERE kpi_code = '2.1');
 
 INSERT INTO kpis (domain_id, kpi_code, kpi_name, kpi_description) 
-VALUES ((SELECT domain_id FROM kpi_domains WHERE domain_code = 'D2'), '2.2', 'توظيف التعلم النشط', 'Active learning requiring student production and engagement') ON CONFLICT (kpi_code) DO NOTHING;
+SELECT domain_id, '2.2', 'توظيف التعلم النشط', 'Active learning requiring student production and engagement'
+FROM kpi_domains
+WHERE domain_code = 'D2'
+  AND NOT EXISTS (SELECT 1 FROM kpis WHERE kpi_code = '2.2');
 
 INSERT INTO kpis (domain_id, kpi_code, kpi_name, kpi_description) 
-VALUES ((SELECT domain_id FROM kpi_domains WHERE domain_code = 'D2'), '2.3', 'التدريس الاستجابي', 'Responsive teaching: modifying explanation/activity based on evidence of understanding') ON CONFLICT (kpi_code) DO NOTHING;
+SELECT domain_id, '2.3', 'التدريس الاستجابي', 'Responsive teaching: modifying explanation/activity based on evidence of understanding'
+FROM kpi_domains
+WHERE domain_code = 'D2'
+  AND NOT EXISTS (SELECT 1 FROM kpis WHERE kpi_code = '2.3');
 
 -- Insert KPIs for Domain 3: تهيئة البيئة التعليمية (D3)
 INSERT INTO kpis (domain_id, kpi_code, kpi_name, kpi_description) 
-VALUES ((SELECT domain_id FROM kpi_domains WHERE domain_code = 'D3'), '3.1', 'وضوح التوجيهات وبنية المهمة', 'Clear directions and task structure so students know what to do now') ON CONFLICT (kpi_code) DO NOTHING;
+SELECT domain_id, '3.1', 'وضوح التوجيهات وبنية المهمة', 'Clear directions and task structure so students know what to do now'
+FROM kpi_domains
+WHERE domain_code = 'D3'
+  AND NOT EXISTS (SELECT 1 FROM kpis WHERE kpi_code = '3.1');
 
 INSERT INTO kpis (domain_id, kpi_code, kpi_name, kpi_description) 
-VALUES ((SELECT domain_id FROM kpi_domains WHERE domain_code = 'D3'), '3.2', 'مناخ تعلم إيجابي', 'Positive learning climate (respect, encouragement, safe errors) supporting learner participation') ON CONFLICT (kpi_code) DO NOTHING;
+SELECT domain_id, '3.2', 'مناخ تعلم إيجابي', 'Positive learning climate (respect, encouragement, safe errors) supporting learner participation'
+FROM kpi_domains
+WHERE domain_code = 'D3'
+  AND NOT EXISTS (SELECT 1 FROM kpis WHERE kpi_code = '3.2');
 
 -- Insert KPIs for Domain 4: الإدارة الصفية (D4)
 INSERT INTO kpis (domain_id, kpi_code, kpi_name, kpi_description) 
-VALUES ((SELECT domain_id FROM kpi_domains WHERE domain_code = 'D4'), '4.1', 'روتين وإجراءات صفية ثابتة', 'Consistent classroom routines and procedures') ON CONFLICT (kpi_code) DO NOTHING;
+SELECT domain_id, '4.1', 'روتين وإجراءات صفية ثابتة', 'Consistent classroom routines and procedures'
+FROM kpi_domains
+WHERE domain_code = 'D4'
+  AND NOT EXISTS (SELECT 1 FROM kpis WHERE kpi_code = '4.1');
 
 INSERT INTO kpis (domain_id, kpi_code, kpi_name, kpi_description) 
-VALUES ((SELECT domain_id FROM kpi_domains WHERE domain_code = 'D4'), '4.2', 'إدارة فاعلة لسلوك الطلاب', 'Effective management of student behavior during learning') ON CONFLICT (kpi_code) DO NOTHING;
+SELECT domain_id, '4.2', 'إدارة فاعلة لسلوك الطلاب', 'Effective management of student behavior during learning'
+FROM kpi_domains
+WHERE domain_code = 'D4'
+  AND NOT EXISTS (SELECT 1 FROM kpis WHERE kpi_code = '4.2');
 
 -- Insert KPIs for Domain 5: تنوع أساليب التقويم داخل الحصة (D5)
 INSERT INTO kpis (domain_id, kpi_code, kpi_name, kpi_description) 
-VALUES ((SELECT domain_id FROM kpi_domains WHERE domain_code = 'D5'), '5.1', 'جودة الأسئلة والتحقق من الفهم', 'Quality of questions and verification of understanding') ON CONFLICT (kpi_code) DO NOTHING;
+SELECT domain_id, '5.1', 'جودة الأسئلة والتحقق من الفهم', 'Quality of questions and verification of understanding'
+FROM kpi_domains
+WHERE domain_code = 'D5'
+  AND NOT EXISTS (SELECT 1 FROM kpis WHERE kpi_code = '5.1');
 
 INSERT INTO kpis (domain_id, kpi_code, kpi_name, kpi_description) 
-VALUES ((SELECT domain_id FROM kpi_domains WHERE domain_code = 'D5'), '5.2', 'تنوع أدوات التقويم التكويني', 'Diversity of formative assessment tools within the session') ON CONFLICT (kpi_code) DO NOTHING;
+SELECT domain_id, '5.2', 'تنوع أدوات التقويم التكويني', 'Diversity of formative assessment tools within the session'
+FROM kpi_domains
+WHERE domain_code = 'D5'
+  AND NOT EXISTS (SELECT 1 FROM kpis WHERE kpi_code = '5.2');
 
 -- Insert KPIs for Domain 6: تحليل مشاركات الطلاب وتشخيص مستوياتهم (D6)
 INSERT INTO kpis (domain_id, kpi_code, kpi_name, kpi_description) 
-VALUES ((SELECT domain_id FROM kpi_domains WHERE domain_code = 'D6'), '6.1', 'توظيف إجابات الطلاب لتشخيص الفجوات', 'Using student responses to diagnose learning gaps') ON CONFLICT (kpi_code) DO NOTHING;
+SELECT domain_id, '6.1', 'توظيف إجابات الطلاب لتشخيص الفجوات', 'Using student responses to diagnose learning gaps'
+FROM kpi_domains
+WHERE domain_code = 'D6'
+  AND NOT EXISTS (SELECT 1 FROM kpis WHERE kpi_code = '6.1');
 
 INSERT INTO kpis (domain_id, kpi_code, kpi_name, kpi_description) 
-VALUES ((SELECT domain_id FROM kpi_domains WHERE domain_code = 'D6'), '6.2', 'معالجة فجوات التعلم داخل الحصة', 'Addressing learning gaps within the session') ON CONFLICT (kpi_code) DO NOTHING;
+SELECT domain_id, '6.2', 'معالجة فجوات التعلم داخل الحصة', 'Addressing learning gaps within the session'
+FROM kpi_domains
+WHERE domain_code = 'D6'
+  AND NOT EXISTS (SELECT 1 FROM kpis WHERE kpi_code = '6.2');
 
 -- Insert KPIs for Domain 7: توظيف تقنيات ووسائل التعلم المناسبة (D7)
 INSERT INTO kpis (domain_id, kpi_code, kpi_name, kpi_description) 
-VALUES ((SELECT domain_id FROM kpi_domains WHERE domain_code = 'D7'), '7.1', 'ربط التقنية لتحقيق هدف الدرس', 'Linking technology to achieve lesson objectives and support understanding and application') ON CONFLICT (kpi_code) DO NOTHING;
+SELECT domain_id, '7.1', 'ربط التقنية لتحقيق هدف الدرس', 'Linking technology to achieve lesson objectives and support understanding and application'
+FROM kpi_domains
+WHERE domain_code = 'D7'
+  AND NOT EXISTS (SELECT 1 FROM kpis WHERE kpi_code = '7.1');
 
 INSERT INTO kpis (domain_id, kpi_code, kpi_name, kpi_description) 
-VALUES ((SELECT domain_id FROM kpi_domains WHERE domain_code = 'D7'), '7.2', 'استخدام التقنية بشكل محكم', 'Using technology purposefully without being distracting from learning process') ON CONFLICT (kpi_code) DO NOTHING;
+SELECT domain_id, '7.2', 'استخدام التقنية بشكل محكم', 'Using technology purposefully without being distracting from learning process'
+FROM kpi_domains
+WHERE domain_code = 'D7'
+  AND NOT EXISTS (SELECT 1 FROM kpis WHERE kpi_code = '7.2');
 
 -- Insert KPIs for Domain 8: تحسين نتائج المتعلمين (D8)
 INSERT INTO kpis (domain_id, kpi_code, kpi_name, kpi_description) 
-VALUES ((SELECT domain_id FROM kpi_domains WHERE domain_code = 'D8'), '8.1', 'شواهد تقدّم داخل الحصة', 'Evidence of progress within the session (before/after) when clear evidence is available') ON CONFLICT (kpi_code) DO NOTHING;
+SELECT domain_id, '8.1', 'شواهد تقدّم داخل الحصة', 'Evidence of progress within the session (before/after) when clear evidence is available'
+FROM kpi_domains
+WHERE domain_code = 'D8'
+  AND NOT EXISTS (SELECT 1 FROM kpis WHERE kpi_code = '8.1');
 
 INSERT INTO kpis (domain_id, kpi_code, kpi_name, kpi_description) 
-VALUES ((SELECT domain_id FROM kpi_domains WHERE domain_code = 'D8'), '8.2', 'بيانات طولية للنتائج', 'Longitudinal data for results: mark as insufficient data if results require longitudinal data') ON CONFLICT (kpi_code) DO NOTHING;
+SELECT domain_id, '8.2', 'بيانات طولية للنتائج', 'Longitudinal data for results: mark as insufficient data if results require longitudinal data'
+FROM kpi_domains
+WHERE domain_code = 'D8'
+  AND NOT EXISTS (SELECT 1 FROM kpis WHERE kpi_code = '8.2');
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_kpi_domains_code ON kpi_domains(domain_code);
