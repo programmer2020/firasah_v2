@@ -73,7 +73,8 @@ export const getAllSoundFiles = async () => {
           file_id,
           COUNT(*) AS total_fragments,
           COUNT(*) FILTER (
-            WHERE transcript = '[transcription_failed]'
+            WHERE transcription_status = 'failed'
+               OR transcript = '[transcription_failed]'
           ) AS failed_fragments
         FROM fragments
         GROUP BY file_id

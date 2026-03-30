@@ -14,9 +14,8 @@ import {
   updateSoundFile,
   deleteSoundFile,
   getSoundFilesByCreator,
-  updateSoundFileTranscript,
 } from '../services/soundFilesService.js';
-import { transcribeAndSave, convertVideoToAudio, getSpeechByFileId, getFailedFragments, retryFailedFragment } from '../services/speechService.js';
+import { transcribeAndSave, convertVideoToAudio, getSpeechByFileId, getFailedFragments, retryFailedFragment, synchronizeLectureRecordsForFile } from '../services/speechService.js';
 import { getProgress, addSSEClient, updateProgress } from '../services/progressService.js';
 import { getEvaluationResults, generateEvaluationReport, testEvaluation, getEvaluationsWithFilters, exportEvaluationToJSON, generateComprehensiveReport } from '../services/evaluationsService.js';
 import { getMany, executeQuery } from '../helpers/database.js';
@@ -145,7 +144,12 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
       const textContent = fs.readFileSync(req.file.path, 'utf-8');
       const { saveFragment } = await import('../services/speechService.js');
       await saveFragment(soundFile.file_id, textContent, 'ar', null, 0, 0, 1);
-      await updateSoundFileTranscript(soundFile.file_id, textContent, 'ar');
+      await synchronizeLectureRecordsForFile(soundFile.file_id, {
+        classId: classId ?? undefined,
+        dayOfWeek: dayOfWeek ?? undefined,
+        slotDate: slotDate ?? undefined,
+        preferredLanguage: 'ar',
+      });
       updateProgress(soundFile.file_id, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
       console.log(`[Upload] Text file saved to fragments table for file ${soundFile.file_id}`);
 
