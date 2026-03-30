@@ -3,7 +3,10 @@
 ALTER TABLE IF EXISTS sound_files
   ADD COLUMN IF NOT EXISTS transcript TEXT COLLATE "C",
   ADD COLUMN IF NOT EXISTS transcript_language VARCHAR(10) COLLATE "C",
-  ADD COLUMN IF NOT EXISTS transcript_updated_at TIMESTAMP;
+  ADD COLUMN IF NOT EXISTS transcript_updated_at TIMESTAMP,
+  ADD COLUMN IF NOT EXISTS class_id INTEGER,
+  ADD COLUMN IF NOT EXISTS day_of_week VARCHAR(10) COLLATE "C",
+  ADD COLUMN IF NOT EXISTS slot_date DATE;
 
 -- 2) fragments table gets normalized fragment columns expected by the pipeline
 ALTER TABLE IF EXISTS fragments
@@ -15,7 +18,11 @@ ALTER TABLE IF EXISTS fragments
   ADD COLUMN IF NOT EXISTS duration DECIMAL(10, 2),
   ADD COLUMN IF NOT EXISTS fragment_path VARCHAR(500),
   ADD COLUMN IF NOT EXISTS transcript TEXT COLLATE "C",
-  ADD COLUMN IF NOT EXISTS language VARCHAR(10);
+  ADD COLUMN IF NOT EXISTS language VARCHAR(10),
+  ADD COLUMN IF NOT EXISTS transcription_status VARCHAR(20) DEFAULT 'completed',
+  ADD COLUMN IF NOT EXISTS retry_count INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS last_error TEXT COLLATE "C",
+  ADD COLUMN IF NOT EXISTS last_transcription_attempt_at TIMESTAMP;
 
 -- 3) Backfill normalized columns from older names if they exist
 DO $$

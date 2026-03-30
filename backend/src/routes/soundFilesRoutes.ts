@@ -16,10 +16,11 @@ import {
   getSoundFilesByCreator,
   updateSoundFileTranscript,
 } from '../services/soundFilesService.js';
-import { transcribeAndSave, convertVideoToAudio, getSpeechByFileId } from '../services/speechService.js';
+import { transcribeAndSave, convertVideoToAudio, getSpeechByFileId, getFailedFragments, retryFailedFragment } from '../services/speechService.js';
 import { getProgress, addSSEClient, updateProgress } from '../services/progressService.js';
 import { getEvaluationResults, generateEvaluationReport, testEvaluation, getEvaluationsWithFilters, exportEvaluationToJSON, generateComprehensiveReport } from '../services/evaluationsService.js';
 import { getMany, executeQuery } from '../helpers/database.js';
+import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 // Configure multer for audio uploads
 const uploadDir = path.join(process.cwd(), 'uploads', 'audio');
@@ -96,7 +97,7 @@ const router = Router();
  *       400:
  *         description: Invalid file or missing required fields
  */
-router.post('/upload', upload.single('file'), async (req: Request, res: Response) => {
+router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -105,7 +106,7 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       });
     }
 
-    const userId = (req as any).user?.userId || 'anonymous';
+    const createdBy = req.user?.email || String(req.user?.id || '');
     const classId = (req.body as any).class_id ? Number((req.body as any).class_id) : undefined;
     const dayOfWeek = (req.body as any).day_of_week || undefined;
     const slotDate = (req.body as any).slot_date || undefined;
@@ -131,8 +132,11 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
     const soundFile = await createSoundFile({
       filename: decodedFilename,
       filepath: relativePath,
-      createdBy: userId,
+      createdBy,
       note: (req.body as any).note || null,
+      class_id: classId ?? null,
+      day_of_week: dayOfWeek ?? null,
+      slot_date: slotDate ?? null,
     });
 
     if (isText) {
@@ -268,6 +272,46 @@ router.get('/', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: error instanceof Error ? error.message : 'Failed to retrieve sound files',
+    });
+  }
+});
+
+router.get('/fragments/failed', async (req: Request, res: Response) => {
+  try {
+    const fragments = await getFailedFragments();
+    res.status(200).json({
+      success: true,
+      message: 'Failed fragments retrieved successfully',
+      data: fragments,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to retrieve failed fragments',
+    });
+  }
+});
+
+router.post('/fragments/:fragmentId/retry-manual', async (req: Request, res: Response) => {
+  try {
+    const fragmentId = parseInt(req.params.fragmentId as string);
+    if (!fragmentId || Number.isNaN(fragmentId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid fragment ID',
+      });
+    }
+
+    const fragment = await retryFailedFragment(fragmentId);
+    res.status(200).json({
+      success: true,
+      message: 'Fragment retranscribed successfully',
+      data: fragment,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to retry fragment transcription',
     });
   }
 });

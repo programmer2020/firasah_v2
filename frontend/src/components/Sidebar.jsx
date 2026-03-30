@@ -64,6 +64,12 @@ const IconSettings = () => (
   </svg>
 );
 
+const IconWarning = () => (
+  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
+  </svg>
+);
+
 export const Sidebar = () => {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(true);
@@ -108,6 +114,11 @@ export const Sidebar = () => {
       label: 'Audio Upload',
       href: '/audio-upload',
       icon: IconMic,
+    },
+    {
+      label: 'Failed Fragments',
+      href: '/failed-fragments',
+      icon: IconWarning,
     },
     {
       label: 'Schedule',

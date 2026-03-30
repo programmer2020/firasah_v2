@@ -99,10 +99,12 @@ export const AudioUpload = () => {
         if (data) {
           setPipelineProgress(data);
 
-          if (data.status === 'completed' || data.status === 'failed') {
+          if (data.status === 'completed' || data.status === 'failed' || data.status === 'partial') {
             clearInterval(pollInterval);
             if (data.status === 'completed') {
               setSuccess(data.message || 'تم الانتهاء بنجاح!');
+            } else if (data.status === 'partial') {
+              setError(data.message || 'بعض الأجزاء لم يتم تحويلها إلى نص. يمكنك إعادة المحاولة يدويًا من صفحة المقاطع الفاشلة.');
             }
             setTimeout(() => {
               setProcessing(false);
@@ -265,6 +267,7 @@ export const AudioUpload = () => {
     const statusMap = {
       'completed': { bg: 'bg-success-100 dark:bg-success-900/30', border: 'border-success-200 dark:border-success-700', text: 'text-success-700 dark:text-success-300', label: 'نجح', icon: '✓' },
       'processing': { bg: 'bg-blue-100 dark:bg-blue-900/30', border: 'border-blue-200 dark:border-blue-700', text: 'text-blue-700 dark:text-blue-300', label: 'قيد المعالجة', icon: '⟳' },
+      'partial': { bg: 'bg-orange-100 dark:bg-orange-900/30', border: 'border-orange-200 dark:border-orange-700', text: 'text-orange-700 dark:text-orange-300', label: 'ناقص', icon: '!' },
       'pending': { bg: 'bg-yellow-100 dark:bg-yellow-900/30', border: 'border-yellow-200 dark:border-yellow-700', text: 'text-yellow-700 dark:text-yellow-300', label: 'في الانتظار', icon: '⏳' },
       'failed': { bg: 'bg-error-100 dark:bg-error-900/30', border: 'border-error-200 dark:border-error-700', text: 'text-error-700 dark:text-error-300', label: 'فشل', icon: '✗' },
       'uploaded': { bg: 'bg-gray-100 dark:bg-gray-900/30', border: 'border-gray-200 dark:border-gray-700', text: 'text-gray-700 dark:text-gray-300', label: 'محمل', icon: '📁' },
@@ -364,9 +367,11 @@ export const AudioUpload = () => {
             {/* Pipeline Progress (shown during processing) */}
             {processing && pipelineProgress && (
               <div className="mb-6">
-                <div className={`rounded-lg p-5 border ${
+                  <div className={`rounded-lg p-5 border ${
                   pipelineProgress.status === 'completed'
                     ? 'bg-success-50 dark:bg-success-900/30 border-success-200 dark:border-success-700'
+                    : pipelineProgress.status === 'partial'
+                    ? 'bg-orange-50 dark:bg-orange-900/30 border-orange-200 dark:border-orange-700'
                     : pipelineProgress.status === 'failed'
                     ? 'bg-error-50 dark:bg-error-900/30 border-error-200 dark:border-error-700'
                     : 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700'
@@ -377,6 +382,10 @@ export const AudioUpload = () => {
                       {pipelineProgress.status === 'completed' ? (
                         <svg className="h-5 w-5 text-success-600 dark:text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      ) : pipelineProgress.status === 'partial' ? (
+                        <svg className="h-5 w-5 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                       ) : pipelineProgress.status === 'failed' ? (
                         <svg className="h-5 w-5 text-error-600 dark:text-error-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -390,6 +399,7 @@ export const AudioUpload = () => {
                       )}
                       <span className={`text-sm font-semibold ${
                         pipelineProgress.status === 'completed' ? 'text-success-700 dark:text-success-300'
+                          : pipelineProgress.status === 'partial' ? 'text-orange-700 dark:text-orange-300'
                           : pipelineProgress.status === 'failed' ? 'text-error-700 dark:text-error-300'
                           : 'text-blue-700 dark:text-blue-300'
                       }`}>
@@ -398,6 +408,7 @@ export const AudioUpload = () => {
                     </div>
                     <span className={`text-sm font-bold ${
                       pipelineProgress.status === 'completed' ? 'text-success-600 dark:text-success-400'
+                        : pipelineProgress.status === 'partial' ? 'text-orange-600 dark:text-orange-400'
                         : pipelineProgress.status === 'failed' ? 'text-error-600 dark:text-error-400'
                         : 'text-blue-600 dark:text-blue-400'
                     }`}>
@@ -410,6 +421,7 @@ export const AudioUpload = () => {
                     <div
                       className={`h-2.5 rounded-full transition-all duration-500 ${
                         pipelineProgress.status === 'completed' ? 'bg-success-500'
+                          : pipelineProgress.status === 'partial' ? 'bg-orange-500'
                           : pipelineProgress.status === 'failed' ? 'bg-error-500'
                           : 'bg-blue-500'
                       }`}
@@ -421,6 +433,17 @@ export const AudioUpload = () => {
                   <p className="text-sm text-gray-700 dark:text-gray-300 text-right" dir="rtl">
                     {pipelineProgress.message}
                   </p>
+
+                  {pipelineProgress.status === 'partial' && (
+                    <div className="mt-3 text-right" dir="rtl">
+                      <Link
+                        to="/failed-fragments"
+                        className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-700"
+                      >
+                        فتح صفحة المقاطع الفاشلة
+                      </Link>
+                    </div>
+                  )}
 
                   {/* Slot info */}
                   {pipelineProgress.currentSlot && pipelineProgress.totalSlots && pipelineProgress.status !== 'completed' && (

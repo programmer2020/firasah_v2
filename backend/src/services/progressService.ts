@@ -8,7 +8,7 @@ import { Response } from 'express';
 
 export interface PipelineProgress {
   fileId: number;
-  status: 'uploading' | 'converting' | 'denoising' | 'analyzing' | 'splitting' | 'transcribing' | 'saving' | 'completed' | 'failed';
+  status: 'uploading' | 'converting' | 'denoising' | 'analyzing' | 'splitting' | 'transcribing' | 'saving' | 'completed' | 'partial' | 'failed';
   /** Label shown to the user */
   message: string;
   /** 0–100 overall progress */
@@ -54,7 +54,7 @@ export const updateProgress = (fileId: number, update: Partial<PipelineProgress>
       }
     }
     // If completed or failed, close connections after a short delay
-    if (updated.status === 'completed' || updated.status === 'failed') {
+    if (updated.status === 'completed' || updated.status === 'partial' || updated.status === 'failed') {
       setTimeout(() => {
         for (const res of clients) {
           try { res.end(); } catch { /* ignore */ }

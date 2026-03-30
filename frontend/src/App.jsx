@@ -12,6 +12,7 @@ import Subjects from './pages/Subjects';
 import Grades from './pages/Grades';
 import Sections from './pages/Sections';
 import AudioUpload from './pages/AudioUpload';
+import FailedFragments from './pages/FailedFragments';
 import Schedule from './pages/Schedule';
 import EvaluationDashboard from './pages/EvaluationDashboard';
 import WorkerJobs from './pages/WorkerJobs';
@@ -51,6 +52,7 @@ function AppRoutes() {
       <Route path="/grades" element={<ProtectedRoute element={<Grades />} />} />
       <Route path="/sections" element={<ProtectedRoute element={<Sections />} />} />
       <Route path="/audio-upload" element={<ProtectedRoute element={<AudioUpload />} />} />
+      <Route path="/failed-fragments" element={<ProtectedRoute element={<FailedFragments />} />} />
       <Route path="/schedule" element={<ProtectedRoute element={<Schedule />} />} />
       <Route path="/evaluations" element={<ProtectedRoute element={<EvaluationDashboard />} />} />
       <Route path="/worker-jobs" element={<ProtectedRoute element={<WorkerJobs />} />} />

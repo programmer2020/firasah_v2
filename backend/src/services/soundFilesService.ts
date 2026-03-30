@@ -11,10 +11,30 @@ interface SoundFile {
   filepath: string;
   createdBy: string;
   note?: string;
+  class_id?: number | null;
+  day_of_week?: string | null;
+  slot_date?: string | null;
   transcript?: string | null;
   transcript_language?: string | null;
   transcript_updated_at?: Date | null;
 }
+
+let ensureSoundFilesScheduleSchemaPromise: Promise<void> | null = null;
+
+const ensureSoundFilesScheduleSchema = async () => {
+  if (!ensureSoundFilesScheduleSchemaPromise) {
+    ensureSoundFilesScheduleSchemaPromise = (async () => {
+      await executeQuery(`
+        ALTER TABLE IF EXISTS sound_files
+          ADD COLUMN IF NOT EXISTS class_id INTEGER,
+          ADD COLUMN IF NOT EXISTS day_of_week VARCHAR(10),
+          ADD COLUMN IF NOT EXISTS slot_date DATE;
+      `);
+    })();
+  }
+
+  return ensureSoundFilesScheduleSchemaPromise;
+};
 
 const syncSoundFilesIdSequence = async () => {
   await executeQuery(`
@@ -33,8 +53,43 @@ const syncSoundFilesIdSequence = async () => {
 export const getAllSoundFiles = async () => {
   try {
     const query = `
-      SELECT * FROM sound_files
-      ORDER BY created_at DESC
+      SELECT
+        sf.*,
+        COALESCE(fragment_stats.total_fragments, 0) AS total_fragments,
+        COALESCE(fragment_stats.failed_fragments, 0) AS failed_fragments,
+        COALESCE(lecture_stats.total_lectures, 0) AS total_lectures,
+        COALESCE(lecture_stats.completed_lectures, 0) AS completed_lectures,
+        CASE
+          WHEN COALESCE(fragment_stats.failed_fragments, 0) > 0 THEN 'partial'
+          WHEN COALESCE(lecture_stats.total_lectures, 0) > 0
+            AND COALESCE(lecture_stats.completed_lectures, 0) = COALESCE(lecture_stats.total_lectures, 0)
+            THEN 'completed'
+          WHEN COALESCE(fragment_stats.total_fragments, 0) > 0 OR COALESCE(lecture_stats.total_lectures, 0) > 0 THEN 'processing'
+          ELSE 'uploaded'
+        END AS status
+      FROM sound_files sf
+      LEFT JOIN (
+        SELECT
+          file_id,
+          COUNT(*) AS total_fragments,
+          COUNT(*) FILTER (
+            WHERE transcript = '[transcription_failed]'
+          ) AS failed_fragments
+        FROM fragments
+        GROUP BY file_id
+      ) fragment_stats ON fragment_stats.file_id = sf.file_id
+      LEFT JOIN (
+        SELECT
+          file_id,
+          COUNT(*) AS total_lectures,
+          COUNT(*) FILTER (
+            WHERE transcript IS NOT NULL
+              AND BTRIM(COALESCE(transcript, '')) <> ''
+          ) AS completed_lectures
+        FROM lecture
+        GROUP BY file_id
+      ) lecture_stats ON lecture_stats.file_id = sf.file_id
+      ORDER BY sf.created_at DESC
     `;
     return await getMany(query);
   } catch (error) {
@@ -72,11 +127,16 @@ export const createSoundFile = async (data: SoundFile) => {
       throw new Error('filename, filepath, and createdBy are required');
     }
 
+    await ensureSoundFilesScheduleSchema();
+
     const createRecord = () => insert('sound_files', {
       filename: data.filename,
       filepath: data.filepath,
       createdBy: data.createdBy,
       note: data.note || null,
+      class_id: data.class_id ?? null,
+      day_of_week: data.day_of_week ?? null,
+      slot_date: data.slot_date ?? null,
     });
 
     // Keep SERIAL sequence aligned with imported/migrated data before insert.

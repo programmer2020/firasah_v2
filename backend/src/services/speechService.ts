@@ -11,7 +11,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 // @ts-ignore
 import ffprobeStatic from 'ffprobe-static';
-import { insert, getOne, getMany, update } from '../helpers/database.js';
+import { insert, getOne, getMany, update, executeQuery } from '../helpers/database.js';
 import { updateProgress } from './progressService.js';
 import { evaluateSpeechAgainstKPIs } from './evaluationsService.js';
 
@@ -25,6 +25,47 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+const PENDING_TRANSCRIPTION_PLACEHOLDER = '[transcription_pending]';
+const FAILED_TRANSCRIPTION_PLACEHOLDER = '[transcription_failed]';
+const MAX_TRANSCRIPTION_ATTEMPTS = 3;
+
+let ensureFragmentTranscriptionSchemaPromise: Promise<void> | null = null;
+
+const ensureFragmentTranscriptionSchema = async () => {
+  if (!ensureFragmentTranscriptionSchemaPromise) {
+    ensureFragmentTranscriptionSchemaPromise = (async () => {
+      await executeQuery(`
+        ALTER TABLE IF EXISTS fragments
+          ADD COLUMN IF NOT EXISTS transcription_status VARCHAR(20) DEFAULT 'completed',
+          ADD COLUMN IF NOT EXISTS retry_count INTEGER DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS last_error TEXT,
+          ADD COLUMN IF NOT EXISTS last_transcription_attempt_at TIMESTAMP;
+      `);
+    })();
+  }
+
+  return ensureFragmentTranscriptionSchemaPromise;
+};
+
+const isSuccessfulTranscript = (transcript?: string | null) => {
+  const normalized = (transcript || '').trim();
+  return Boolean(
+    normalized &&
+    normalized !== PENDING_TRANSCRIPTION_PLACEHOLDER &&
+    normalized !== FAILED_TRANSCRIPTION_PLACEHOLDER
+  );
+};
+
+const getStoredFragmentPath = (fileId: number, fragmentOrder: number, originalPath: string) => {
+  const ext = path.extname(originalPath) || '.mp3';
+  const fragmentDir = path.join(process.cwd(), 'uploads', 'audio', 'fragments', `file_${fileId}`);
+  if (!fs.existsSync(fragmentDir)) {
+    fs.mkdirSync(fragmentDir, { recursive: true });
+  }
+
+  return path.join(fragmentDir, `fragment_${fragmentOrder}${ext}`);
+};
+
 interface TimeSlot {
   time_slot_id: number;
   class_id: number;
@@ -32,6 +73,15 @@ interface TimeSlot {
   slot_date: string | null;
   start_time: string;
   end_time: string;
+}
+
+interface LectureBucket {
+  slotOrder: number;
+  timeSlotId: number | null;
+  startSeconds: number;
+  endSeconds: number;
+  durationSeconds: number;
+  fragments: any[];
 }
 
 /**
@@ -264,23 +314,20 @@ export const transcribeAudio = async (filePath: string, fileId?: number, slotInf
   
   console.log(`[Speech] Using audio path: ${audioPath} (cleanup needed: ${needsCleanup})`);
 
-  const models = ['gpt-4o-transcribe', 'whisper-1'];
-  const MAX_RETRIES = 2;
+  const attemptsPlan = ['gpt-4o-transcribe', 'gpt-4o-transcribe', 'whisper-1'];
   const slotLabel = slotInfo ? `الحصة ${slotInfo.current} من ${slotInfo.total}` : 'الملف';
 
   try {
-    let attemptNum = 0;
-    const totalAttempts = models.length * MAX_RETRIES;
-    for (const model of models) {
-      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        attemptNum++;
-        try {
+    for (let attemptIndex = 0; attemptIndex < attemptsPlan.length; attemptIndex++) {
+      const model = attemptsPlan[attemptIndex];
+      const attemptNumber = attemptIndex + 1;
+      try {
           const startTime = Date.now();
-          console.log(`[Speech] Transcribing with ${model} (attempt ${attempt}/${MAX_RETRIES}) - file: ${path.basename(audioPath)}`);
+          console.log(`[Speech] Transcribing with ${model} (attempt ${attemptNumber}/${MAX_TRANSCRIPTION_ATTEMPTS}) - file: ${path.basename(audioPath)}`);
 
           if (fileId) {
             updateProgress(fileId, {
-              message: `جاري تحويل ${slotLabel} إلى نص... (محاولة ${attemptNum}/${totalAttempts})`,
+              message: `جاري تحويل ${slotLabel} إلى نص... (محاولة ${attemptNumber}/${MAX_TRANSCRIPTION_ATTEMPTS})`,
             });
           }
 
@@ -305,54 +352,54 @@ export const transcribeAudio = async (filePath: string, fileId?: number, slotInf
             text: transcription.text,
             language: detectedLang || 'auto',
             duration: (transcription as any).duration || null,
+            attemptsUsed: attemptNumber,
           };
-        } catch (err: any) {
-          const isTimeout = err.code === 'ETIMEDOUT' || err.message?.includes('timeout') || err.message?.includes('ENOTFOUND');
-          const isRateLimit = err.status === 429 || err.code === 'rate_limit_exceeded';
-          const isConnectionError = err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.message?.includes('Connection error');
+      } catch (err: any) {
+        const isTimeout = err.code === 'ETIMEDOUT' || err.message?.includes('timeout') || err.message?.includes('ENOTFOUND');
+        const isRateLimit = err.status === 429 || err.code === 'rate_limit_exceeded';
+        const isConnectionError = err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.message?.includes('Connection error');
 
-          console.error(`[Speech] ❌ ${model} attempt ${attempt} failed:`);
-          console.error(`[Speech] Error status: ${err.status}`);
-          console.error(`[Speech] Error message: ${err.message}`);
-          console.error(`[Speech] Error code: ${err.code}`);
-          console.error(`[Speech] Error type: ${isRateLimit ? 'RATE_LIMIT' : isTimeout ? 'TIMEOUT' : isConnectionError ? 'CONNECTION' : 'OTHER'}`);
+        console.error(`[Speech] ❌ ${model} attempt ${attemptNumber} failed:`);
+        console.error(`[Speech] Error status: ${err.status}`);
+        console.error(`[Speech] Error message: ${err.message}`);
+        console.error(`[Speech] Error code: ${err.code}`);
+        console.error(`[Speech] Error type: ${isRateLimit ? 'RATE_LIMIT' : isTimeout ? 'TIMEOUT' : isConnectionError ? 'CONNECTION' : 'OTHER'}`);
 
-          if (attempt < MAX_RETRIES) {
-            // Exponential backoff: rate limit (30s) > timeout/connection (5s) > other (1s)
-            let delay = 1000; // default: 1 second
-            if (isRateLimit) {
-              delay = 30000; // 30 seconds for rate limits
-            } else if (isTimeout || isConnectionError) {
-              delay = 5000; // 5 seconds for timeouts/connection errors
-            }
+        if (attemptNumber < MAX_TRANSCRIPTION_ATTEMPTS) {
+          let delay = 1000;
+          if (isRateLimit) {
+            delay = 30000;
+          } else if (isTimeout || isConnectionError) {
+            delay = 5000;
+          }
 
-            const updateInterval = 250;
-            const steps = Math.ceil(delay / updateInterval);
+          const updateInterval = 250;
+          const steps = Math.ceil(delay / updateInterval);
 
+          if (fileId) {
+            updateProgress(fileId, {
+              message: `فشلت المحاولة ${attemptNumber}. إعادة المحاولة خلال ${(delay / 1000).toFixed(1)}s...`,
+            });
+          }
+
+          for (let i = 0; i < steps; i++) {
+            await new Promise(r => setTimeout(r, updateInterval));
             if (fileId) {
-              updateProgress(fileId, {
-                message: `فشلت المحاولة ${attemptNum}. إعادة المحاولة خلال ${(delay / 1000).toFixed(1)}s...`,
-              });
-            }
-
-            // Update progress every interval to show countdown
-            for (let i = 0; i < steps; i++) {
-              await new Promise(r => setTimeout(r, updateInterval));
-              if (fileId) {
-                const remaining = Math.max(0, (delay - (i + 1) * updateInterval) / 1000);
-                if (remaining > 0) {
-                  updateProgress(fileId, {
-                    message: `إعادة المحاولة خلال ${remaining.toFixed(1)}s...`,
-                  });
-                }
+              const remaining = Math.max(0, (delay - (i + 1) * updateInterval) / 1000);
+              if (remaining > 0) {
+                updateProgress(fileId, {
+                  message: `إعادة المحاولة خلال ${remaining.toFixed(1)}s...`,
+                });
               }
             }
           }
         }
+        if (attemptNumber === MAX_TRANSCRIPTION_ATTEMPTS) {
+          throw new Error(err.message || 'All transcription attempts failed');
+        }
       }
-      console.log(`[Speech] All attempts with ${model} failed, trying next model...`);
     }
-    throw new Error('All transcription models and retries exhausted');
+    throw new Error('All transcription attempts failed');
   } finally {
     // Clean up compressed file
     if (needsCleanup && fs.existsSync(audioPath)) {
@@ -375,9 +422,17 @@ export const saveFragment = async (
   duration: number | null,
   startTime: number = 0,
   endTime: number = 0,
-  slotOrder: number = 0
+  slotOrder: number = 0,
+  options: {
+    fragmentPath?: string | null;
+    transcriptionStatus?: 'completed' | 'failed' | 'pending';
+    retryCount?: number;
+    lastError?: string | null;
+    lastTranscriptionAttemptAt?: Date | null;
+  } = {}
 ) => {
   try {
+    await ensureFragmentTranscriptionSchema();
     console.log(`[Fragment] Saving fragment: file_id=${fileId}, start=${startTime}s, end=${endTime}s, order=${slotOrder}, transcript_len=${transcript.length}`);
     
     const normalizedDuration = duration ?? Math.max(0, endTime - startTime);
@@ -390,6 +445,11 @@ export const saveFragment = async (
       fragment_order: slotOrder,
       start_seconds: startTime,
       end_seconds: endTime,
+      fragment_path: options.fragmentPath || null,
+      transcription_status: options.transcriptionStatus || (isSuccessfulTranscript(transcript) ? 'completed' : 'pending'),
+      retry_count: options.retryCount ?? 0,
+      last_error: options.lastError || null,
+      last_transcription_attempt_at: options.lastTranscriptionAttemptAt || null,
       created_at: new Date(),
       updated_at: new Date(),
     });
@@ -397,7 +457,7 @@ export const saveFragment = async (
     console.log(`[Fragment] ✅ Fragment saved successfully: id=${result.id}, file_id=${result.file_id}`);
     
     // Automatically evaluate fragment against KPIs asynchronously
-    if (transcript && transcript.trim() && transcript !== '[transcription_pending]') {
+    if (isSuccessfulTranscript(transcript)) {
       setImmediate(async () => {
         try {
           console.log(`[Evaluation] 🔄 Starting automatic KPI evaluation for fragment_id=${result.id}...`);
@@ -423,41 +483,345 @@ export const saveFragment = async (
 
 
 /**
- * Rebuild the full transcript for a file from all successful fragments and save it to sound_files.transcript
+ * Clear any old file-level transcript aggregation.
+ * Transcript aggregation now lives in lecture records instead of sound_files.
  */
-export const updateAggregatedTranscriptForFile = async (fileId: number, preferredLanguage: string = 'ar') => {
+export const clearSoundFileTranscriptAggregation = async (fileId: number) => {
   try {
-    const fragments = await getMany(`
-      SELECT transcript, language
-      FROM fragments
-      WHERE file_id = $1
-        AND transcript IS NOT NULL
-        AND BTRIM(transcript) <> ''
-        AND transcript <> '[transcription_pending]'
-      ORDER BY fragment_order ASC
-    `, [fileId]);
+    const updated = await update('sound_files', {
+      transcript: null,
+      transcript_language: null,
+      transcript_updated_at: null,
+      updated_at: new Date(),
+    }, 'file_id = $1', [fileId]);
 
-    const fullTranscript = fragments
-      .map((fragment: any) => (fragment.transcript || '').trim())
+    console.log(`[Speech] ✅ Cleared file-level transcript aggregation for file_id=${fileId}`);
+    return updated;
+  } catch (err) {
+    console.error(`[Speech] ❌ Failed to clear file-level transcript for file_id=${fileId}:`, err);
+    throw err;
+  }
+};
+
+const getSlotDurationSeconds = (slot: TimeSlot) => {
+  const start = timeToSeconds(slot.start_time);
+  const end = timeToSeconds(slot.end_time);
+  const duration = end - start;
+  return Number.isFinite(duration) && duration > 0 ? duration : FRAGMENT_DURATION_SEC;
+};
+
+const isValidLectureText = (transcript?: string | null) => isSuccessfulTranscript(transcript);
+
+const buildLectureBucketsFromSchedule = (
+  fragments: any[],
+  timeSlots: TimeSlot[]
+): LectureBucket[] => {
+  const buckets: LectureBucket[] = [];
+  let cursor = 0;
+
+  for (const [index, slot] of timeSlots.entries()) {
+    const durationSeconds = getSlotDurationSeconds(slot);
+    buckets.push({
+      slotOrder: index + 1,
+      timeSlotId: slot.time_slot_id,
+      startSeconds: cursor,
+      endSeconds: cursor + durationSeconds,
+      durationSeconds,
+      fragments: [],
+    });
+    cursor += durationSeconds;
+  }
+
+  for (const fragment of fragments) {
+    const fragmentStart = Number(fragment.start_seconds || 0);
+    const fragmentEnd = Number(fragment.end_seconds || fragmentStart);
+    const fragmentDuration = Number(fragment.duration || Math.max(0, fragmentEnd - fragmentStart));
+    const midpoint = fragmentStart + (fragmentDuration / 2);
+
+    let bucket = buckets.find((candidate) => midpoint >= candidate.startSeconds && midpoint < candidate.endSeconds);
+
+    if (!bucket) {
+      const overflowStart = buckets.length > 0 ? buckets[buckets.length - 1].endSeconds : fragmentStart;
+      bucket = {
+        slotOrder: buckets.length + 1,
+        timeSlotId: null,
+        startSeconds: overflowStart,
+        endSeconds: Math.max(overflowStart, fragmentEnd),
+        durationSeconds: Math.max(fragmentDuration, fragmentEnd - overflowStart),
+        fragments: [],
+      };
+      buckets.push(bucket);
+    }
+
+    bucket.fragments.push(fragment);
+  }
+
+  return buckets.filter((bucket) => bucket.fragments.length > 0);
+};
+
+const buildLectureBucketsFromExistingAssignments = (
+  fragments: any[],
+  existingLectures: any[]
+): LectureBucket[] => {
+  if (existingLectures.length === 0) {
+    return [];
+  }
+
+  const buckets: LectureBucket[] = existingLectures
+    .sort((a, b) => Number(a.slot_order || 0) - Number(b.slot_order || 0) || Number(a.id) - Number(b.id))
+    .map((lecture) => ({
+      slotOrder: Number(lecture.slot_order || 0),
+      timeSlotId: lecture.time_slot_id ?? null,
+      startSeconds: 0,
+      endSeconds: 0,
+      durationSeconds: Number(lecture.duration || 0),
+      fragments: [],
+    }));
+
+  const bucketByLectureId = new Map(existingLectures.map((lecture, index) => [Number(lecture.id), buckets[index]]));
+
+  for (const fragment of fragments) {
+    const lectureId = fragment.lecture_id ? Number(fragment.lecture_id) : null;
+    if (lectureId && bucketByLectureId.has(lectureId)) {
+      bucketByLectureId.get(lectureId)!.fragments.push(fragment);
+      continue;
+    }
+  }
+
+  const orphanFragments = fragments.filter((fragment) => !fragment.lecture_id);
+  if (orphanFragments.length > 0) {
+    buckets.push({
+      slotOrder: buckets.length + 1,
+      timeSlotId: orphanFragments[0].time_slot_id ?? null,
+      startSeconds: Number(orphanFragments[0].start_seconds || 0),
+      endSeconds: Number(orphanFragments[orphanFragments.length - 1].end_seconds || 0),
+      durationSeconds: orphanFragments.reduce((sum, fragment) => sum + Number(fragment.duration || 0), 0),
+      fragments: orphanFragments,
+    });
+  }
+
+  return buckets.filter((bucket) => bucket.fragments.length > 0);
+};
+
+const buildDefaultLectureBucket = (fragments: any[]): LectureBucket[] => {
+  if (fragments.length === 0) return [];
+
+  return [{
+    slotOrder: 1,
+    timeSlotId: null,
+    startSeconds: Number(fragments[0].start_seconds || 0),
+    endSeconds: Number(fragments[fragments.length - 1].end_seconds || 0),
+    durationSeconds: fragments.reduce((sum, fragment) => sum + Number(fragment.duration || 0), 0),
+    fragments,
+  }];
+};
+
+export const synchronizeLectureRecordsForFile = async (
+  fileId: number,
+  options: {
+    classId?: number;
+    dayOfWeek?: string;
+    slotDate?: string;
+    preferredLanguage?: string;
+  } = {}
+) => {
+  await ensureFragmentTranscriptionSchema();
+
+  const soundFileContext = await getOne(`
+    SELECT class_id, day_of_week, slot_date::text
+    FROM sound_files
+    WHERE file_id = $1
+  `, [fileId]);
+
+  const effectiveClassId = options.classId ?? soundFileContext?.class_id ?? undefined;
+  const effectiveDayOfWeek = options.dayOfWeek ?? soundFileContext?.day_of_week ?? undefined;
+  const effectiveSlotDate = options.slotDate ?? soundFileContext?.slot_date ?? undefined;
+
+  const fragments = await getMany(`
+    SELECT *
+    FROM fragments
+    WHERE file_id = $1
+    ORDER BY fragment_order ASC, id ASC
+  `, [fileId]);
+
+  const existingLectures = await getMany(`
+    SELECT *
+    FROM lecture
+    WHERE file_id = $1
+    ORDER BY slot_order ASC, id ASC
+  `, [fileId]);
+
+  let buckets: LectureBucket[] = [];
+
+  if (effectiveClassId && effectiveDayOfWeek) {
+    const timeSlots = await getTimeSlots(effectiveClassId, effectiveDayOfWeek, effectiveSlotDate);
+    if (timeSlots.length > 0) {
+      buckets = buildLectureBucketsFromSchedule(fragments, timeSlots);
+    }
+  }
+
+  if (buckets.length === 0 && existingLectures.length > 0) {
+    buckets = buildLectureBucketsFromExistingAssignments(fragments, existingLectures);
+  }
+
+  if (buckets.length === 0) {
+    buckets = buildDefaultLectureBucket(fragments);
+  }
+
+  const existingLectureByOrder = new Map<number, any>(
+    existingLectures.map((lecture: any) => [Number(lecture.slot_order || 0), lecture])
+  );
+  const usedLectureIds = new Set<number>();
+  const syncedLectures: any[] = [];
+
+  for (const bucket of buckets) {
+    const successfulFragments = bucket.fragments.filter((fragment) => isValidLectureText(fragment.transcript));
+    const transcript = successfulFragments
+      .map((fragment) => String(fragment.transcript || '').trim())
       .filter(Boolean)
       .join('\n\n')
       .trim();
 
-    const language = fragments.find((fragment: any) => fragment.language)?.language || preferredLanguage || 'ar';
+    const language = successfulFragments.find((fragment) => fragment.language)?.language
+      || options.preferredLanguage
+      || 'ar';
 
-    const updated = await update('sound_files', {
-      transcript: fullTranscript || null,
-      transcript_language: fullTranscript ? language : null,
-      transcript_updated_at: fullTranscript ? new Date() : null,
-      updated_at: new Date(),
-    }, 'file_id = $1', [fileId]);
+    const bucketDuration = bucket.fragments.reduce(
+      (sum, fragment) => sum + Number(fragment.duration || 0),
+      0
+    );
 
-    console.log(`[Speech] ✅ Aggregated transcript updated for file_id=${fileId}, chars=${fullTranscript.length}`);
-    return updated;
-  } catch (err) {
-    console.error(`[Speech] ❌ Failed to update aggregated transcript for file_id=${fileId}:`, err);
-    throw err;
+    const existingLecture = existingLectureByOrder.get(bucket.slotOrder);
+    const lectureRecord: any = existingLecture
+      ? await update('lecture', {
+          time_slot_id: bucket.timeSlotId,
+          transcript: transcript || null,
+          language: transcript ? language : null,
+          duration: bucketDuration || bucket.durationSeconds || null,
+          slot_order: bucket.slotOrder,
+          updated_at: new Date(),
+        }, 'id = $1', [existingLecture.id])
+      : await insert('lecture', {
+          file_id: fileId,
+          time_slot_id: bucket.timeSlotId,
+          transcript: transcript || null,
+          language: transcript ? language : null,
+          duration: bucketDuration || bucket.durationSeconds || null,
+          slot_order: bucket.slotOrder,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+
+    usedLectureIds.add(Number(lectureRecord.id));
+    syncedLectures.push(lectureRecord);
+
+    const fragmentIds = bucket.fragments.map((fragment) => Number(fragment.id)).filter(Number.isFinite);
+    if (fragmentIds.length > 0) {
+      await executeQuery(`
+        UPDATE fragments
+        SET lecture_id = $1,
+            time_slot_id = $2,
+            updated_at = NOW()
+        WHERE id = ANY($3::int[])
+      `, [lectureRecord.id, bucket.timeSlotId, fragmentIds]);
+    }
   }
+
+  const obsoleteLectureIds = existingLectures
+    .map((lecture: any) => Number(lecture.id))
+    .filter((lectureId: number) => !usedLectureIds.has(lectureId));
+
+  for (const obsoleteLectureId of obsoleteLectureIds) {
+    await executeQuery(`
+      DELETE FROM lecture
+      WHERE id = $1
+        AND NOT EXISTS (
+          SELECT 1
+          FROM fragments
+          WHERE lecture_id = $1
+        )
+    `, [obsoleteLectureId]);
+  }
+
+  await clearSoundFileTranscriptAggregation(fileId);
+
+  console.log(`[Speech] ✅ Synchronized ${syncedLectures.length} lecture record(s) for file_id=${fileId}`);
+  return syncedLectures;
+};
+
+export const getFailedFragments = async () => {
+  await ensureFragmentTranscriptionSchema();
+  return await getMany(`
+    SELECT
+      f.id,
+      f.file_id,
+      sf.filename,
+      f.fragment_order,
+      f.start_seconds,
+      f.end_seconds,
+      f.duration,
+      f.fragment_path,
+      f.retry_count,
+      f.last_error,
+      f.last_transcription_attempt_at,
+      f.updated_at
+    FROM fragments f
+    JOIN sound_files sf ON sf.file_id = f.file_id
+    WHERE f.transcription_status = 'failed'
+       OR f.transcript = $1
+    ORDER BY f.updated_at DESC, f.file_id DESC, f.fragment_order ASC
+  `, [FAILED_TRANSCRIPTION_PLACEHOLDER]);
+};
+
+export const retryFailedFragment = async (fragmentId: number) => {
+  await ensureFragmentTranscriptionSchema();
+
+  const fragment = await getOne(`
+    SELECT *
+    FROM fragments
+    WHERE id = $1
+  `, [fragmentId]);
+
+  if (!fragment) {
+    throw new Error('Fragment not found');
+  }
+
+  if (!fragment.fragment_path) {
+    throw new Error('No fragment file is available for manual retry');
+  }
+
+  if (!fs.existsSync(fragment.fragment_path)) {
+    throw new Error('Stored fragment file no longer exists on disk');
+  }
+
+  const result = await transcribeAudio(fragment.fragment_path, fragment.file_id, {
+    current: fragment.fragment_order || 1,
+    total: fragment.fragment_order || 1,
+  });
+
+  const updatedFragment = await update('fragments', {
+    transcript: result.text,
+    language: result.language || 'ar',
+    transcription_status: 'completed',
+    retry_count: (fragment.retry_count || 0) + (result.attemptsUsed || 1),
+    last_error: null,
+    last_transcription_attempt_at: new Date(),
+    updated_at: new Date(),
+  }, 'id = $1', [fragmentId]);
+
+  if (isSuccessfulTranscript(result.text)) {
+    try {
+      await evaluateSpeechAgainstKPIs(result.text, fragment.file_id);
+    } catch (evalErr) {
+      console.error(`[Evaluation] ⚠️ Manual retry evaluation failed for fragment_id=${fragmentId}:`, evalErr);
+    }
+  }
+
+  await synchronizeLectureRecordsForFile(fragment.file_id, {
+    preferredLanguage: result.language || 'ar',
+  });
+
+  return updatedFragment;
 };
 
 export const saveSpeech = async (
@@ -592,15 +956,54 @@ export const transcribeAndSave = async (
   if (totalDuration <= FRAGMENT_DURATION_SEC) {
     console.log(`[Speech] File is short (${totalDuration}s) — transcribing as single fragment`);
     updateProgress(fileId, { status: 'transcribing', message: 'جاري تحويل الصوت إلى نص...', percent: 30 });
-    const result = await transcribeAudio(denoisedPath, fileId);
-    updateProgress(fileId, { status: 'saving', message: 'جاري حفظ النص...', percent: 90 });
-    const fragment = await saveFragment(fileId, result.text, result.language, totalDuration, 0, totalDuration, 1);
-    await updateAggregatedTranscriptForFile(fileId, result.language || 'ar');
-    updateProgress(fileId, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
-    return [fragment];
+    try {
+      const result = await transcribeAudio(denoisedPath, fileId);
+      updateProgress(fileId, { status: 'saving', message: 'جاري حفظ النص...', percent: 90 });
+      const fragment = await saveFragment(fileId, result.text, result.language, totalDuration, 0, totalDuration, 1, {
+        fragmentPath: denoisedPath,
+        transcriptionStatus: 'completed',
+        retryCount: result.attemptsUsed || 1,
+        lastError: null,
+        lastTranscriptionAttemptAt: new Date(),
+      });
+      await synchronizeLectureRecordsForFile(fileId, {
+        classId,
+        dayOfWeek,
+        slotDate,
+        preferredLanguage: result.language || 'ar',
+      });
+      updateProgress(fileId, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
+      return [fragment];
+    } catch (err) {
+      const failureMessage = err instanceof Error ? err.message : 'Unknown transcription failure';
+      const fragment = await saveFragment(fileId, FAILED_TRANSCRIPTION_PLACEHOLDER, 'ar', totalDuration, 0, totalDuration, 1, {
+        fragmentPath: denoisedPath,
+        transcriptionStatus: 'failed',
+        retryCount: MAX_TRANSCRIPTION_ATTEMPTS,
+        lastError: failureMessage,
+        lastTranscriptionAttemptAt: new Date(),
+      });
+      await synchronizeLectureRecordsForFile(fileId, {
+        classId,
+        dayOfWeek,
+        slotDate,
+        preferredLanguage: 'ar',
+      });
+      updateProgress(fileId, {
+        status: 'partial',
+        message: 'تعذر تحويل الملف بالكامل إلى نص بعد 3 محاولات. ستجده في صفحة المقاطع الفاشلة لإعادة المحاولة يدويًا.',
+        percent: 100,
+        error: failureMessage,
+        currentSlot: 1,
+        totalSlots: 1,
+      });
+      return [fragment];
+    }
   }
 
   // Create temp directory for segments
+  await ensureFragmentTranscriptionSchema();
+
   const tempDir = path.join(path.dirname(denoisedPath), 'temp_segments');
   if (!fs.existsSync(tempDir)) {
     fs.mkdirSync(tempDir, { recursive: true });
@@ -618,7 +1021,7 @@ export const transcribeAndSave = async (
 
     if (effectiveDuration <= 0) break;
 
-    const segmentFile = path.join(tempDir, `fragment_${slotOrder}${ext}`);
+    const segmentFile = getStoredFragmentPath(fileId, slotOrder, absolutePath);
     console.log(`[Speech] 📌 Processing fragment ${slotOrder}/${totalFragments}: ${startSec}s → ${endSec}s (${effectiveDuration}s)`);
 
     // Calculate progress: fragments spread across 25%-95%
@@ -676,31 +1079,47 @@ export const transcribeAndSave = async (
         effectiveDuration,
         startSec,
         endSec,
-        slotOrder
+        slotOrder,
+        {
+          fragmentPath: segmentFile,
+          transcriptionStatus: 'completed',
+          retryCount: result.attemptsUsed || 1,
+          lastError: null,
+          lastTranscriptionAttemptAt: new Date(),
+        }
       );
 
       console.log(`[Speech] ✅ Fragment ${slotOrder} saved: id=${fragment.id}`);
       results.push(fragment);
     } catch (err) {
       console.error(`[Speech] ❌ Error processing fragment ${slotOrder}:`, err);
-      // Save a placeholder
+      const failureMessage = err instanceof Error ? err.message : 'Unknown transcription failure';
       try {
         const fragment = await saveFragment(
           fileId,
-          '[transcription_pending]',
+          FAILED_TRANSCRIPTION_PLACEHOLDER,
           'ar',
           effectiveDuration,
           startSec,
           endSec,
-          slotOrder
+          slotOrder,
+          {
+            fragmentPath: segmentFile,
+            transcriptionStatus: 'failed',
+            retryCount: MAX_TRANSCRIPTION_ATTEMPTS,
+            lastError: failureMessage,
+            lastTranscriptionAttemptAt: new Date(),
+          }
         );
-        console.log(`[Speech] ⚠️ Fragment ${slotOrder} saved as pending: id=${fragment.id}`);
+        console.log(`[Speech] ⚠️ Fragment ${slotOrder} saved as failed: id=${fragment.id}`);
         results.push(fragment);
       } catch (saveErr) {
         console.error(`[Speech] ❌ Failed to save placeholder for fragment ${slotOrder}:`, saveErr);
       }
     } finally {
-      if (fs.existsSync(segmentFile)) {
+      const createdFragment = results[results.length - 1];
+      const shouldDeleteSegment = createdFragment?.transcription_status !== 'failed';
+      if (shouldDeleteSegment && fs.existsSync(segmentFile)) {
         fs.unlinkSync(segmentFile);
       }
     }
@@ -711,9 +1130,26 @@ export const transcribeAndSave = async (
     fs.rmdirSync(tempDir);
   } catch { /* ignore if not empty */ }
 
-  console.log(`[Speech] ✅ Completed: ${results.length}/${totalFragments} fragments transcribed for file_id=${fileId}`);
-  await updateAggregatedTranscriptForFile(fileId);
-  updateProgress(fileId, { status: 'completed', message: `تم الانتهاء! تم معالجة ${results.length} من ${totalFragments} مقطع.`, percent: 100 });
+  const failedFragments = results.filter((fragment) => fragment.transcription_status === 'failed').length;
+  console.log(`[Speech] ✅ Completed: ${results.length}/${totalFragments} fragments processed for file_id=${fileId}`);
+  await synchronizeLectureRecordsForFile(fileId, {
+    classId,
+    dayOfWeek,
+    slotDate,
+    preferredLanguage: 'ar',
+  });
+  if (failedFragments > 0) {
+    updateProgress(fileId, {
+      status: 'partial',
+      message: `تمت المعالجة مع مشكلة: ${failedFragments} من ${totalFragments} مقطع لم يتم تحويله إلى نص. يمكنك إعادة المحاولة يدويًا من صفحة المقاطع الفاشلة.`,
+      percent: 100,
+      currentSlot: totalFragments,
+      totalSlots: totalFragments,
+      error: `${failedFragments} fragments failed`,
+    });
+  } else {
+    updateProgress(fileId, { status: 'completed', message: `تم الانتهاء! تم تحويل ${totalFragments} من ${totalFragments} مقطع بنجاح.`, percent: 100 });
+  }
   return results;
   } finally {
     // Clean up denoised file

@@ -11,6 +11,10 @@ CREATE TABLE IF NOT EXISTS fragments (
     fragment_path VARCHAR(500),
     transcript TEXT COLLATE "C",
     language VARCHAR(10),
+    transcription_status VARCHAR(20) DEFAULT 'completed',
+    retry_count INTEGER DEFAULT 0,
+    last_error TEXT COLLATE "C",
+    last_transcription_attempt_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
