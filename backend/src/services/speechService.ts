@@ -561,7 +561,7 @@ const buildLectureBucketsFromExistingAssignments = (
   }
 
   const buckets: LectureBucket[] = existingLectures
-    .sort((a, b) => Number(a.slot_order || 0) - Number(b.slot_order || 0) || Number(a.id) - Number(b.id))
+    .sort((a, b) => Number(a.slot_order || 0) - Number(b.slot_order || 0) || Number(a.lecture_id) - Number(b.lecture_id))
     .map((lecture) => ({
       slotOrder: Number(lecture.slot_order || 0),
       timeSlotId: lecture.time_slot_id ?? null,
@@ -571,7 +571,7 @@ const buildLectureBucketsFromExistingAssignments = (
       fragments: [],
     }));
 
-  const bucketByLectureId = new Map(existingLectures.map((lecture, index) => [Number(lecture.id), buckets[index]]));
+  const bucketByLectureId = new Map(existingLectures.map((lecture, index) => [Number(lecture.lecture_id), buckets[index]]));
 
   for (const fragment of fragments) {
     const lectureId = fragment.lecture_id ? Number(fragment.lecture_id) : null;
@@ -634,14 +634,14 @@ export const synchronizeLectureRecordsForFile = async (
     SELECT *
     FROM fragments
     WHERE file_id = $1
-    ORDER BY fragment_order ASC, id ASC
+    ORDER BY fragment_order ASC, fragment_id ASC
   `, [fileId]);
 
   const existingLectures = await getMany(`
     SELECT *
     FROM lecture
     WHERE file_id = $1
-    ORDER BY slot_order ASC, id ASC
+    ORDER BY slot_order ASC, lecture_id ASC
   `, [fileId]);
 
   let buckets: LectureBucket[] = [];
@@ -693,7 +693,7 @@ export const synchronizeLectureRecordsForFile = async (
           duration: bucketDuration || bucket.durationSeconds || null,
           slot_order: bucket.slotOrder,
           updated_at: new Date(),
-        }, 'id = $1', [existingLecture.id])
+        }, 'lecture_id = $1', [existingLecture.lecture_id])
       : await insert('lecture', {
           file_id: fileId,
           time_slot_id: bucket.timeSlotId,
@@ -705,29 +705,29 @@ export const synchronizeLectureRecordsForFile = async (
           updated_at: new Date(),
         });
 
-    usedLectureIds.add(Number(lectureRecord.id));
+    usedLectureIds.add(Number(lectureRecord.lecture_id));
     syncedLectures.push(lectureRecord);
 
-    const fragmentIds = bucket.fragments.map((fragment) => Number(fragment.id)).filter(Number.isFinite);
+    const fragmentIds = bucket.fragments.map((fragment) => Number(fragment.fragment_id)).filter(Number.isFinite);
     if (fragmentIds.length > 0) {
       await executeQuery(`
         UPDATE fragments
         SET lecture_id = $1,
             time_slot_id = $2,
             updated_at = NOW()
-        WHERE id = ANY($3::int[])
+        WHERE fragment_id = ANY($3::int[])
       `, [lectureRecord.id, bucket.timeSlotId, fragmentIds]);
     }
   }
 
   const obsoleteLectureIds = existingLectures
-    .map((lecture: any) => Number(lecture.id))
+    .map((lecture: any) => Number(lecture.lecture_id))
     .filter((lectureId: number) => !usedLectureIds.has(lectureId));
 
   for (const obsoleteLectureId of obsoleteLectureIds) {
     await executeQuery(`
       DELETE FROM lecture
-      WHERE id = $1
+      WHERE lecture_id = $1
         AND NOT EXISTS (
           SELECT 1
           FROM fragments
@@ -746,7 +746,7 @@ export const getFailedFragments = async () => {
   await ensureFragmentTranscriptionSchema();
   return await getMany(`
     SELECT
-      f.id,
+      f.fragment_id,
       f.file_id,
       sf.filename,
       f.fragment_order,
@@ -772,7 +772,7 @@ export const retryFailedFragment = async (fragmentId: number) => {
   const fragment = await getOne(`
     SELECT *
     FROM fragments
-    WHERE id = $1
+    WHERE fragment_id = $1
   `, [fragmentId]);
 
   if (!fragment) {
@@ -787,7 +787,7 @@ export const retryFailedFragment = async (fragmentId: number) => {
     throw new Error('Stored fragment file no longer exists on disk');
   }
 
-  const fragmentLabel = `fragment #${fragment.fragment_order || fragment.id}`;
+  const fragmentLabel = `fragment #${fragment.fragment_order || fragment.fragment_id}`;
   const fragmentOrder = fragment.fragment_order || 1;
 
   updateProgress(fragment.file_id, {
@@ -1140,7 +1140,7 @@ export const transcribeAndSave = async (
         }
       );
 
-      console.log(`[Speech] ✅ Fragment ${slotOrder} saved: id=${fragment.id}`);
+      console.log(`[Speech] ✅ Fragment ${slotOrder} saved: fragment_id=${fragment.fragment_id}`);
       results.push(fragment);
     } catch (err) {
       console.error(`[Speech] ❌ Error processing fragment ${slotOrder}:`, err);
@@ -1162,7 +1162,7 @@ export const transcribeAndSave = async (
             lastTranscriptionAttemptAt: new Date(),
           }
         );
-        console.log(`[Speech] ⚠️ Fragment ${slotOrder} saved as failed: id=${fragment.id}`);
+        console.log(`[Speech] ⚠️ Fragment ${slotOrder} saved as failed: fragment_id=${fragment.fragment_id}`);
         results.push(fragment);
       } catch (saveErr) {
         console.error(`[Speech] ❌ Failed to save placeholder for fragment ${slotOrder}:`, saveErr);

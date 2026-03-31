@@ -164,7 +164,7 @@ router.post('/process-all', authenticate, async (req: AuthRequest, res: Response
 
         // Get associated lectures for this file
         const lectures = await getMany(
-          'SELECT * FROM lecture WHERE file_id = $1 ORDER BY id ASC',
+          'SELECT * FROM lecture WHERE file_id = $1 ORDER BY lecture_id ASC',
           [file.file_id]
         );
 
@@ -179,12 +179,12 @@ router.post('/process-all', authenticate, async (req: AuthRequest, res: Response
             const fragments = await processLectureFragments(
               file.file_id,
               file.filepath,
-              lecture.id,
+              lecture.lecture_id,
               lecture.time_slot_id
             );
             results.push({
               file_id: file.file_id,
-              lecture_id: lecture.id,
+              lecture_id: lecture.lecture_id,
               status: 'success',
               fragments_created: fragments.length,
             });

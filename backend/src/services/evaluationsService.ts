@@ -12,7 +12,7 @@ const openai = new OpenAI({
 });
 
 interface Evaluation {
-  id?: number;
+  evaluation_id?: number;
   file_id: number;
   kpi_id: number;
   evidence_count?: number;
@@ -52,13 +52,13 @@ export const getAllEvaluations = async () => {
   try {
     const query = `
       SELECT 
-        e.id, 
-        e.file_id, 
-        e.kpi_id, 
-        e.evidence_count, 
+        e.evaluation_id,
+        e.file_id,
+        e.kpi_id,
+        e.evidence_count,
         e.avg_confidence,
         e.kpi_score,
-        e.mark, 
+        e.mark,
         e.created_at,
         e.updated_at,
         k.kpi_name,
@@ -84,13 +84,13 @@ export const getEvaluationById = async (evaluationId: number) => {
   try {
     const query = `
       SELECT 
-        e.id, 
-        e.file_id, 
-        e.kpi_id, 
-        e.evidence_count, 
+        e.evaluation_id,
+        e.file_id,
+        e.kpi_id,
+        e.evidence_count,
         e.avg_confidence,
         e.kpi_score,
-        e.mark, 
+        e.mark,
         e.created_at,
         e.updated_at,
         k.kpi_name,
@@ -98,7 +98,7 @@ export const getEvaluationById = async (evaluationId: number) => {
       FROM evaluations e
       LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
       LEFT JOIN sound_files s ON e.file_id = s.file_id
-      WHERE e.id = $1
+      WHERE e.evaluation_id = $1
     `;
     return await getOne(query, [evaluationId]);
   } catch (error) {
@@ -170,7 +170,7 @@ export const updateEvaluation = async (evaluationId: number, data: Partial<Evalu
       throw new Error('No fields to update');
     }
 
-    return await update('evaluations', updateData, 'id = $1', [evaluationId]);
+    return await update('evaluations', updateData, 'evaluation_id = $1', [evaluationId]);
   } catch (error) {
     console.error('Error updating evaluation:', error);
     throw error;
@@ -184,7 +184,7 @@ export const updateEvaluation = async (evaluationId: number, data: Partial<Evalu
  */
 export const deleteEvaluation = async (evaluationId: number) => {
   try {
-    return await deleteRecord('evaluations', 'id = $1', [evaluationId]);
+    return await deleteRecord('evaluations', 'evaluation_id = $1', [evaluationId]);
   } catch (error) {
     console.error('Error deleting evaluation:', error);
     throw error;
@@ -200,13 +200,13 @@ export const getEvaluationsByKPI = async (kpiId: number) => {
   try {
     const query = `
       SELECT 
-        e.id, 
-        e.file_id, 
-        e.kpi_id, 
-        e.evidence_count, 
+        e.evaluation_id,
+        e.file_id,
+        e.kpi_id,
+        e.evidence_count,
         e.avg_confidence,
         e.kpi_score,
-        e.mark, 
+        e.mark,
         e.created_at,
         e.updated_at,
         k.kpi_name,
@@ -233,13 +233,13 @@ export const getEvaluationsByFile = async (fileId: number) => {
   try {
     const query = `
       SELECT 
-        e.id, 
-        e.file_id, 
-        e.kpi_id, 
-        e.evidence_count, 
+        e.evaluation_id,
+        e.file_id,
+        e.kpi_id,
+        e.evidence_count,
         e.avg_confidence,
         e.kpi_score,
-        e.mark, 
+        e.mark,
         e.created_at,
         e.updated_at,
         k.kpi_name,
@@ -612,7 +612,7 @@ ${kpiReference}
               created_at: now,
               updated_at: now,
             });
-            console.log(`[Evaluation] ✅ Evidence stored: evidence_id=${evidence.id}, status=${determinedStatus}, timeslot=${slotStartTime?.toLocaleTimeString('ar-SA') ?? 'N/A'}-${slotEndTime?.toLocaleTimeString('ar-SA') ?? 'N/A'}`);
+            console.log(`[Evaluation] ✅ Evidence stored: evidence_id=${evidence.evidence_id}, status=${determinedStatus}, timeslot=${slotStartTime?.toLocaleTimeString('ar-SA') ?? 'N/A'}-${slotEndTime?.toLocaleTimeString('ar-SA') ?? 'N/A'}`);
           } catch (err) {
             console.error(`[Evaluation] ⚠️ Failed to store evidence for ${kpiCode}:`, err);
           }
@@ -639,7 +639,7 @@ ${kpiReference}
 export const getEvaluationResults = async (fileId: number) => {
   const query = `
     SELECT
-      e.id as evidence_id,
+      e.evidence_id,
       e.kpi_id,
       e.file_id,
       e.evidence_txt,
@@ -754,7 +754,7 @@ export const getEvaluationsWithFilters = async (options: {
   try {
     let query = `
       SELECT
-        e.id as evidence_id,
+        e.evidence_id,
         e.kpi_id,
         e.file_id,
         e.evidence_txt,

@@ -6,7 +6,7 @@
 import { getOne, getMany, insert, update, deleteRecord } from '../helpers/database.js';
 
 interface Evidence {
-  id?: number;
+  evidence_id?: number;
   kpi_id: number;
   file_id: number;
   start_time?: string;
@@ -22,7 +22,7 @@ export const getAllEvidences = async () => {
   try {
     const query = `
       SELECT
-        e.id,
+        e.evidence_id,
         e.kpi_id,
         e.file_id,
         e.start_time,
@@ -52,7 +52,7 @@ export const getEvidenceById = async (evidenceId: number) => {
   try {
     const query = `
       SELECT
-        e.id,
+        e.evidence_id,
         e.kpi_id,
         e.file_id,
         e.start_time,
@@ -64,7 +64,7 @@ export const getEvidenceById = async (evidenceId: number) => {
       FROM evidences e
       LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
       LEFT JOIN sound_files s ON e.file_id = s.file_id
-      WHERE e.id = $1
+      WHERE e.evidence_id = $1
     `;
     return await getOne(query, [evidenceId]);
   } catch (error) {
@@ -117,7 +117,7 @@ export const updateEvidence = async (evidenceId: number, data: Partial<Evidence>
       throw new Error('No fields to update');
     }
 
-    return await update('evidences', updateData, 'id = $1', [evidenceId]);
+    return await update('evidences', updateData, 'evidence_id = $1', [evidenceId]);
   } catch (error) {
     console.error('Error updating evidence:', error);
     throw error;
@@ -131,7 +131,7 @@ export const updateEvidence = async (evidenceId: number, data: Partial<Evidence>
  */
 export const deleteEvidence = async (evidenceId: number) => {
   try {
-    return await deleteRecord('evidences', 'id = $1', [evidenceId]);
+    return await deleteRecord('evidences', 'evidence_id = $1', [evidenceId]);
   } catch (error) {
     console.error('Error deleting evidence:', error);
     throw error;
@@ -147,7 +147,7 @@ export const getEvidencesByKPI = async (kpiId: number) => {
   try {
     const query = `
       SELECT
-        e.id,
+        e.evidence_id,
         e.kpi_id,
         e.file_id,
         e.start_time,
@@ -178,7 +178,7 @@ export const getEvidencesByFile = async (fileId: number) => {
   try {
     const query = `
       SELECT
-        e.id,
+        e.evidence_id,
         e.kpi_id,
         e.file_id,
         e.start_time,

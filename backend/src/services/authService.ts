@@ -17,7 +17,7 @@ interface UserCredentials {
 }
 
 interface JWTPayload {
-  id: number;
+  user_id: number;
   email: string;
   iat?: number;
   exp?: number;
@@ -26,8 +26,8 @@ interface JWTPayload {
 const syncUsersIdSequence = async () => {
   await executeQuery(`
     SELECT setval(
-      pg_get_serial_sequence('users', 'id'),
-      COALESCE((SELECT MAX(id) FROM users), 0) + 1,
+      pg_get_serial_sequence('users', 'user_id'),
+      COALESCE((SELECT MAX(user_id) FROM users), 0) + 1,
       false
     );
   `);
@@ -91,7 +91,7 @@ export const registerUser = async (credentials: UserCredentials) => {
   try {
     // Check if user exists
     const existingUser = await getOne(
-      'SELECT id FROM users WHERE email = $1',
+      'SELECT user_id FROM users WHERE email = $1',
       [credentials.email]
     );
 
@@ -102,7 +102,7 @@ export const registerUser = async (credentials: UserCredentials) => {
     // Hash password
     const hashedPassword = await hashPassword(credentials.password);
 
-    // Ensure sequence is aligned with current max(id) after migrations/imports
+    // Ensure sequence is aligned with current max(user_id) after migrations/imports
     await syncUsersIdSequence();
 
     // Create user
@@ -160,7 +160,7 @@ export const loginUser = async (email: string, password: string) => {
 
     // Generate token
     const token = generateToken({
-      id: user.id,
+      user_id: user.user_id,
       email: user.email,
     });
 
@@ -183,7 +183,7 @@ export const loginUser = async (email: string, password: string) => {
  */
 export const getUserById = async (userId: number) => {
   try {
-    const user = await getOne('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = await getOne('SELECT * FROM users WHERE user_id = $1', [userId]);
 
     if (!user) {
       throw new Error('User not found');
@@ -216,7 +216,7 @@ export const updateUser = async (
         ...updateData,
         updated_at: new Date(),
       },
-      'id = $1',
+      'user_id = $1',
       [userId]
     );
 
@@ -245,7 +245,7 @@ export const changePassword = async (
   newPassword: string
 ) => {
   try {
-    const user = await getOne('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = await getOne('SELECT * FROM users WHERE user_id = $1', [userId]);
 
     if (!user) {
       throw new Error('User not found');
@@ -268,7 +268,7 @@ export const changePassword = async (
         password: hashedPassword,
         updated_at: new Date(),
       },
-      'id = $1',
+      'user_id = $1',
       [userId]
     );
 

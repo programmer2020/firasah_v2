@@ -70,7 +70,7 @@ export const transcribeFragment = async (fragmentPath: string): Promise<string> 
  */
 export const getLectureFragmentsOrdered = async (lectureId: number): Promise<FragmentWithOrder[]> => {
   const query = `
-    SELECT f.id, f.fragment_order, f.fragment_path, f.lecture_id, f.file_id
+    SELECT f.fragment_id, f.fragment_order, f.fragment_path, f.lecture_id, f.file_id
     FROM fragments f
     WHERE f.lecture_id = $1
     ORDER BY f.fragment_order ASC
@@ -131,7 +131,7 @@ export const updateLectureTranscript = async (
     const query = `
       UPDATE lecture
       SET transcript = $1, language = $2, updated_at = NOW()
-      WHERE id = $3
+      WHERE lecture_id = $3
       RETURNING *
     `;
 
@@ -192,7 +192,7 @@ export const processFileTranscriptions = async (fileId: number): Promise<any[]> 
     console.log(`[Transcription] 📁 Processing all lectures for file ${fileId}...`);
 
     // Get all lectures for this file
-    const query = `SELECT id FROM lecture WHERE file_id = $1`;
+    const query = `SELECT lecture_id FROM lecture WHERE file_id = $1`;
     const lectures = await getMany(query, [fileId]);
 
     console.log(`[Transcription] Found ${lectures.length} lectures for file ${fileId}`);
@@ -202,16 +202,16 @@ export const processFileTranscriptions = async (fileId: number): Promise<any[]> 
     // Process each lecture
     for (const lecture of lectures) {
       try {
-        const result = await processLectureTranscription(lecture.id);
+        const result = await processLectureTranscription(lecture.lecture_id);
         results.push({
-          lecture_id: lecture.id,
+          lecture_id: lecture.lecture_id,
           status: 'success',
           transcript_length: result.transcript?.length || 0,
         });
       } catch (err) {
-        console.error(`[Transcription] ❌ Error processing lecture ${lecture.id}:`, err);
+        console.error(`[Transcription] ❌ Error processing lecture ${lecture.lecture_id}:`, err);
         results.push({
-          lecture_id: lecture.id,
+          lecture_id: lecture.lecture_id,
           status: 'error',
           error: (err as any).message,
         });

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import ProtectedLayout from '../components/ProtectedLayout';
+import { useAuth } from '../context/AuthContext';
 
 const stats = [
   {
@@ -80,13 +81,14 @@ const lectureRows = [
 
 export const Dashboard = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   return (
     <ProtectedLayout>
       <div className="mx-auto max-w-[1500px]">
         <section className="mb-12">
           <h2 className="font-headline mb-2 text-5xl font-bold tracking-[-0.08em] text-[var(--dashboard-primary)]">
-            Welcome back, Dr. Thorne
+            Welcome back, {user?.name || 'User'}
           </h2>
           <p className="max-w-2xl text-[#62746d]">
             Your intelligence dashboard is updated with the latest performance metrics from your clinical lectures this week.

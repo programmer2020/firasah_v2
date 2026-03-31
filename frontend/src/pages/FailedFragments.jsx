@@ -44,7 +44,7 @@ const FailedFragments = () => {
     clearRetryPolling();
 
     setRetryProgress({
-      fragmentId: fragment.id,
+      fragmentId: fragment.fragment_id,
       fileId: fragment.file_id,
       status: 'transcribing',
       message: `Starting manual retry for fragment #${fragment.fragment_order}...`,
@@ -61,7 +61,7 @@ const FailedFragments = () => {
         }
 
         setRetryProgress({
-          fragmentId: fragment.id,
+          fragmentId: fragment.fragment_id,
           fileId: fragment.file_id,
           status: data.status,
           message: data.error ? `${data.message} ${data.error}`.trim() : data.message,
@@ -99,15 +99,15 @@ const FailedFragments = () => {
       return;
     }
 
-    setRetryingId(fragment.id);
+    setRetryingId(fragment.fragment_id);
     setError('');
     setSuccess('');
     startRetryProgressPolling(fragment);
 
     try {
-      await api.post(`/sound-files/fragments/${fragment.id}/retry-manual`);
+      await api.post(`/sound-files/fragments/${fragment.fragment_id}/retry-manual`);
       setRetryProgress((current) => (
-        current?.fragmentId === fragment.id
+        current?.fragmentId === fragment.fragment_id
           ? {
               ...current,
               status: 'completed',
@@ -121,7 +121,7 @@ const FailedFragments = () => {
     } catch (err) {
       const failureMessage = err.response?.data?.message || 'Manual retry failed.';
       setRetryProgress((current) => (
-        current?.fragmentId === fragment.id
+        current?.fragmentId === fragment.fragment_id
           ? {
               ...current,
               status: 'failed',
@@ -206,7 +206,7 @@ const FailedFragments = () => {
                 </thead>
                 <tbody>
                   {filteredFragments.map((fragment) => (
-                    <React.Fragment key={fragment.id}>
+                    <React.Fragment key={fragment.fragment_id}>
                       <tr className="border-b border-gray-100 dark:border-gray-700">
                         <td className="px-4 py-4 text-sm font-semibold text-gray-900 dark:text-white">{fragment.file_id}</td>
                         <td className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300">{fragment.filename}</td>
@@ -230,14 +230,14 @@ const FailedFragments = () => {
                             disabled={Boolean(retryingId)}
                             className="rounded-lg bg-brand-600 px-4 py-2 font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            {retryingId === fragment.id
+                            {retryingId === fragment.fragment_id
                               ? `Retrying... ${Math.round(Number(retryProgress?.percent || 0))}%`
                               : 'Retry Manual'}
                           </button>
                         </td>
                       </tr>
 
-                      {retryProgress?.fragmentId === fragment.id && (
+                      {retryProgress?.fragmentId === fragment.fragment_id && (
                         <tr className="border-b border-gray-100 bg-gray-50/70 dark:border-gray-700 dark:bg-gray-900/30">
                           <td colSpan={6} className="px-4 py-4">
                             <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
