@@ -52,45 +52,58 @@ export const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4 transition-colors duration-300 relative">
+    <div className="relative flex min-h-screen items-center justify-center bg-[#f8f9fa] p-4 transition-colors duration-300">
+      {/* Subtle grid texture */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage: 'radial-gradient(#006049 0.5px, transparent 0.5px)',
+          backgroundSize: '24px 24px',
+        }}
+      />
+
       {/* Database Switch - Top Right */}
-      <div className="fixed top-4 right-4 z-50">
+      <div className="fixed right-6 top-6 z-50">
         <DatabaseSwitch />
       </div>
-      <div className="w-full max-w-md">
+
+      <div className="relative z-10 w-full max-w-md">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <h2 className="text-5xl font-outfit font-bold text-brand-600">
-            Firasah
+        <div className="mb-10 text-center">
+          <h2 className="font-headline text-3xl font-extrabold uppercase tracking-[0.15em] text-[#006049]">
+            Firasah AI
           </h2>
+          <p className="font-mono mt-2 text-[10px] uppercase tracking-[0.3em] text-[#6e7a74]">
+            Precision Intelligence
+          </p>
         </div>
 
-        {/* Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-theme-lg p-8 transition-colors duration-300">
+        {/* Card — tonal layering, no border */}
+        <div className="bg-white p-10 shadow-[0_12px_40px_-10px_rgba(0,96,73,0.12)] transition-colors duration-300">
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-2xl font-outfit font-bold text-gray-900 dark:text-white mb-2">
-              Login to your account
+            <h1 className="font-headline text-3xl font-bold text-[#191c1d]">
+              Welcome back
             </h1>
-            <p className="text-gray-600 dark:text-gray-400 font-outfit">
-              Welcome back! Please enter your details.
+            <p className="mt-2 font-body text-sm text-[#3e4944]">
+              Enter your credentials to access the intelligence dashboard.
             </p>
           </div>
 
           {/* Error Message */}
           {error && (
-            <div className="mb-6 p-4 bg-error-50 dark:bg-error-900 border border-error-200 dark:border-error-700 rounded-lg">
-              <p className="text-error-800 dark:text-error-200 font-outfit text-sm">
+            <div className="mb-6 border-t-2 border-[#ba1a1a] bg-[#ffdad6] p-4">
+              <p className="font-body text-sm text-[#93000a]">
                 {error}
               </p>
             </div>
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email Input */}
             <div>
-              <label htmlFor="email" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 font-outfit">
+              <label htmlFor="email" className="font-mono mb-2 block text-[10px] uppercase tracking-[0.2em] text-[#6e7a74]">
                 Email
               </label>
               <input
@@ -101,13 +114,13 @@ export const Login = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={loading}
                 required
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 font-outfit transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full border-0 border-b-2 border-[#bdc9c2] bg-[#f3f4f5] px-4 py-3.5 font-body text-sm text-[#191c1d] placeholder-[#6e7a74] transition-colors duration-200 focus:border-[#006049] focus:bg-[#edeeef] focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
 
             {/* Password Input */}
             <div>
-              <label htmlFor="password" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 font-outfit">
+              <label htmlFor="password" className="font-mono mb-2 block text-[10px] uppercase tracking-[0.2em] text-[#6e7a74]">
                 Password
               </label>
               <input
@@ -118,34 +131,34 @@ export const Login = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
                 required
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 font-outfit transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full border-0 border-b-2 border-[#bdc9c2] bg-[#f3f4f5] px-4 py-3.5 font-body text-sm text-[#191c1d] placeholder-[#6e7a74] transition-colors duration-200 focus:border-[#006049] focus:bg-[#edeeef] focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
 
             {/* Checkboxes */}
-            <div className="flex items-center justify-between pt-2">
-              <label className="flex items-center gap-2 cursor-pointer">
+            <div className="flex items-center justify-between pt-1">
+              <label className="flex cursor-pointer items-center gap-2.5">
                 <input
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
                   disabled={loading}
-                  className="w-5 h-5 border border-gray-300 dark:border-gray-600 rounded cursor-pointer accent-brand-600"
+                  className="h-4 w-4 cursor-pointer border-[#bdc9c2] bg-[#f3f4f5] text-[#006049] focus:ring-[#006049]/20"
                 />
-                <span className="text-sm text-gray-700 dark:text-gray-400 font-outfit">
+                <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-[#3e4944]">
                   Remember me
                 </span>
               </label>
 
-              <label className="flex items-center gap-2 cursor-pointer">
+              <label className="flex cursor-pointer items-center gap-2.5">
                 <input
                   type="checkbox"
                   checked={showPassword}
                   onChange={(e) => setShowPassword(e.target.checked)}
                   disabled={loading}
-                  className="w-5 h-5 border border-gray-300 dark:border-gray-600 rounded cursor-pointer accent-brand-600"
+                  className="h-4 w-4 cursor-pointer border-[#bdc9c2] bg-[#f3f4f5] text-[#006049] focus:ring-[#006049]/20"
                 />
-                <span className="text-sm text-gray-700 dark:text-gray-400 font-outfit">
+                <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-[#3e4944]">
                   Show password
                 </span>
               </label>
@@ -155,26 +168,29 @@ export const Login = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-6 py-3 bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white font-outfit font-semibold rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-theme-md hover:shadow-theme-lg"
+              className="mt-2 w-full bg-gradient-to-r from-[#004634] to-[#006049] px-10 py-4 font-headline text-sm font-bold uppercase tracking-[0.18em] text-white transition-all duration-200 hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? 'Logging in...' : 'Login'}
+              {loading ? 'Authenticating...' : 'Access Dashboard'}
             </button>
           </form>
 
+          {/* Divider */}
+          <div className="my-8 h-px bg-[#bdc9c2]/30" />
+
           {/* Footer Links */}
-          <div className="mt-8 space-y-3 text-center">
+          <div className="space-y-3 text-center">
             <Link
               to="/forgot-password"
-              className="block text-brand-600 hover:text-brand-700 font-outfit font-semibold transition-colors duration-200"
+              className="font-mono block text-[11px] uppercase tracking-[0.18em] text-[#006049] transition-colors duration-200 hover:text-[#0F7B5F]"
             >
               Forgot Password
             </Link>
 
-            <p className="text-gray-600 dark:text-gray-400 font-outfit">
+            <p className="font-body text-sm text-[#3e4944]">
               Don't have an account?{' '}
               <Link
                 to="/register"
-                className="text-brand-600 hover:text-brand-700 font-semibold transition-colors duration-200"
+                className="font-headline font-bold text-[#006049] transition-colors duration-200 hover:text-[#0F7B5F]"
               >
                 Create new account
               </Link>
@@ -183,8 +199,8 @@ export const Login = () => {
         </div>
 
         {/* Footer Text */}
-        <p className="text-center text-gray-600 dark:text-gray-400 text-sm mt-6 font-outfit">
-          © 2025 Firasah AI. All rights reserved.
+        <p className="font-mono mt-8 text-center text-[10px] uppercase tracking-[0.15em] text-[#6e7a74]/60">
+          © 2025 Firasah AI · Precision Intelligence for Education
         </p>
       </div>
     </div>

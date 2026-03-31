@@ -49,7 +49,7 @@ const routeMeta = {
 };
 
 const Header = ({ onOpenSidebar }) => {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const location = useLocation();
   const [showMenu, setShowMenu] = useState(false);
   const currentRoute = routeMeta[location.pathname] || routeMeta['/dashboard'];
@@ -101,13 +101,13 @@ const Header = ({ onOpenSidebar }) => {
                 onClick={() => setShowMenu((previous) => !previous)}
                 className="text-left text-xs font-bold text-[#172b26]"
               >
-                Dr. Aris Thorne
+                {user?.name || 'User'}
               </button>
 
               {showMenu && (
                 <div className="absolute right-0 mt-3 min-w-[180px] bg-white p-4 shadow-[0_24px_50px_-32px_rgba(16,24,40,0.55)]">
-                  <p className="font-headline text-sm font-semibold text-[#172b26]">Dr. Aris Thorne</p>
-                  <p className="font-dashboard-mono mt-1 text-[10px] uppercase tracking-[0.2em] text-[#7f938a]">Lead Instructor</p>
+                  <p className="font-headline text-sm font-semibold text-[#172b26]">{user?.name || 'User'}</p>
+                  <p className="font-dashboard-mono mt-1 text-[10px] uppercase tracking-[0.2em] text-[#7f938a]">{user?.role || ''}</p>
                   <div className="mt-4 border-t border-[#e5ece7] pt-4">
                     <button
                       type="button"

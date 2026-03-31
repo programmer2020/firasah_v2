@@ -15,7 +15,7 @@ const DatabaseSwitch = ({ className = '' }) => {
         onClick={() => toggleDatabase(!useNeon)}
         disabled={loading}
         className={`relative inline-flex h-10 w-[54px] items-center rounded-full border border-transparent transition-all duration-200 ${
-          useNeon ? 'bg-[#9b4cf0]' : 'bg-[#d0d8d4]'
+          useNeon ? 'bg-[#006049]' : 'bg-[#d0d8d4]'
         } ${loading ? 'opacity-60 cursor-not-allowed' : 'hover:scale-[1.02]'}`}
         title={loading ? 'Switching database...' : useNeon ? 'Click to use Local Database' : 'Click to use Neon Cloud'}
         aria-label="Database Switch"

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const IconDashboard = ({ className = 'h-5 w-5' }) => (
   <svg className={className} fill="currentColor" viewBox="0 0 24 24">
@@ -43,8 +44,20 @@ const CloseIcon = () => (
   </svg>
 );
 
+const getInitials = (name) => {
+  if (!name) return '?';
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+};
+
 export const Sidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
+  const { user } = useAuth();
 
   const menuItems = [
     { label: 'Dashboard', href: '/dashboard', icon: IconDashboard },
@@ -120,16 +133,14 @@ export const Sidebar = ({ isOpen, onClose }) => {
 
         <div className="mt-auto px-8 pt-8">
           <div className="flex items-center gap-3 bg-white/5 p-3">
-            <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#d8ede4]">
-              <img
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJTeMmHMywyseDWAle7Q0km05BHpijhYYbBLLsLY4V0nPQmbf4vf0irxpAgkNrbakDXFHAHQHytM60mImf2hHUS9jJYLnMFmTeF1yc-neb0XQRqTRjkcEIhL6ROkNAhoseJ-ygE1HYfrCdbmpzBaAvUA58svrl8z4Zq0xABbickS8l5UX3ep8fTjMKGRSOKQMb0-afa34XstBntC9mrgvlt3ccASEztZmFz2u8evWze-WAAgb6egqn0WXvW1KNP2HNjSM6SAt4JpC1"
-                alt="Dr. Aris Thorne"
-                className="h-full w-full object-cover"
-              />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#d8ede4]">
+              <span className="font-headline text-xs font-bold text-[#006049]">
+                {getInitials(user?.name)}
+              </span>
             </div>
             <div className="overflow-hidden">
-              <p className="truncate text-xs font-bold text-white">Dr. Aris Thorne</p>
-              <p className="font-dashboard-mono text-[10px] text-white/50">Lead Instructor</p>
+              <p className="truncate text-xs font-bold text-white">{user?.name || 'User'}</p>
+              <p className="font-dashboard-mono text-[10px] text-white/50">{user?.role || ''}</p>
             </div>
           </div>
         </div>
