@@ -16,6 +16,8 @@ interface Evaluation {
   file_id: number;
   kpi_id: number;
   evidence_count?: number;
+  avg_confidence?: number;
+  kpi_score?: number;
   mark?: string;
 }
 
@@ -33,6 +35,15 @@ function computeMark(count: number | null | undefined): string {
   return 'l';
 }
 
+function computeKpiScore(
+  avgConfidence: number | null | undefined,
+  evidenceCount: number | null | undefined
+): number {
+  const normalizedAverage = Math.min(100, Math.max(0, Number(avgConfidence) || 0));
+  const normalizedEvidenceCount = Math.max(0, Number(evidenceCount) || 0);
+  return Math.min(Number((normalizedAverage + (normalizedEvidenceCount * 2)).toFixed(2)), 100);
+}
+
 /**
  * Get all evaluations
  * @returns Promise with array of evaluations
@@ -45,8 +56,11 @@ export const getAllEvaluations = async () => {
         e.file_id, 
         e.kpi_id, 
         e.evidence_count, 
+        e.avg_confidence,
+        e.kpi_score,
         e.mark, 
         e.created_at,
+        e.updated_at,
         k.kpi_name,
         s.filename
       FROM evaluations e
@@ -74,8 +88,11 @@ export const getEvaluationById = async (evaluationId: number) => {
         e.file_id, 
         e.kpi_id, 
         e.evidence_count, 
+        e.avg_confidence,
+        e.kpi_score,
         e.mark, 
         e.created_at,
+        e.updated_at,
         k.kpi_name,
         s.filename
       FROM evaluations e
@@ -102,10 +119,13 @@ export const createEvaluation = async (data: Evaluation) => {
     }
 
     const evidenceCount = data.evidence_count || 0;
+    const avgConfidence = Math.min(100, Math.max(0, Number(data.avg_confidence) || 0));
     return await insert('evaluations', {
       file_id: data.file_id,
       kpi_id: data.kpi_id,
       evidence_count: evidenceCount,
+      avg_confidence: avgConfidence,
+      kpi_score: computeKpiScore(avgConfidence, evidenceCount),
       mark: computeMark(evidenceCount),
     });
   } catch (error) {
@@ -128,7 +148,20 @@ export const updateEvaluation = async (evaluationId: number, data: Partial<Evalu
     if (data.kpi_id) updateData.kpi_id = data.kpi_id;
     if (data.evidence_count !== undefined) {
       updateData.evidence_count = data.evidence_count;
-      updateData.mark = computeMark(data.evidence_count);
+    }
+    if (data.avg_confidence !== undefined) {
+      updateData.avg_confidence = Math.min(100, Math.max(0, Number(data.avg_confidence) || 0));
+    }
+    if (updateData.evidence_count !== undefined || updateData.avg_confidence !== undefined) {
+      const existing = await getEvaluationById(evaluationId);
+      if (!existing) {
+        throw new Error('Evaluation not found');
+      }
+
+      const nextEvidenceCount = updateData.evidence_count ?? existing.evidence_count ?? 0;
+      const nextAvgConfidence = updateData.avg_confidence ?? existing.avg_confidence ?? 0;
+      updateData.kpi_score = computeKpiScore(nextAvgConfidence, nextEvidenceCount);
+      updateData.mark = computeMark(nextEvidenceCount);
     } else if (data.mark !== undefined) {
       updateData.mark = data.mark;
     }
@@ -171,8 +204,11 @@ export const getEvaluationsByKPI = async (kpiId: number) => {
         e.file_id, 
         e.kpi_id, 
         e.evidence_count, 
+        e.avg_confidence,
+        e.kpi_score,
         e.mark, 
         e.created_at,
+        e.updated_at,
         k.kpi_name,
         s.filename
       FROM evaluations e
@@ -201,8 +237,11 @@ export const getEvaluationsByFile = async (fileId: number) => {
         e.file_id, 
         e.kpi_id, 
         e.evidence_count, 
+        e.avg_confidence,
+        e.kpi_score,
         e.mark, 
         e.created_at,
+        e.updated_at,
         k.kpi_name,
         s.filename
       FROM evaluations e

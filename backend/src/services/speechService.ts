@@ -70,7 +70,7 @@ interface TimeSlot {
   time_slot_id: number;
   class_id: number;
   day_of_week: string;
-  slot_date: string | null;
+  subject_id?: number | null;
   start_time: string;
   end_time: string;
 }
@@ -85,24 +85,17 @@ interface LectureBucket {
 }
 
 /**
- * Get time slots for a class on a specific date (or day_of_week fallback), ordered by start_time
+ * Get time slots for a class ordered by day schedule.
+ * section_time_slots no longer stores slot_date, so we match by day_of_week only.
  */
 export const getTimeSlots = async (classId: number, dayOfWeek: string, slotDate?: string): Promise<TimeSlot[]> => {
-  // 1. Prefer exact date match
   if (slotDate) {
-    const query = `
-      SELECT time_slot_id, class_id, day_of_week, slot_date::text,
-             start_time::text, end_time::text
-      FROM section_time_slots
-      WHERE class_id = $1 AND slot_date = $2
-      ORDER BY start_time ASC
-    `;
-    const rows = await getMany(query, [classId, slotDate]);
-    if (rows.length > 0) return rows;
+    console.log(`[Speech] slot_date=${slotDate} received, but section_time_slots now matches on day_of_week only`);
   }
-  // 2. Fallback: match by day_of_week
+
+  // 1. Match by day_of_week
   const query2 = `
-    SELECT time_slot_id, class_id, day_of_week, slot_date::text,
+    SELECT time_slot_id, class_id, day_of_week, subject_id,
            start_time::text, end_time::text
     FROM section_time_slots
     WHERE class_id = $1 AND day_of_week = $2
@@ -111,10 +104,10 @@ export const getTimeSlots = async (classId: number, dayOfWeek: string, slotDate?
   const rows2 = await getMany(query2, [classId, dayOfWeek]);
   if (rows2.length > 0) return rows2;
 
-  // 3. Last fallback: any time slots for this class (regardless of day)
+  // 2. Last fallback: any time slots for this class (regardless of day)
   console.log(`[Speech] No slots for day=${dayOfWeek}, trying any day for class=${classId}`);
   const query3 = `
-    SELECT DISTINCT ON (start_time) time_slot_id, class_id, day_of_week, slot_date::text,
+    SELECT DISTINCT ON (start_time) time_slot_id, class_id, day_of_week, subject_id,
            start_time::text, end_time::text
     FROM section_time_slots
     WHERE class_id = $1
@@ -794,34 +787,92 @@ export const retryFailedFragment = async (fragmentId: number) => {
     throw new Error('Stored fragment file no longer exists on disk');
   }
 
-  const result = await transcribeAudio(fragment.fragment_path, fragment.file_id, {
-    current: fragment.fragment_order || 1,
-    total: fragment.fragment_order || 1,
+  const fragmentLabel = `fragment #${fragment.fragment_order || fragment.id}`;
+  const fragmentOrder = fragment.fragment_order || 1;
+
+  updateProgress(fragment.file_id, {
+    status: 'transcribing',
+    message: `Starting manual retry for ${fragmentLabel}...`,
+    percent: 10,
+    currentSlot: fragmentOrder,
+    totalSlots: 1,
   });
 
-  const updatedFragment = await update('fragments', {
-    transcript: result.text,
-    language: result.language || 'ar',
-    transcription_status: 'completed',
-    retry_count: (fragment.retry_count || 0) + (result.attemptsUsed || 1),
-    last_error: null,
-    last_transcription_attempt_at: new Date(),
-    updated_at: new Date(),
-  }, 'id = $1', [fragmentId]);
+  try {
+    const result = await transcribeAudio(fragment.fragment_path, fragment.file_id, {
+      current: fragmentOrder,
+      total: 1,
+    });
 
-  if (isSuccessfulTranscript(result.text)) {
-    try {
-      await evaluateSpeechAgainstKPIs(result.text, fragment.file_id);
-    } catch (evalErr) {
-      console.error(`[Evaluation] ⚠️ Manual retry evaluation failed for fragment_id=${fragmentId}:`, evalErr);
+    updateProgress(fragment.file_id, {
+      status: 'saving',
+      message: `Saving transcription result for ${fragmentLabel}...`,
+      percent: 80,
+      currentSlot: fragmentOrder,
+      totalSlots: 1,
+    });
+
+    const updatedFragment = await update('fragments', {
+      transcript: result.text,
+      language: result.language || 'ar',
+      transcription_status: 'completed',
+      retry_count: (fragment.retry_count || 0) + (result.attemptsUsed || 1),
+      last_error: null,
+      last_transcription_attempt_at: new Date(),
+      updated_at: new Date(),
+    }, 'id = $1', [fragmentId]);
+
+    if (isSuccessfulTranscript(result.text)) {
+      try {
+        await evaluateSpeechAgainstKPIs(result.text, fragment.file_id);
+      } catch (evalErr) {
+        console.error(`[Evaluation] ⚠️ Manual retry evaluation failed for fragment_id=${fragmentId}:`, evalErr);
+      }
     }
+
+    updateProgress(fragment.file_id, {
+      status: 'saving',
+      message: `Updating lecture transcript for ${fragmentLabel}...`,
+      percent: 92,
+      currentSlot: fragmentOrder,
+      totalSlots: 1,
+    });
+
+    await synchronizeLectureRecordsForFile(fragment.file_id, {
+      preferredLanguage: result.language || 'ar',
+    });
+
+    updateProgress(fragment.file_id, {
+      status: 'completed',
+      message: `Manual retry completed successfully for ${fragmentLabel}.`,
+      percent: 100,
+      currentSlot: fragmentOrder,
+      totalSlots: 1,
+    });
+
+    return updatedFragment;
+  } catch (error) {
+    const failureMessage = error instanceof Error ? error.message : 'Manual retry failed';
+
+    await update('fragments', {
+      transcription_status: 'failed',
+      retry_count: (fragment.retry_count || 0) + MAX_TRANSCRIPTION_ATTEMPTS,
+      last_error: failureMessage,
+      last_transcription_attempt_at: new Date(),
+      updated_at: new Date(),
+    }, 'id = $1', [fragmentId]);
+
+    updateProgress(fragment.file_id, {
+      status: 'failed',
+      message: `Manual retry failed for ${fragmentLabel}.`,
+      percent: 100,
+      currentSlot: fragmentOrder,
+      totalSlots: 1,
+      error: failureMessage,
+    });
+
+    throw error;
   }
-
-  await synchronizeLectureRecordsForFile(fragment.file_id, {
-    preferredLanguage: result.language || 'ar',
-  });
-
-  return updatedFragment;
 };
 
 export const saveSpeech = async (

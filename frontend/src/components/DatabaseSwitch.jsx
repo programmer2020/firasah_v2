@@ -1,34 +1,33 @@
 import React from 'react';
 import { useDatabase } from '../context/DatabaseContext';
 
-const DatabaseSwitch = () => {
+const DatabaseSwitch = ({ className = '' }) => {
   const { useNeon, toggleDatabase, loading } = useDatabase();
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-md hover:shadow-lg transition-shadow">
-      <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">
-        {useNeon ? '☁️ Neon' : '🗄️ Local'}
+    <div className={`flex items-center gap-3 rounded-[24px] border border-white/50 bg-white/78 px-4 py-3 shadow-[0_18px_40px_-30px_rgba(16,24,40,0.65)] backdrop-blur-xl ${className}`}>
+      <span className="font-dashboard-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[#4e625b]">
+        {useNeon ? 'Neon' : 'Local'}
       </span>
-      
-      {/* Toggle Switch */}
+
       <button
         type="button"
         onClick={() => toggleDatabase(!useNeon)}
         disabled={loading}
-        className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
-          useNeon ? 'bg-brand-600' : 'bg-gray-400'
-        } ${loading ? 'opacity-60 cursor-not-allowed' : ''}`}
-        title={loading ? 'Switching database...' : (useNeon ? 'Click to use Local Database' : 'Click to use Neon Cloud')}
+        className={`relative inline-flex h-10 w-[54px] items-center rounded-full border border-transparent transition-all duration-200 ${
+          useNeon ? 'bg-[#9b4cf0]' : 'bg-[#d0d8d4]'
+        } ${loading ? 'opacity-60 cursor-not-allowed' : 'hover:scale-[1.02]'}`}
+        title={loading ? 'Switching database...' : useNeon ? 'Click to use Local Database' : 'Click to use Neon Cloud'}
         aria-label="Database Switch"
       >
         <span
-          className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-            useNeon ? 'translate-x-6' : 'translate-x-1'
+          className={`inline-block h-8 w-8 transform rounded-full bg-white shadow-[0_8px_18px_-10px_rgba(16,24,40,0.55)] transition-transform ${
+            useNeon ? 'translate-x-[14px]' : 'translate-x-[4px]'
           }`}
         />
       </button>
 
-      <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">
+      <span className="text-sm font-semibold text-[#425851]">
         {useNeon ? 'Cloud' : 'Local'}
       </span>
     </div>

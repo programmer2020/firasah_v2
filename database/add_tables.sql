@@ -59,7 +59,9 @@ CREATE TABLE IF NOT EXISTS evaluations (
   file_id INTEGER NOT NULL REFERENCES sound_files(file_id) ON DELETE CASCADE,
   kpi_id INTEGER NOT NULL REFERENCES kpis(kpi_id) ON DELETE CASCADE,
   evidence_count INTEGER DEFAULT 0,
-  mark DECIMAL(5, 2),
+  avg_confidence DECIMAL(5, 2) DEFAULT 0,
+  kpi_score DECIMAL(5, 2) DEFAULT 0,
+  mark VARCHAR(1),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT uq_evaluations_file_kpi UNIQUE (file_id, kpi_id)

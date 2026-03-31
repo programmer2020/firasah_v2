@@ -1,182 +1,140 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
-// Material Design Icon Components
-const IconSchool = () => (
-  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-    <path d="M12 3L2 9v2h20V9L12 3zm0 4.18V7.82L6.9 10.5h10.2L12 7.18zM2 20h20v2H2z" />
+const IconDashboard = ({ className = 'h-5 w-5' }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="M3 13h8V3H3v10Zm10 8h8V3h-8v18ZM3 21h8v-6H3v6Z" />
   </svg>
 );
 
-const IconPeople = () => (
-  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-    <path d="M9 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0-6c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 7c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4zm6 5H3v-2c0-1.5 3.58-2.5 6-2.5s6 1 6 2.5v2z" />
+const IconSchool = ({ className = 'h-5 w-5' }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="M12 3 2 9v2h20V9L12 3Zm0 4.18V7.82L6.9 10.5h10.2L12 7.18ZM4 13h2v5H4v-5Zm4 0h2v5H8v-5Zm4 0h2v5h-2v-5Zm4 0h2v5h-2v-5ZM2 20h20v2H2v-2Z" />
   </svg>
 );
 
-const IconBooks = () => (
-  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-    <path d="M19 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 16H5V4h14v14zm-5.04-6.71l-2.75 3.54-2.16-2.66c-.23-.29-.61-.37-.92-.15-.31.21-.38.56-.15.87l2.92 3.58c.23.29.61.37.92.15l3.54-4.58c.23-.29.14-.65-.15-.92-.29-.23-.65-.14-.92.15z" />
+const IconClips = ({ className = 'h-5 w-5' }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Zm4 3v6l5-3-5-3Zm8-4h2v2h-2V5Zm0 12h2v2h-2v-2Z" />
   </svg>
 );
 
-const IconEdit = () => (
-  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" />
-    <path d="M20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+const IconTexture = ({ className = 'h-5 w-5' }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z" />
   </svg>
 );
 
-const IconChart = () => (
-  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-3-5h2V7h-2v7zm-4 0h2V9h-2v5zm-4 0h2v-3H8v3z" />
+const IconHighlights = ({ className = 'h-5 w-5' }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="m12 2 1.9 5.8H20l-4.95 3.6 1.9 5.8L12 13.6l-4.95 3.6 1.9-5.8L4 7.8h6.1L12 2Z" />
   </svg>
 );
 
-const IconList = () => (
-  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-    <path d="M15 5H5v2h10V5zm0 8H5v2h10v-2zM5 16h10v-2H5v2zM20 5h-2v6h2V5zm0 8h-2v2h2v-2z" />
+const IconUpload = ({ className = 'h-5 w-5' }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="M19 15v4H5v-4H3v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4h-2ZM11 16h2V8h3l-4-4-4 4h3v8Z" />
   </svg>
 );
 
-const IconMic = () => (
-  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-    <path d="M17 16c0 2.76-2.24 5-5 5s-5-2.24-5-5h-2c0 3.87 3.13 7 7 7s7-3.13 7-7h-2z" />
+const CloseIcon = () => (
+  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
   </svg>
 );
 
-const IconCalendar = () => (
-  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-    <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z" />
-  </svg>
-);
-
-const IconHome = () => (
-  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
-  </svg>
-);
-
-const IconSettings = () => (
-  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-    <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.61-.22l-2.39.96a7.03 7.03 0 00-1.63-.94l-.36-2.54a.5.5 0 00-.5-.42h-3.84a.5.5 0 00-.5.42l-.36 2.54c-.58.23-1.12.54-1.63.94l-2.39-.96a.5.5 0 00-.61.22L2.71 8.84a.5.5 0 00.12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32c.13.22.39.31.61.22l2.39-.96c.51.4 1.05.71 1.63.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.58-.23 1.12-.54 1.63-.94l2.39.96c.22.09.48 0 .61-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1112 8a3.5 3.5 0 010 7.5z" />
-  </svg>
-);
-
-const IconWarning = () => (
-  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-    <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
-  </svg>
-);
-
-export const Sidebar = () => {
+export const Sidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
-  const [isOpen, setIsOpen] = useState(true);
 
   const menuItems = [
-    {
-      label: 'Dashboard',
-      href: '/dashboard',
-      icon: IconHome,
-    },
-    {
-      label: 'Schools',
-      href: '/schools',
-      icon: IconSchool,
-    },
-    {
-      label: 'Teachers',
-      href: '/teachers',
-      icon: IconPeople,
-    },
-    {
-      label: 'Classes',
-      href: '/classes',
-      icon: IconBooks,
-    },
-    {
-      label: 'Subjects',
-      href: '/subjects',
-      icon: IconEdit,
-    },
-    {
-      label: 'Grades',
-      href: '/grades',
-      icon: IconChart,
-    },
-    {
-      label: 'Sections',
-      href: '/sections',
-      icon: IconList,
-    },
-    {
-      label: 'Audio Upload',
-      href: '/audio-upload',
-      icon: IconMic,
-    },
-    {
-      label: 'Failed Fragments',
-      href: '/failed-fragments',
-      icon: IconWarning,
-    },
-    {
-      label: 'Schedule',
-      href: '/schedule',
-      icon: IconCalendar,
-    },
-    {
-      label: 'Worker Schedule',
-      href: '/worker-jobs',
-      icon: IconSettings,
-    },
+    { label: 'Dashboard', href: '/dashboard', icon: IconDashboard },
+    { label: 'Lectures', href: '/audio-upload', icon: IconSchool },
+    { label: 'Clips', href: '/failed-fragments', icon: IconClips },
+    { label: 'Patterns', href: '/schedule', icon: IconTexture },
+    { label: 'Highlights', href: '/evaluations', icon: IconHighlights },
+    { label: 'Admin Upload', href: '/worker-jobs', icon: IconUpload },
   ];
 
-  const isActive = (href) => location.pathname === href;
+  const activeIndex = Math.max(
+    0,
+    menuItems.findIndex((item) => location.pathname === item.href),
+  );
 
   return (
-    <aside
-      className={`fixed left-0 top-0 h-screen bg-white dark:bg-gray-800 shadow-lg transition-all duration-300 ${
-        isOpen ? 'w-64' : 'w-20'
-      } pt-24 z-40`}
-    >
-      {/* Toggle Button */}
+    <>
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="absolute top-24 -right-3 bg-brand-600 text-white rounded-full p-1.5 shadow-md hover:bg-brand-700 transition-colors"
+        type="button"
+        onClick={onClose}
+        className={`fixed inset-0 z-30 bg-[#0a1814]/45 backdrop-blur-sm transition lg:hidden ${
+          isOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+        aria-label="Close sidebar overlay"
+      />
+
+      <aside
+        className={`emerald-sidebar fixed left-0 top-0 z-50 flex h-screen w-64 flex-col py-8 text-white transition-transform duration-300 ${
+          isOpen ? 'translate-x-0' : '-translate-x-full'
+        } lg:translate-x-0`}
       >
-        <svg
-          className={`w-5 h-5 transition-transform ${!isOpen ? 'rotate-180' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-        </svg>
-      </button>
+        <div className="mb-12 flex items-start justify-between px-8">
+          <div>
+            <h1 className="font-headline text-2xl font-bold tracking-[-0.08em] text-white">FIRASAH</h1>
+            <p className="font-dashboard-mono text-[10px] uppercase tracking-[0.2em] text-white/60">Precision Intelligence</p>
+          </div>
 
-      {/* Menu Items */}
-      <nav className="px-4 py-6 space-y-2">
-        {menuItems.map((item) => {
-          const IconComponent = item.icon;
-          return (
-            <Link
-              key={item.label}
-              to={item.href}
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                isActive(item.href)
-                  ? 'bg-gray-300 text-gray-900 shadow-md dark:bg-gray-600 dark:text-white'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              <IconComponent />
-              {isOpen && <span className="font-medium text-sm">{item.label}</span>}
-            </Link>
-          );
-        })}
-      </nav>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-10 w-10 items-center justify-center text-white/80 transition hover:text-white lg:hidden"
+            aria-label="Close sidebar"
+          >
+            <CloseIcon />
+          </button>
+        </div>
 
-    </aside>
+        <nav className="relative flex-1 space-y-1 px-4">
+          <div
+            className="absolute left-0 h-10 w-1 bg-[#F8F9FA] transition-transform duration-200"
+            style={{ transform: `translateY(${activeIndex * 52}px)` }}
+          />
+
+          {menuItems.map((item) => {
+            const IconComponent = item.icon;
+            const active = location.pathname === item.href;
+
+            return (
+              <Link
+                key={item.label}
+                to={item.href}
+                onClick={onClose}
+                className={`relative z-10 flex items-center px-4 py-3 transition-all duration-200 ${
+                  active ? 'font-bold text-white' : 'text-white/70 hover:bg-[#0F7B5F]/50 hover:text-white'
+                }`}
+              >
+                <IconComponent className="mr-3 h-5 w-5 text-xl" />
+                <span className="text-sm tracking-tight">{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="mt-auto px-8 pt-8">
+          <div className="flex items-center gap-3 bg-white/5 p-3">
+            <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#d8ede4]">
+              <img
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJTeMmHMywyseDWAle7Q0km05BHpijhYYbBLLsLY4V0nPQmbf4vf0irxpAgkNrbakDXFHAHQHytM60mImf2hHUS9jJYLnMFmTeF1yc-neb0XQRqTRjkcEIhL6ROkNAhoseJ-ygE1HYfrCdbmpzBaAvUA58svrl8z4Zq0xABbickS8l5UX3ep8fTjMKGRSOKQMb0-afa34XstBntC9mrgvlt3ccASEztZmFz2u8evWze-WAAgb6egqn0WXvW1KNP2HNjSM6SAt4JpC1"
+                alt="Dr. Aris Thorne"
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <div className="overflow-hidden">
+              <p className="truncate text-xs font-bold text-white">Dr. Aris Thorne</p>
+              <p className="font-dashboard-mono text-[10px] text-white/50">Lead Instructor</p>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </>
   );
 };
 

@@ -81,8 +81,8 @@ CREATE TABLE IF NOT EXISTS teachers (
 CREATE TABLE IF NOT EXISTS section_time_slots (
     time_slot_id SERIAL PRIMARY KEY,
     class_id INT NOT NULL,
+    subject_id INT NOT NULL,
     day_of_week VARCHAR(10) NOT NULL,
-    slot_date DATE,
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,
 
@@ -90,6 +90,10 @@ CREATE TABLE IF NOT EXISTS section_time_slots (
         FOREIGN KEY (class_id)
         REFERENCES classes(class_id)
         ON DELETE CASCADE,
+
+    CONSTRAINT fk_timeslot_subject
+        FOREIGN KEY (subject_id)
+        REFERENCES subjects(subject_id),
 
     CONSTRAINT chk_valid_time
         CHECK (end_time > start_time)
@@ -166,12 +170,12 @@ VALUES
 ON CONFLICT DO NOTHING;
 
 -- Time Slots
-INSERT INTO section_time_slots (class_id, day_of_week, slot_date, start_time, end_time)
+INSERT INTO section_time_slots (class_id, subject_id, day_of_week, start_time, end_time)
 VALUES
-  (1,'Sunday','2026-03-08','07:00','08:00'),
-  (1,'Sunday','2026-03-08','08:00','09:00'),
-  (1,'Monday','2026-03-09','07:00','08:00'),
-  (2,'Sunday','2026-03-08','07:00','08:00')
+  (1,1,'Sunday','07:00','08:00'),
+  (1,2,'Sunday','08:00','09:00'),
+  (1,3,'Monday','07:00','08:00'),
+  (2,1,'Sunday','07:00','08:00')
 ON CONFLICT DO NOTHING;
 
 -- Class Schedule

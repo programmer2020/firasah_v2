@@ -32,7 +32,7 @@ export default function Schedule() {
 
   // Time slot form
   const [showSlotForm, setShowSlotForm] = useState(false);
-  const [slotForm, setSlotForm] = useState({ start_time: '08:00', end_time: '08:45' });
+  const [slotForm, setSlotForm] = useState({ start_time: '08:00', end_time: '08:45', subject_id: '' });
 
   // Assignment form
   const [assignForm, setAssignForm] = useState({ time_slot_id: '', subject_id: '', teacher_id: '' });
@@ -92,9 +92,10 @@ export default function Schedule() {
         day_of_week: selectedDay,
         start_time: slotForm.start_time,
         end_time: slotForm.end_time,
+        subject_id: parseInt(slotForm.subject_id),
       });
       setShowSlotForm(false);
-      setSlotForm({ start_time: '08:00', end_time: '08:45' });
+      setSlotForm({ start_time: '08:00', end_time: '08:45', subject_id: '' });
       loadSlots();
     } catch (err) {
       setError('فشل في إضافة الحصة');
@@ -231,6 +232,20 @@ export default function Schedule() {
             {showSlotForm && (
               <form onSubmit={handleAddSlot} className="bg-white rounded-xl shadow p-4 mb-4 flex flex-wrap items-end gap-4">
                 <div>
+                  <label className="block text-sm text-gray-600 mb-1">المادة</label>
+                  <select
+                    className="border rounded px-3 py-2 min-w-[180px]"
+                    value={slotForm.subject_id}
+                    onChange={(e) => setSlotForm({ ...slotForm, subject_id: e.target.value })}
+                    required
+                  >
+                    <option value="">-- اختر مادة --</option>
+                    {subjects.map((s) => (
+                      <option key={s.subject_id} value={s.subject_id}>{s.subject_name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
                   <label className="block text-sm text-gray-600 mb-1">وقت البداية</label>
                   <input
                     type="time"
@@ -256,7 +271,10 @@ export default function Schedule() {
                 <button
                   type="button"
                   className="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400"
-                  onClick={() => setShowSlotForm(false)}
+                  onClick={() => {
+                    setShowSlotForm(false);
+                    setSlotForm({ start_time: '08:00', end_time: '08:45', subject_id: '' });
+                  }}
                 >
                   إلغاء
                 </button>

@@ -434,10 +434,10 @@ export const AudioUpload = () => {
                     {pipelineProgress.message}
                   </p>
 
-                  {pipelineProgress.status === 'partial' && (
+                  {pipelineProgress.status === 'partial' && uploadedFile?.file_id && (
                     <div className="mt-3 text-right" dir="rtl">
                       <Link
-                        to="/failed-fragments"
+                        to={`/failed-fragments?fileId=${uploadedFile.file_id}`}
                         className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-700"
                       >
                         فتح صفحة المقاطع الفاشلة
@@ -594,13 +594,13 @@ export const AudioUpload = () => {
               <div>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">معرّف الملف</p>
                 <p className="text-gray-900 dark:text-white font-semibold">
-                  {uploadedFile.id}
+                  {uploadedFile.file_id || uploadedFile.id || '-'}
                 </p>
               </div>
               <div>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">اسم الملف</p>
                 <p className="text-gray-900 dark:text-white font-semibold">
-                  {uploadedFile.fileName}
+                  {uploadedFile.filename || uploadedFile.fileName || '-'}
                 </p>
               </div>
               {uploadedFile.duration && (
@@ -667,16 +667,29 @@ export const AudioUpload = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                          {file.createdBy || '-'}
+                          {file.createdBy || file.createdby || '-'}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                          {file.createdAt ? new Date(file.createdAt).toLocaleDateString('ar-SA') : '-'}
+                          {(file.createdAt || file.created_at)
+                            ? new Date(file.createdAt || file.created_at).toLocaleDateString('ar-SA')
+                            : '-'}
                         </td>
                         <td className="px-6 py-4 text-sm">
-                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full border text-xs font-semibold ${statusBadge.bg} ${statusBadge.border} ${statusBadge.text}`}>
-                            <span>{statusBadge.icon}</span>
-                            <span>{statusBadge.label}</span>
-                          </span>
+                          {status === 'partial' && file.file_id ? (
+                            <Link
+                              to={`/failed-fragments?fileId=${file.file_id}`}
+                              className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition-colors hover:brightness-95 ${statusBadge.bg} ${statusBadge.border} ${statusBadge.text}`}
+                              title="عرض الأجزاء الناقصة وإعادة المحاولة"
+                            >
+                              <span>{statusBadge.icon}</span>
+                              <span>{statusBadge.label}</span>
+                            </Link>
+                          ) : (
+                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full border text-xs font-semibold ${statusBadge.bg} ${statusBadge.border} ${statusBadge.text}`}>
+                              <span>{statusBadge.icon}</span>
+                              <span>{statusBadge.label}</span>
+                            </span>
+                          )}
                         </td>
                       </tr>
                     );

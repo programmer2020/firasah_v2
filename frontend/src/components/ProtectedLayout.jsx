@@ -1,22 +1,25 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 
 const ProtectedLayout = ({ children }) => {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <Header />
+    <div className="min-h-screen bg-[var(--dashboard-bg)] text-[var(--dashboard-copy)]">
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Sidebar */}
-      <Sidebar />
+      <div className="relative min-h-screen lg:ml-64">
+        <div className="dashboard-grid-overlay pointer-events-none absolute inset-0 opacity-[0.045]" />
 
-      {/* Main Content */}
-      <main className="pt-20 pl-64 transition-all duration-300">
-        <div className="max-w-7xl mx-auto px-4 py-8 md:px-6 md:py-12">
-          {children}
+        <div className="relative z-10">
+          <Header onOpenSidebar={() => setSidebarOpen(true)} />
+
+          <main className="px-4 pb-10 pt-8 sm:px-6 lg:px-10">
+            {children}
+          </main>
         </div>
-      </main>
+      </div>
     </div>
   );
 };

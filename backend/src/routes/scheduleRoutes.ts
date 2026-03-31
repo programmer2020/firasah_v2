@@ -56,11 +56,11 @@ router.get('/time-slots/:classId', async (req: Request, res: Response) => {
 
 router.post('/time-slots', async (req: Request, res: Response) => {
   try {
-    const { class_id, day_of_week, start_time, end_time, slot_date } = req.body;
-    if (!class_id || !day_of_week || !start_time || !end_time) {
-      return res.status(400).json({ error: 'class_id, day_of_week, start_time, end_time are required' });
+    const { class_id, day_of_week, start_time, end_time, subject_id } = req.body;
+    if (!class_id || !day_of_week || !start_time || !end_time || !subject_id) {
+      return res.status(400).json({ error: 'class_id, day_of_week, start_time, end_time, subject_id are required' });
     }
-    const slot = await createTimeSlot({ class_id, day_of_week, start_time, end_time, slot_date });
+    const slot = await createTimeSlot({ class_id, day_of_week, start_time, end_time, subject_id });
     res.status(201).json(slot);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

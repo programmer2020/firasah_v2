@@ -52,6 +52,29 @@ const getErrorMessage = (error: unknown): string => {
   return String(error);
 };
 
+const SQL_CONFIDENCE_EXTRACT_EXPR = `
+  COALESCE(
+    ((regexp_match(COALESCE(e.evidence_txt, ''), 'Confidence:\\s*([0-9]+(?:\\.[0-9]+)?)%?', 'i'))[1])::numeric,
+    0
+  )
+`.trim();
+
+const sqlMarkExpression = (countExpr: string): string => `
+  CASE
+    WHEN COALESCE(${countExpr}, 0) >= 3 THEN 's'
+    WHEN COALESCE(${countExpr}, 0) >= 2 THEN 'g'
+    WHEN COALESCE(${countExpr}, 0) >= 1 THEN 'l'
+    ELSE 'n'
+  END
+`.trim();
+
+const sqlKpiScoreExpression = (avgConfidenceExpr: string, evidenceCountExpr: string): string => `
+  LEAST(
+    ROUND(COALESCE((${avgConfidenceExpr})::numeric, 0), 2) + (COALESCE(${evidenceCountExpr}, 0) * 2),
+    100
+  )
+`.trim();
+
 const currentDatabaseKey = (): string => {
   const status = getDatabaseStatus();
   return `${status.host}|${status.database}|${status.type}`;
@@ -76,6 +99,12 @@ export const ensureAggregationSchemaForCurrentDb = async (): Promise<void> => {
       ADD COLUMN IF NOT EXISTS fragment_id INTEGER REFERENCES fragments(id) ON DELETE CASCADE;
     `);
 
+    await client.query(`
+      ALTER TABLE evaluations
+      ADD COLUMN IF NOT EXISTS avg_confidence NUMERIC(5, 2) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS kpi_score NUMERIC(5, 2) NOT NULL DEFAULT 0;
+    `);
+
     // Ensure the mark column in evaluations is VARCHAR(1) (not numeric).
     await client.query(`
       DO $$ BEGIN
@@ -94,13 +123,14 @@ export const ensureAggregationSchemaForCurrentDb = async (): Promise<void> => {
     // Backfill mark for any rows where it is NULL or not a valid letter.
     await client.query(`
       UPDATE evaluations
-      SET mark = CASE
-        WHEN COALESCE(evidence_count, 0) >= 3 THEN 's'
-        WHEN COALESCE(evidence_count, 0) >= 2 THEN 'g'
-        WHEN COALESCE(evidence_count, 0) >= 1 THEN 'l'
-        ELSE 'n'
-      END
-      WHERE mark IS NULL OR mark NOT IN ('s', 'g', 'l', 'n');
+      SET
+        avg_confidence = COALESCE(avg_confidence, 0),
+        kpi_score = ${sqlKpiScoreExpression('COALESCE(avg_confidence, 0)', 'COALESCE(evidence_count, 0)')},
+        mark = ${sqlMarkExpression('COALESCE(evidence_count, 0)')}
+      WHERE mark IS NULL
+         OR mark NOT IN ('s', 'g', 'l', 'n')
+         OR avg_confidence IS NULL
+         OR kpi_score IS NULL;
     `);
 
     // Safely create index, handling case where fragment_id column exists
@@ -156,6 +186,48 @@ export const ensureAggregationSchemaForCurrentDb = async (): Promise<void> => {
       CREATE UNIQUE INDEX IF NOT EXISTS uq_evaluations_file_kpi
       ON evaluations(file_id, kpi_id);
     `);
+
+    // Reconcile evaluations from all evidence rows so legacy data also gets avg_confidence and kpi_score.
+    await client.query(`
+      WITH evidence_metrics AS (
+        SELECT
+          COALESCE(f.file_id, e.file_id) AS file_id,
+          e.kpi_id,
+          COUNT(*)::int AS evidence_count,
+          ROUND(AVG(${SQL_CONFIDENCE_EXTRACT_EXPR})::numeric, 2) AS avg_confidence
+        FROM evidences e
+        LEFT JOIN fragments f ON e.fragment_id = f.id
+        WHERE COALESCE(f.file_id, e.file_id) IS NOT NULL
+        GROUP BY COALESCE(f.file_id, e.file_id), e.kpi_id
+      )
+      INSERT INTO evaluations (
+        file_id,
+        kpi_id,
+        evidence_count,
+        avg_confidence,
+        kpi_score,
+        mark,
+        created_at,
+        updated_at
+      )
+      SELECT
+        em.file_id,
+        em.kpi_id,
+        em.evidence_count,
+        COALESCE(em.avg_confidence, 0),
+        ${sqlKpiScoreExpression('COALESCE(em.avg_confidence, 0)', 'em.evidence_count')},
+        ${sqlMarkExpression('em.evidence_count')},
+        NOW(),
+        NOW()
+      FROM evidence_metrics em
+      ON CONFLICT (file_id, kpi_id)
+      DO UPDATE SET
+        evidence_count = EXCLUDED.evidence_count,
+        avg_confidence = EXCLUDED.avg_confidence,
+        kpi_score = EXCLUDED.kpi_score,
+        mark = EXCLUDED.mark,
+        updated_at = NOW();
+    `);
   });
 
   ensuredSchemaKeys.add(dbKey);
@@ -190,41 +262,74 @@ export const ensureAggregationFunctionForCurrentDb = async (): Promise<void> => 
 
         RETURN QUERY
         WITH pending AS (
-          SELECT e.id, f.file_id, e.kpi_id
+          SELECT
+            e.id,
+            COALESCE(f.file_id, e.file_id) AS file_id,
+            e.kpi_id,
+            ${SQL_CONFIDENCE_EXTRACT_EXPR} AS confidence
           FROM evidences e
           LEFT JOIN fragments f ON e.fragment_id = f.id
           WHERE COALESCE(e.iscalculated, FALSE) = FALSE
           FOR UPDATE OF e SKIP LOCKED
         ),
         grouped AS (
-          SELECT file_id, kpi_id, COUNT(*)::int AS pending_count
+          SELECT
+            file_id,
+            kpi_id,
+            COUNT(*)::int AS pending_count,
+            ROUND(AVG(confidence)::numeric, 2) AS pending_avg_confidence
           FROM pending
           WHERE file_id IS NOT NULL
           GROUP BY file_id, kpi_id
         ),
         upserted AS (
-          INSERT INTO evaluations (file_id, kpi_id, evidence_count, mark, created_at, updated_at)
+          INSERT INTO evaluations (
+            file_id,
+            kpi_id,
+            evidence_count,
+            avg_confidence,
+            kpi_score,
+            mark,
+            created_at,
+            updated_at
+          )
           SELECT
             g.file_id,
             g.kpi_id,
             g.pending_count,
-            CASE
-              WHEN g.pending_count >= 3 THEN 's'
-              WHEN g.pending_count >= 2 THEN 'g'
-              WHEN g.pending_count >= 1 THEN 'l'
-              ELSE 'n'
-            END,
+            COALESCE(g.pending_avg_confidence, 0),
+            ${sqlKpiScoreExpression('COALESCE(g.pending_avg_confidence, 0)', 'g.pending_count')},
+            ${sqlMarkExpression('g.pending_count')},
             NOW(), NOW()
           FROM grouped g
           ON CONFLICT (file_id, kpi_id)
           DO UPDATE SET
             evidence_count = COALESCE(evaluations.evidence_count, 0) + EXCLUDED.evidence_count,
-            mark = CASE
-              WHEN COALESCE(evaluations.evidence_count, 0) + EXCLUDED.evidence_count >= 3 THEN 's'
-              WHEN COALESCE(evaluations.evidence_count, 0) + EXCLUDED.evidence_count >= 2 THEN 'g'
-              WHEN COALESCE(evaluations.evidence_count, 0) + EXCLUDED.evidence_count >= 1 THEN 'l'
-              ELSE 'n'
+            avg_confidence = CASE
+              WHEN (COALESCE(evaluations.evidence_count, 0) + EXCLUDED.evidence_count) > 0 THEN
+                ROUND((
+                  (
+                    COALESCE(evaluations.avg_confidence, 0) * COALESCE(evaluations.evidence_count, 0)
+                  ) + (
+                    COALESCE(EXCLUDED.avg_confidence, 0) * EXCLUDED.evidence_count
+                  )
+                ) / NULLIF(COALESCE(evaluations.evidence_count, 0) + EXCLUDED.evidence_count, 0), 2)
+              ELSE 0
             END,
+            kpi_score = ${sqlKpiScoreExpression(`
+              CASE
+                WHEN (COALESCE(evaluations.evidence_count, 0) + EXCLUDED.evidence_count) > 0 THEN
+                  ROUND((
+                    (
+                      COALESCE(evaluations.avg_confidence, 0) * COALESCE(evaluations.evidence_count, 0)
+                    ) + (
+                      COALESCE(EXCLUDED.avg_confidence, 0) * EXCLUDED.evidence_count
+                    )
+                  ) / NULLIF(COALESCE(evaluations.evidence_count, 0) + EXCLUDED.evidence_count, 0), 2)
+                ELSE 0
+              END
+            `, 'COALESCE(evaluations.evidence_count, 0) + EXCLUDED.evidence_count')},
+            mark = ${sqlMarkExpression('COALESCE(evaluations.evidence_count, 0) + EXCLUDED.evidence_count')},
             updated_at = NOW()
           RETURNING file_id, kpi_id
         ),

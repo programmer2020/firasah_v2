@@ -41,13 +41,15 @@ export const getAllSubjects = async () => {
 
 export const getTimeSlotsByClass = async (classId: number) => {
   const query = `
-    SELECT ts.time_slot_id, ts.class_id, ts.day_of_week, ts.slot_date::text,
+    SELECT ts.time_slot_id, ts.class_id, ts.day_of_week, ts.subject_id,
            ts.start_time::text, ts.end_time::text,
-           cs.schedule_id, cs.subject_id, cs.teacher_id,
+           cs.schedule_id, cs.teacher_id,
            sub.subject_name, t.teacher_name
     FROM section_time_slots ts
-    LEFT JOIN class_schedule cs ON ts.time_slot_id = cs.time_slot_id
-    LEFT JOIN subjects sub ON cs.subject_id = sub.subject_id
+    LEFT JOIN class_schedule cs
+      ON ts.time_slot_id = cs.time_slot_id
+     AND ts.class_id = cs.class_id
+    LEFT JOIN subjects sub ON ts.subject_id = sub.subject_id
     LEFT JOIN teachers t ON cs.teacher_id = t.teacher_id
     WHERE ts.class_id = $1
     ORDER BY ts.day_of_week, ts.start_time ASC
@@ -60,14 +62,14 @@ export const createTimeSlot = async (data: {
   day_of_week: string;
   start_time: string;
   end_time: string;
-  slot_date?: string;
+  subject_id: number;
 }) => {
   return await insert('section_time_slots', {
     class_id: data.class_id,
     day_of_week: data.day_of_week,
     start_time: data.start_time,
     end_time: data.end_time,
-    slot_date: data.slot_date || null,
+    subject_id: data.subject_id,
   });
 };
 
@@ -96,6 +98,13 @@ export const assignSchedule = async (data: {
   );
 
   if (existing) {
+    await executeQuery(
+      `UPDATE section_time_slots
+       SET subject_id = $1
+       WHERE time_slot_id = $2`,
+      [data.subject_id, data.time_slot_id]
+    );
+
     const result = await executeQuery(
       `UPDATE class_schedule
        SET subject_id = $1, teacher_id = $2
@@ -105,6 +114,13 @@ export const assignSchedule = async (data: {
     );
     return result.rows[0];
   }
+
+  await executeQuery(
+    `UPDATE section_time_slots
+     SET subject_id = $1
+     WHERE time_slot_id = $2`,
+    [data.subject_id, data.time_slot_id]
+  );
 
   return await insert('class_schedule', {
     class_id: data.class_id,
@@ -128,15 +144,17 @@ export const getFullSchedule = async (classId: number) => {
   const query = `
     SELECT
       cs.schedule_id,
-      ts.time_slot_id, ts.day_of_week, ts.slot_date::text,
+      ts.time_slot_id, ts.day_of_week, ts.subject_id,
       ts.start_time::text, ts.end_time::text,
-      sub.subject_id, sub.subject_name,
+      sub.subject_name,
       t.teacher_id, t.teacher_name
-    FROM class_schedule cs
-    JOIN section_time_slots ts ON cs.time_slot_id = ts.time_slot_id
-    JOIN subjects sub ON cs.subject_id = sub.subject_id
-    JOIN teachers t ON cs.teacher_id = t.teacher_id
-    WHERE cs.class_id = $1
+    FROM section_time_slots ts
+    LEFT JOIN class_schedule cs
+      ON cs.time_slot_id = ts.time_slot_id
+     AND cs.class_id = ts.class_id
+    LEFT JOIN subjects sub ON ts.subject_id = sub.subject_id
+    LEFT JOIN teachers t ON cs.teacher_id = t.teacher_id
+    WHERE ts.class_id = $1
     ORDER BY ts.day_of_week, ts.start_time ASC
   `;
   return await getMany(query, [classId]);
