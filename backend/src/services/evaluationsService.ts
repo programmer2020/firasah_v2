@@ -1,6 +1,6 @@
 /**
  * Evaluations Service
- * Handles CRUD operations for lecture_kpi records
+ * Handles CRUD operations for evaluation records
  * Also includes automatic KPI-based speech evaluation using OpenAI
  */
 
@@ -11,12 +11,11 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-interface LectureKPI {
-  lecture_id: number;
+interface Evaluation {
+  id?: number;
+  file_id: number;
   kpi_id: number;
   evidence_count?: number;
-  avg_confidence?: number;
-  score?: number;
   mark?: string;
 }
 
@@ -34,213 +33,187 @@ function computeMark(count: number | null | undefined): string {
   return 'l';
 }
 
-function computeScore(
-  avgConfidence: number | null | undefined,
-  evidenceCount: number | null | undefined
-): number {
-  const normalizedAverage = Math.min(100, Math.max(0, Number(avgConfidence) || 0));
-  const normalizedEvidenceCount = Math.max(0, Number(evidenceCount) || 0);
-  return Math.min(Number((normalizedAverage + (normalizedEvidenceCount * 2)).toFixed(2)), 100);
-}
-
 /**
- * Get all lecture_kpi records
+ * Get all evaluations
+ * @returns Promise with array of evaluations
  */
 export const getAllEvaluations = async () => {
   try {
     const query = `
-      SELECT
-        lk.lecture_id,
-        lk.kpi_id,
-        lk.evidence_count,
-        lk.avg_confidence,
-        lk.score,
-        lk.mark,
-        lk.created_at,
-        lk.updated_at,
+      SELECT 
+        e.id, 
+        e.file_id, 
+        e.kpi_id, 
+        e.evidence_count, 
+        e.mark, 
+        e.created_at,
         k.kpi_name,
-        l.file_id,
         s.filename
-      FROM lecture_kpi lk
-      LEFT JOIN kpis k ON lk.kpi_id = k.kpi_id
-      LEFT JOIN lecture l ON lk.lecture_id = l.lecture_id
-      LEFT JOIN sound_files s ON l.file_id = s.file_id
-      ORDER BY lk.created_at DESC
+      FROM evaluations e
+      LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
+      LEFT JOIN sound_files s ON e.file_id = s.file_id
+      ORDER BY e.created_at DESC
     `;
     return await getMany(query);
   } catch (error) {
-    console.error('Error fetching lecture_kpi records:', error);
+    console.error('Error fetching evaluations:', error);
     throw error;
   }
 };
 
 /**
- * Get lecture_kpi by lecture_id and kpi_id
+ * Get evaluation by ID
+ * @param evaluationId Evaluation ID
+ * @returns Promise with single evaluation
  */
-export const getEvaluationByLectureAndKPI = async (lectureId: number, kpiId: number) => {
+export const getEvaluationById = async (evaluationId: number) => {
   try {
     const query = `
-      SELECT
-        lk.lecture_id,
-        lk.kpi_id,
-        lk.evidence_count,
-        lk.avg_confidence,
-        lk.score,
-        lk.mark,
-        lk.created_at,
-        lk.updated_at,
+      SELECT 
+        e.id, 
+        e.file_id, 
+        e.kpi_id, 
+        e.evidence_count, 
+        e.mark, 
+        e.created_at,
         k.kpi_name,
-        l.file_id,
         s.filename
-      FROM lecture_kpi lk
-      LEFT JOIN kpis k ON lk.kpi_id = k.kpi_id
-      LEFT JOIN lecture l ON lk.lecture_id = l.lecture_id
-      LEFT JOIN sound_files s ON l.file_id = s.file_id
-      WHERE lk.lecture_id = $1 AND lk.kpi_id = $2
+      FROM evaluations e
+      LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
+      LEFT JOIN sound_files s ON e.file_id = s.file_id
+      WHERE e.id = $1
     `;
-    return await getOne(query, [lectureId, kpiId]);
+    return await getOne(query, [evaluationId]);
   } catch (error) {
-    console.error('Error fetching lecture_kpi record:', error);
+    console.error('Error fetching evaluation:', error);
     throw error;
   }
 };
 
 /**
- * Create a new lecture_kpi record
+ * Create a new evaluation
+ * @param data Evaluation data
+ * @returns Promise with created evaluation
  */
-export const createEvaluation = async (data: LectureKPI) => {
+export const createEvaluation = async (data: Evaluation) => {
   try {
-    if (!data.lecture_id || !data.kpi_id) {
-      throw new Error('lecture_id and kpi_id are required');
+    if (!data.file_id || !data.kpi_id) {
+      throw new Error('file_id and kpi_id are required');
     }
 
     const evidenceCount = data.evidence_count || 0;
-    const avgConfidence = Math.min(100, Math.max(0, Number(data.avg_confidence) || 0));
-    return await insert('lecture_kpi', {
-      lecture_id: data.lecture_id,
+    return await insert('evaluations', {
+      file_id: data.file_id,
       kpi_id: data.kpi_id,
       evidence_count: evidenceCount,
-      avg_confidence: avgConfidence,
-      score: computeScore(avgConfidence, evidenceCount),
       mark: computeMark(evidenceCount),
     });
   } catch (error) {
-    console.error('Error creating lecture_kpi record:', error);
+    console.error('Error creating evaluation:', error);
     throw error;
   }
 };
 
 /**
- * Update a lecture_kpi record
+ * Update an evaluation
+ * @param evaluationId Evaluation ID
+ * @param data Data to update
+ * @returns Promise with updated evaluation
  */
-export const updateEvaluation = async (lectureId: number, kpiId: number, data: Partial<LectureKPI>) => {
+export const updateEvaluation = async (evaluationId: number, data: Partial<Evaluation>) => {
   try {
     const updateData: Record<string, any> = {};
-
+    
+    if (data.file_id) updateData.file_id = data.file_id;
+    if (data.kpi_id) updateData.kpi_id = data.kpi_id;
     if (data.evidence_count !== undefined) {
       updateData.evidence_count = data.evidence_count;
-    }
-    if (data.avg_confidence !== undefined) {
-      updateData.avg_confidence = Math.min(100, Math.max(0, Number(data.avg_confidence) || 0));
-    }
-    if (updateData.evidence_count !== undefined || updateData.avg_confidence !== undefined) {
-      const existing = await getEvaluationByLectureAndKPI(lectureId, kpiId);
-      if (!existing) {
-        throw new Error('lecture_kpi record not found');
-      }
-
-      const nextEvidenceCount = updateData.evidence_count ?? existing.evidence_count ?? 0;
-      const nextAvgConfidence = updateData.avg_confidence ?? existing.avg_confidence ?? 0;
-      updateData.score = computeScore(nextAvgConfidence, nextEvidenceCount);
-      updateData.mark = computeMark(nextEvidenceCount);
+      updateData.mark = computeMark(data.evidence_count);
     } else if (data.mark !== undefined) {
       updateData.mark = data.mark;
     }
-
+    
     if (Object.keys(updateData).length === 0) {
       throw new Error('No fields to update');
     }
 
-    updateData.updated_at = new Date();
-    return await update('lecture_kpi', updateData, 'lecture_id = $1 AND kpi_id = $2', [lectureId, kpiId]);
+    return await update('evaluations', updateData, 'id = $1', [evaluationId]);
   } catch (error) {
-    console.error('Error updating lecture_kpi record:', error);
+    console.error('Error updating evaluation:', error);
     throw error;
   }
 };
 
 /**
- * Delete a lecture_kpi record
+ * Delete an evaluation
+ * @param evaluationId Evaluation ID
+ * @returns Promise with deleted evaluation
  */
-export const deleteEvaluation = async (lectureId: number, kpiId: number) => {
+export const deleteEvaluation = async (evaluationId: number) => {
   try {
-    return await deleteRecord('lecture_kpi', 'lecture_id = $1 AND kpi_id = $2', [lectureId, kpiId]);
+    return await deleteRecord('evaluations', 'id = $1', [evaluationId]);
   } catch (error) {
-    console.error('Error deleting lecture_kpi record:', error);
+    console.error('Error deleting evaluation:', error);
     throw error;
   }
 };
 
 /**
- * Get lecture_kpi records by KPI ID
+ * Get evaluations by KPI ID
+ * @param kpiId KPI ID
+ * @returns Promise with array of evaluations
  */
 export const getEvaluationsByKPI = async (kpiId: number) => {
   try {
     const query = `
-      SELECT
-        lk.lecture_id,
-        lk.kpi_id,
-        lk.evidence_count,
-        lk.avg_confidence,
-        lk.score,
-        lk.mark,
-        lk.created_at,
-        lk.updated_at,
+      SELECT 
+        e.id, 
+        e.file_id, 
+        e.kpi_id, 
+        e.evidence_count, 
+        e.mark, 
+        e.created_at,
         k.kpi_name,
-        l.file_id,
         s.filename
-      FROM lecture_kpi lk
-      LEFT JOIN kpis k ON lk.kpi_id = k.kpi_id
-      LEFT JOIN lecture l ON lk.lecture_id = l.lecture_id
-      LEFT JOIN sound_files s ON l.file_id = s.file_id
-      WHERE lk.kpi_id = $1
-      ORDER BY lk.created_at DESC
+      FROM evaluations e
+      LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
+      LEFT JOIN sound_files s ON e.file_id = s.file_id
+      WHERE e.kpi_id = $1
+      ORDER BY e.created_at DESC
     `;
     return await getMany(query, [kpiId]);
   } catch (error) {
-    console.error('Error fetching lecture_kpi by KPI:', error);
+    console.error('Error fetching evaluations by KPI:', error);
     throw error;
   }
 };
 
 /**
- * Get lecture_kpi records by lecture ID
+ * Get evaluations by file ID
+ * @param fileId File ID
+ * @returns Promise with array of evaluations
  */
-export const getEvaluationsByLecture = async (lectureId: number) => {
+export const getEvaluationsByFile = async (fileId: number) => {
   try {
     const query = `
-      SELECT
-        lk.lecture_id,
-        lk.kpi_id,
-        lk.evidence_count,
-        lk.avg_confidence,
-        lk.score,
-        lk.mark,
-        lk.created_at,
-        lk.updated_at,
+      SELECT 
+        e.id, 
+        e.file_id, 
+        e.kpi_id, 
+        e.evidence_count, 
+        e.mark, 
+        e.created_at,
         k.kpi_name,
-        l.file_id,
         s.filename
-      FROM lecture_kpi lk
-      LEFT JOIN kpis k ON lk.kpi_id = k.kpi_id
-      LEFT JOIN lecture l ON lk.lecture_id = l.lecture_id
-      LEFT JOIN sound_files s ON l.file_id = s.file_id
-      WHERE lk.lecture_id = $1
-      ORDER BY lk.created_at DESC
+      FROM evaluations e
+      LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
+      LEFT JOIN sound_files s ON e.file_id = s.file_id
+      WHERE e.file_id = $1
+      ORDER BY e.created_at DESC
     `;
-    return await getMany(query, [lectureId]);
+    return await getMany(query, [fileId]);
   } catch (error) {
-    console.error('Error fetching lecture_kpi by lecture:', error);
+    console.error('Error fetching evaluations by file:', error);
     throw error;
   }
 };
@@ -252,6 +225,7 @@ export const getEvaluationsByLecture = async (lectureId: number) => {
 
 /**
  * Status levels for KPI evaluation
+ * Defines confidence and evidence thresholds
  */
 export type EvaluationStatus = 'Strong' | 'Emerging' | 'Limited' | 'Insufficient';
 
@@ -264,33 +238,116 @@ export interface EvaluationResult {
   evidenceFound: boolean;
   status: EvaluationStatus;
   confidence: number;
-  facts?: string;
+  evidenceCount: number;
+  justification: string;
+  facts: string;
   interpretation?: string;
   limitations?: string;
-  evidenceCount?: number;
 }
 
 /**
- * Get all KPIs for evaluation
+ * Status level definitions and criteria
+ * Used to determine confidence level and evidence thresholds
+ */
+const STATUS_DEFINITIONS = {
+  Strong: {
+    description: 'قوي - دليل واضح وقوي مع أدلة متعددة ومستقلة متسقة',
+    criteria: {
+      minEvidenceCount: 2,
+      minConfidence: 75,
+      consistency: 'متسق وواضح'
+    }
+  },
+  Emerging: {
+    description: 'ناشئ - بعض الأدلة على ممارسة المعيار لكن غير متسقة',
+    criteria: {
+      minEvidenceCount: 1,
+      minConfidence: 50,
+      consistency: 'غير متسق أو محدود النطاق'
+    }
+  },
+  Limited: {
+    description: 'محدود - دليل ضعيف جداً أو حالات معزولة فقط',
+    criteria: {
+      minEvidenceCount: 1,
+      minConfidence: 25,
+      consistency: 'ضعيف أو غير موثوق'
+    }
+  },
+  Insufficient: {
+    description: 'غير كافي - لا توجد أدلة موثوقة',
+    criteria: {
+      minEvidenceCount: 0,
+      minConfidence: 0,
+      consistency: 'غياب كامل'
+    }
+  }
+};
+
+/**
+ * Determine status based on evidence count and confidence
+ */
+const determineStatus = (evidenceCount: number, confidence: number): EvaluationStatus => {
+  if (evidenceCount === 0 || confidence < 10) return 'Insufficient';
+  if (confidence >= 75 && evidenceCount >= 2) return 'Strong';
+  if (confidence >= 50 && evidenceCount >= 1) return 'Emerging';
+  if (confidence >= 25 && evidenceCount >= 1) return 'Limited';
+  return 'Insufficient';
+};
+
+/**
+ * Firasah Supervisor system prompt for classroom evaluation
+ * Focus: Evidence-based developmental feedback in Arabic (Saudi)
+ */
+const FIRASAH_SYSTEM_PROMPT = `أنت "مشرف فراسة" - خبير تقويم تعليمي متخصص في تقييم جودة التدريس.
+
+**دورك:**
+تحليل نصوص الحوار الصفي وتقييمها مقابل معايير الأداء التدريسي المحددة.
+
+**مبادئ التقويم:**
+1. ابحث عن أي إشارة ولو ضعيفة في النص لكل معيار.
+2. إذا وُجد أي دليل ولو بسيط، لا تضع "Insufficient" — ضع "Limited" على الأقل.
+3. "Insufficient" فقط عند الغياب الكامل للدليل في النص.
+4. النص المقدم قد يكون مقتطفاً قصيراً من حصة أطول — قيّم ما هو موجود فقط.
+5. الهدف تقديم تغذية راجعة تنموية بناءة، وليس الحكم القاطع.
+
+**معايير الحالة:**
+- Strong: دليلان مستقلان أو أكثر، ثقة 70% فأعلاه
+- Emerging: دليل واحد واضح، ثقة 40-70%
+- Limited: إشارة ضعيفة أو غير مباشرة، ثقة 15-40%
+- Insufficient: غياب كامل للدليل في النص، ثقة أقل من 15%
+
+**صيغة الإجابة:**
+- أجب دائماً بـ JSON object يحتوي على مفتاح "evaluations" وقيمته مصفوفة.
+- لا تضف أي نص خارج الـ JSON.
+- استخدم اللغة العربية في الحقول النصية.`;
+
+/**
+ * Get all KPIs for evaluation context
  */
 const getAllKPIsForEvaluation = async () => {
   const query = `
-    SELECT
+    SELECT 
       k.kpi_id,
       k.kpi_code,
       k.kpi_name,
       k.kpi_description,
+      d.domain_id,
       d.domain_code,
-      d.domain_name
+      d.domain_name,
+      d.domain_description
     FROM kpis k
-    LEFT JOIN domains d ON k.domain_id = d.domain_id
+    LEFT JOIN kpi_domains d ON k.domain_id = d.domain_id
     ORDER BY d.sort_order ASC, k.kpi_code ASC
   `;
-  return await getMany(query);
+  const rows = await getMany(query);
+  return rows;
 };
 
 /**
- * Main evaluation function - evaluates speech text against all KPIs
+ * Main automatic evaluation function
+ * Sends speech to OpenAI for KPI evaluation
+ * Stores evidence records for KPIs that are found
  */
 export const evaluateSpeechAgainstKPIs = async (
   speechText: string,
@@ -301,9 +358,9 @@ export const evaluateSpeechAgainstKPIs = async (
   try {
     console.log(`[Evaluation] Starting evaluation for file_id=${fileId}, text_length=${speechText.length}`);
 
-    // Get timeslot information for this file (time only, no date)
-    let slotStartTime: string | null = null;
-    let slotEndTime: string | null = null;
+    // Get timeslot information for this file
+    let slotStartTime: Date | null = null;
+    let slotEndTime: Date | null = null;
 
     try {
       // First try: get scheduled timeslot from lecture → section_time_slots
@@ -316,15 +373,18 @@ export const evaluateSpeechAgainstKPIs = async (
       `;
       const speechRecord = await getOne(speechQuery, [fileId]);
       if (speechRecord && speechRecord.start_time && speechRecord.end_time) {
-        slotStartTime = speechRecord.start_time;
-        slotEndTime = speechRecord.end_time;
-        console.log(`[Evaluation] 📅 Timeslot from schedule: ${slotStartTime} - ${slotEndTime}`);
+        const today = new Date();
+        const [startHours, startMins, startSecs] = speechRecord.start_time.split(':').map(Number);
+        const [endHours, endMins, endSecs] = speechRecord.end_time.split(':').map(Number);
+        slotStartTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(), startHours, startMins, startSecs);
+        slotEndTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(), endHours, endMins, endSecs);
+        console.log(`[Evaluation] 📅 Timeslot from schedule: ${slotStartTime.toISOString()} - ${slotEndTime.toISOString()}`);
       }
     } catch (err) {
       console.warn(`[Evaluation] ⚠️ Could not fetch timeslot from lecture table:`, err);
     }
 
-    // Fallback: use file upload time + duration
+    // Fallback: use file upload time + total fragment duration
     if (!slotStartTime || !slotEndTime) {
       try {
         const fileQuery = `
@@ -336,12 +396,10 @@ export const evaluateSpeechAgainstKPIs = async (
         `;
         const fileRecord = await getOne(fileQuery, [fileId]);
         if (fileRecord && fileRecord.created_at) {
-          const startDate = new Date(fileRecord.created_at);
+          slotStartTime = new Date(fileRecord.created_at);
           const durationSecs = Math.round(Number(fileRecord.total_duration) || 0);
-          const endDate = new Date(startDate.getTime() + durationSecs * 1000);
-          slotStartTime = startDate.toTimeString().split(' ')[0];
-          slotEndTime = endDate.toTimeString().split(' ')[0];
-          console.log(`[Evaluation] 📅 Timeslot from file upload: ${slotStartTime} - ${slotEndTime} (${durationSecs}s)`);
+          slotEndTime = new Date(slotStartTime.getTime() + durationSecs * 1000);
+          console.log(`[Evaluation] 📅 Timeslot from file upload: ${slotStartTime.toISOString()} - ${slotEndTime.toISOString()} (${durationSecs}s)`);
         }
       } catch (err) {
         console.warn(`[Evaluation] ⚠️ Could not fetch file upload time:`, err);
@@ -353,140 +411,169 @@ export const evaluateSpeechAgainstKPIs = async (
     console.log(`[Evaluation] Retrieved ${allKPIs.length} KPIs for evaluation`);
 
     if (allKPIs.length === 0) {
-      console.warn('[Evaluation] No KPIs found in database');
+      console.warn(`[Evaluation] ⚠️ No KPIs found in database`);
       return [];
     }
 
-    // Get lecture_id for this file
-    const lectureRecord = await getOne('SELECT lecture_id FROM lecture WHERE file_id = $1 LIMIT 1', [fileId]);
-    const lectureId = lectureRecord?.lecture_id;
+    // Build KPI reference text for OpenAI prompt
+    const kpiReference = allKPIs.map((kpi: any) => {
+      return `${kpi.kpi_code}: ${kpi.kpi_name}\n   التفاصيل: ${kpi.kpi_description}`;
+    }).join('\n\n');
 
-    // Build KPI descriptions for the prompt
-    const kpiDescriptions = allKPIs
-      .map((kpi: any) => `- ${kpi.kpi_code}: ${kpi.kpi_name}${kpi.kpi_description ? ' - ' + kpi.kpi_description : ''}`)
-      .join('\n');
+    // Build user prompt — speech text FIRST so the model reads it before KPI definitions
+    const userPrompt = `**نص الحوار الصفي المراد تقييمه:**
+"${speechText}"
 
-    const evaluationPrompt = `You are an expert educational evaluator analyzing Arabic teaching transcripts.
+---
 
-Evaluate the following transcript against these Key Performance Indicators (KPIs):
+**معايير الأداء التدريسي (قيّم النص أعلاه مقابل كل معيار):**
+${kpiReference}
 
-${kpiDescriptions}
+---
 
-TRANSCRIPT:
-"${speechText.substring(0, 8000)}"
+**المطلوب:**
+قيّم النص الصفي أعلاه مقابل كل معيار من المعايير. ابحث عن أي دليل ولو بسيط.
+أرسل الإجابة فقط بصيغة JSON object يحتوي على مفتاح "evaluations" وقيمته مصفوفة من الكائنات.
 
-For EACH KPI, determine if there is evidence in the transcript. Respond in JSON format:
+كل كائن في المصفوفة:
 {
-  "evaluations": [
-    {
-      "kpi_code": "KPI code",
-      "evidence_found": true/false,
-      "status": "Strong|Emerging|Limited|Insufficient",
-      "confidence": 0-100,
-      "facts": "Specific evidence found in Arabic",
-      "interpretation": "How the evidence relates to the KPI in Arabic",
-      "limitations": "Any limitations of the evidence in Arabic (optional)"
-    }
-  ]
-}
+  "kpi_code": "رمز المعيار",
+  "Evidence Found": true أو false,
+  "Status": "Strong" أو "Emerging" أو "Limited" أو "Insufficient",
+  "Confidence": عدد من 0-100,
+  "Evidence Count": عدد الأدلة (0-3),
+  "Facts": "وصف موضوعي من النص",
+  "Interpretation": "المعنى (إذا Status لم يكن Insufficient)",
+  "Limitations": "قيود التقييم (اختياري)",
+  "Justification": "الشرح الكامل بالعربية"
+}`;
 
-Rules:
-- "Strong": Multiple clear, direct evidence (confidence >= 70%)
-- "Emerging": Some evidence, partially demonstrated (confidence 40-69%)
-- "Limited": Minimal or indirect evidence (confidence 20-39%)
-- "Insufficient": No meaningful evidence found (confidence < 20%)
-- Write facts, interpretation, and limitations in Arabic
-- Be thorough but fair in your assessment`;
 
-    console.log(`[Evaluation] Sending to OpenAI...`);
+    console.log(`[Evaluation] Sending to OpenAI with model: gpt-4o`);
 
+    // Call OpenAI — response_format: json_object guarantees valid JSON output
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4o',
       messages: [
-        { role: 'system', content: 'You are an educational evaluation expert. Always respond in valid JSON.' },
-        { role: 'user', content: evaluationPrompt },
+        {
+          role: 'system',
+          content: FIRASAH_SYSTEM_PROMPT,
+        },
+        {
+          role: 'user',
+          content: userPrompt,
+        },
       ],
-      temperature: 0.3,
+      temperature: 0.2,
       max_tokens: 4000,
       response_format: { type: 'json_object' },
     });
 
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('No response from OpenAI');
+    console.log(`[Evaluation] ✅ OpenAI response received`);
+
+    // Parse response — model returns { "evaluations": [...] }
+    const responseText = response.choices[0]?.message?.content?.trim() || '';
+    console.log(`[Evaluation] Response length: ${responseText.length} chars`);
+    console.log(`[Evaluation] First 300 chars: ${responseText.substring(0, 300)}`);
+
+    // Extract evaluations array from JSON object
+    let evaluations: any[] = [];
+    try {
+      const parsed = JSON.parse(responseText);
+      // Accept {"evaluations": [...]} or a bare array
+      if (Array.isArray(parsed)) {
+        evaluations = parsed;
+      } else if (Array.isArray(parsed.evaluations)) {
+        evaluations = parsed.evaluations;
+      } else {
+        // Fallback: look for any array-valued key
+        const arrayKey = Object.keys(parsed).find(k => Array.isArray(parsed[k]));
+        evaluations = arrayKey ? parsed[arrayKey] : [];
+      }
+    } catch (e) {
+      console.error(`[Evaluation] ❌ Failed to parse JSON response:`, (e as any).message);
+      console.error(`[Evaluation] Raw response:`, responseText.substring(0, 500));
+      return [];
     }
 
-    console.log(`[Evaluation] OpenAI response received, parsing...`);
-    const parsed = JSON.parse(content);
-    const evaluations = parsed.evaluations || [];
+    if (!Array.isArray(evaluations) || evaluations.length === 0) {
+      console.error(`[Evaluation] ❌ No evaluations array in response. Keys: ${Object.keys(JSON.parse(responseText) || {}).join(', ')}`);
+      return [];
+    }
 
-    console.log(`[Evaluation] Parsed ${evaluations.length} KPI evaluations`);
+    console.log(`[Evaluation] Parsed ${evaluations.length} evaluation results`);
 
+    // Process evaluations and store evidence
     const results: EvaluationResult[] = [];
     const now = new Date();
 
-    for (const evalItem of evaluations) {
+    for (const evaluation of evaluations) {
       try {
-        const kpiCode = evalItem.kpi_code;
-        const kpiRecord = allKPIs.find((k: any) => k.kpi_code === kpiCode);
+        const kpiCode = evaluation.kpi_code?.trim();
+        const status = evaluation.Status || evaluation.status || 'Insufficient';
+        const confidence = evaluation.Confidence || evaluation.confidence || 0;
+        const evidenceCount = evaluation['Evidence Count'] || evaluation.evidenceCount || 0;
+        const facts = evaluation.Facts || evaluation.facts || '';
+        const interpretation = evaluation.Interpretation || evaluation.interpretation || '';
+        const limitations = evaluation.Limitations || evaluation.limitations || '';
+        const justification = evaluation.Justification || evaluation.justification || '';
 
-        if (!kpiRecord) {
-          console.warn(`[Evaluation] Unknown KPI code: ${kpiCode}`);
+        if (!kpiCode) {
+          console.warn(`[Evaluation] ⚠️ Skipping evaluation with missing kpi_code`);
           continue;
         }
 
-        const evidenceFound = evalItem.evidence_found === true;
-        const confidence = Math.min(100, Math.max(0, Number(evalItem.confidence) || 0));
-        const facts = evalItem.facts || '';
-        const interpretation = evalItem.interpretation || '';
-        const limitations = evalItem.limitations || '';
-
-        // Determine status
-        let determinedStatus: EvaluationStatus;
-        if (confidence >= 70 && evidenceFound) {
-          determinedStatus = 'Strong';
-        } else if (confidence >= 40 && evidenceFound) {
-          determinedStatus = 'Emerging';
-        } else if (confidence >= 20 && evidenceFound) {
-          determinedStatus = 'Limited';
-        } else {
-          determinedStatus = 'Insufficient';
+        // Find KPI in database
+        const kpiRecord = allKPIs.find((kpi: any) => kpi.kpi_code.toLowerCase() === kpiCode.toLowerCase());
+        if (!kpiRecord) {
+          console.warn(`[Evaluation] ⚠️ KPI not found in database: ${kpiCode}`);
+          continue;
         }
 
-        // Count existing evidence for this KPI
-        const evidenceCount = evidenceFound ? 1 : 0;
+        // Determine final status based on evidence count and confidence
+        const determinedStatus = determineStatus(evidenceCount, confidence);
 
-        results.push({
+        // Build result
+        const result: EvaluationResult = {
           kpi_code: kpiCode,
           kpi_id: kpiRecord.kpi_id,
-          evidenceFound,
+          evidenceFound: evaluation['Evidence Found'] ?? evaluation.evidenceFound ?? false,
           status: determinedStatus,
-          confidence,
+          confidence: Math.min(100, Math.max(0, Number(confidence) || 0)),
+          evidenceCount: Math.min(3, Math.max(0, Number(evidenceCount) || 0)),
+          justification,
           facts,
-          interpretation,
-          limitations,
-          evidenceCount,
-        });
+          interpretation: interpretation || undefined,
+          limitations: limitations || undefined,
+        };
+
+        results.push(result);
 
         // Store evidence if status is not Insufficient
         if (determinedStatus !== 'Insufficient' && facts) {
           try {
             console.log(`[Evaluation] 💾 Storing evidence for KPI ${kpiCode} (status: ${determinedStatus}, confidence: ${confidence}%, count: ${evidenceCount})`);
-
+            
+            // Build detailed evidence text
+            let evidence_text = `[${determinedStatus}] Facts: ${facts}`;
+            if (interpretation) {
+              evidence_text += ` | Interpretation: ${interpretation}`;
+            }
+            if (limitations) {
+              evidence_text += ` | Limitations: ${limitations}`;
+            }
+            evidence_text += ` | Confidence: ${confidence}%`;
+            
             const evidence = await insert('evidences', {
               kpi_id: kpiRecord.kpi_id,
-              lecture_id: lectureId || null,
-              status: determinedStatus,
-              facts: facts,
-              interpretation: interpretation || null,
-              limitations: limitations || null,
-              confidence: confidence,
+              file_id: fileId,
+              evidence_txt: evidence_text,
               start_time: slotStartTime,
               end_time: slotEndTime,
               created_at: now,
               updated_at: now,
             });
-            console.log(`[Evaluation] ✅ Evidence stored: evidence_id=${evidence.evidence_id}, status=${determinedStatus}, timeslot=${slotStartTime ?? 'N/A'}-${slotEndTime ?? 'N/A'}`);
+            console.log(`[Evaluation] ✅ Evidence stored: evidence_id=${evidence.id}, status=${determinedStatus}, timeslot=${slotStartTime?.toLocaleTimeString('ar-SA') ?? 'N/A'}-${slotEndTime?.toLocaleTimeString('ar-SA') ?? 'N/A'}`);
           } catch (err) {
             console.error(`[Evaluation] ⚠️ Failed to store evidence for ${kpiCode}:`, err);
           }
@@ -499,29 +586,24 @@ Rules:
       }
     }
 
-    console.log(`[Evaluation] Completed: ${results.length} KPIs evaluated`);
+    console.log(`[Evaluation] ✅ Evaluation complete: ${results.length} KPIs processed, ${results.filter(r => r.status !== 'Insufficient').length} evidence records created`);
     return results;
   } catch (err) {
-    console.error(`[Evaluation] Error:`, err);
+    console.error(`[Evaluation] ❌ Fatal evaluation error:`, err);
     throw err;
   }
 };
 
 /**
- * Get evaluation results (evidences) for a specific file
+ * Get evaluation results for a specific file
  */
 export const getEvaluationResults = async (fileId: number) => {
   const query = `
     SELECT
-      e.evidence_id,
+      e.id as evidence_id,
       e.kpi_id,
-      e.lecture_id,
-      l.file_id,
-      e.status,
-      e.facts,
-      e.interpretation,
-      e.limitations,
-      e.confidence,
+      e.file_id,
+      e.evidence_txt,
       e.start_time,
       e.end_time,
       e.created_at,
@@ -531,9 +613,8 @@ export const getEvaluationResults = async (fileId: number) => {
       d.domain_name
     FROM evidences e
     JOIN kpis k ON e.kpi_id = k.kpi_id
-    LEFT JOIN domains d ON k.domain_id = d.domain_id
-    LEFT JOIN lecture l ON e.lecture_id = l.lecture_id
-    WHERE l.file_id = $1
+    LEFT JOIN kpi_domains d ON k.domain_id = d.domain_id
+    WHERE e.file_id = $1
     ORDER BY d.sort_order ASC, k.kpi_code ASC
   `;
   return await getMany(query, [fileId]);
@@ -578,7 +659,7 @@ export const generateEvaluationReport = async (fileId: number) => {
 export const testEvaluation = async (speechText: string, description?: string) => {
   try {
     console.log(`[Test Evaluation] Starting with text length: ${speechText.length}`);
-
+    
     // Create a temporary file record for testing
     const tempSoundFile = await insert('sound_files', {
       filename: description || 'test_evaluation.txt',
@@ -617,7 +698,6 @@ export const getEvaluationsWithFilters = async (options: {
   status?: string;
   domain?: string;
   fileId?: number;
-  lectureId?: number;
   orderBy?: 'date' | 'domain' | 'status';
   orderDirection?: 'ASC' | 'DESC';
 } = {}) => {
@@ -628,7 +708,6 @@ export const getEvaluationsWithFilters = async (options: {
     status = '',
     domain = '',
     fileId = undefined,
-    lectureId = undefined,
     orderBy = 'date',
     orderDirection = 'DESC',
   } = options;
@@ -636,15 +715,10 @@ export const getEvaluationsWithFilters = async (options: {
   try {
     let query = `
       SELECT
-        e.evidence_id,
+        e.id as evidence_id,
         e.kpi_id,
-        e.lecture_id,
-        l.file_id,
-        e.status,
-        e.facts,
-        e.interpretation,
-        e.limitations,
-        e.confidence,
+        e.file_id,
+        e.evidence_txt,
         e.start_time,
         e.end_time,
         e.created_at,
@@ -655,30 +729,23 @@ export const getEvaluationsWithFilters = async (options: {
         s.filename
       FROM evidences e
       JOIN kpis k ON e.kpi_id = k.kpi_id
-      LEFT JOIN domains d ON k.domain_id = d.domain_id
-      LEFT JOIN lecture l ON e.lecture_id = l.lecture_id
-      LEFT JOIN sound_files s ON l.file_id = s.file_id
+      LEFT JOIN kpi_domains d ON k.domain_id = d.domain_id
+      LEFT JOIN sound_files s ON e.file_id = s.file_id
       WHERE 1=1
     `;
 
     const params: any[] = [];
 
-    // File ID filter (via lecture)
+    // File ID filter
     if (fileId) {
-      query += ` AND l.file_id = $${params.length + 1}`;
+      query += ` AND e.file_id = $${params.length + 1}`;
       params.push(fileId);
-    }
-
-    // Lecture ID filter
-    if (lectureId) {
-      query += ` AND e.lecture_id = $${params.length + 1}`;
-      params.push(lectureId);
     }
 
     // Status filter
     if (status) {
-      query += ` AND e.status = $${params.length + 1}`;
-      params.push(status);
+      query += ` AND e.evidence_txt LIKE $${params.length + 1}`;
+      params.push(`[${status}]%`);
     }
 
     // Domain filter
@@ -687,17 +754,17 @@ export const getEvaluationsWithFilters = async (options: {
       params.push(domain);
     }
 
-    // Search filter
+    // Search filter (in evidence or KPI name)
     if (search) {
-      query += ` AND (e.facts ILIKE $${params.length + 1} OR e.interpretation ILIKE $${params.length + 2} OR k.kpi_name ILIKE $${params.length + 3})`;
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      query += ` AND (e.evidence_txt ILIKE $${params.length + 1} OR k.kpi_name ILIKE $${params.length + 2})`;
+      params.push(`%${search}%`, `%${search}%`);
     }
 
     // Order by
     const orderByMap: { [key: string]: string } = {
       date: 'e.created_at',
       domain: 'd.domain_code',
-      status: 'e.status',
+      status: 'e.evidence_txt',
     };
 
     query += ` ORDER BY ${orderByMap[orderBy] || orderByMap.date} ${orderDirection}`;
@@ -710,32 +777,27 @@ export const getEvaluationsWithFilters = async (options: {
       SELECT COUNT(*) as total
       FROM evidences e
       JOIN kpis k ON e.kpi_id = k.kpi_id
-      LEFT JOIN domains d ON k.domain_id = d.domain_id
-      LEFT JOIN lecture l ON e.lecture_id = l.lecture_id
-      LEFT JOIN sound_files s ON l.file_id = s.file_id
+      LEFT JOIN kpi_domains d ON k.domain_id = d.domain_id
+      LEFT JOIN sound_files s ON e.file_id = s.file_id
       WHERE 1=1
     `;
 
     const countParams: any[] = [];
     if (fileId) {
-      countQuery += ` AND l.file_id = $${countParams.length + 1}`;
+      countQuery += ` AND e.file_id = $${countParams.length + 1}`;
       countParams.push(fileId);
     }
-    if (lectureId) {
-      countQuery += ` AND e.lecture_id = $${countParams.length + 1}`;
-      countParams.push(lectureId);
-    }
     if (status) {
-      countQuery += ` AND e.status = $${countParams.length + 1}`;
-      countParams.push(status);
+      countQuery += ` AND e.evidence_txt LIKE $${countParams.length + 1}`;
+      countParams.push(`[${status}]%`);
     }
     if (domain) {
       countQuery += ` AND d.domain_code = $${countParams.length + 1}`;
       countParams.push(domain);
     }
     if (search) {
-      countQuery += ` AND (e.facts ILIKE $${countParams.length + 1} OR e.interpretation ILIKE $${countParams.length + 2} OR k.kpi_name ILIKE $${countParams.length + 3})`;
-      countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      countQuery += ` AND (e.evidence_txt ILIKE $${countParams.length + 1} OR k.kpi_name ILIKE $${countParams.length + 2})`;
+      countParams.push(`%${search}%`, `%${search}%`);
     }
 
     const countResult = await getOne(countQuery, countParams);
@@ -781,9 +843,9 @@ export const exportEvaluationToJSON = async (fileId: number) => {
         report,
         summary: {
           totalEvidences: evaluation.length,
-          strongCount: evaluation.filter((e: any) => e.status === 'Strong').length,
-          emergingCount: evaluation.filter((e: any) => e.status === 'Emerging').length,
-          limitedCount: evaluation.filter((e: any) => e.status === 'Limited').length,
+          strongCount: evaluation.filter((e: any) => e.evidence_txt?.includes('[Strong]')).length,
+          emergingCount: evaluation.filter((e: any) => e.evidence_txt?.includes('[Emerging]')).length,
+          limitedCount: evaluation.filter((e: any) => e.evidence_txt?.includes('[Limited]')).length,
         },
       },
     };
@@ -802,10 +864,10 @@ export const generateComprehensiveReport = async (fileId: number) => {
     const report = await generateEvaluationReport(fileId);
 
     // Calculate statistics
-    const strongCount = evaluations.filter((e: any) => e.status === 'Strong').length;
-    const emergingCount = evaluations.filter((e: any) => e.status === 'Emerging').length;
-    const limitedCount = evaluations.filter((e: any) => e.status === 'Limited').length;
-    const insufficientCount = evaluations.filter((e: any) => e.status === 'Insufficient').length;
+    const strongCount = evaluations.filter((e: any) => e.evidence_txt?.includes('[Strong]')).length;
+    const emergingCount = evaluations.filter((e: any) => e.evidence_txt?.includes('[Emerging]')).length;
+    const limitedCount = evaluations.filter((e: any) => e.evidence_txt?.includes('[Limited]')).length;
+    const insufficientCount = evaluations.filter((e: any) => e.evidence_txt?.includes('[Insufficient]')).length;
 
     // Calculate percentages
     const total = evaluations.length || 1;

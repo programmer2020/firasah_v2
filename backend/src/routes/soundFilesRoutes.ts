@@ -15,11 +15,10 @@ import {
   deleteSoundFile,
   getSoundFilesByCreator,
 } from '../services/soundFilesService.js';
-import { transcribeAndSave, convertVideoToAudio, getSpeechByFileId, getFailedFragments, retryFailedFragment, synchronizeLectureRecordsForFile } from '../services/speechService.js';
+import { transcribeAndSave, convertVideoToAudio, getSpeechByFileId, retranscribePendingFragments } from '../services/speechService.js';
 import { getProgress, addSSEClient, updateProgress } from '../services/progressService.js';
 import { getEvaluationResults, generateEvaluationReport, testEvaluation, getEvaluationsWithFilters, exportEvaluationToJSON, generateComprehensiveReport } from '../services/evaluationsService.js';
 import { getMany, executeQuery } from '../helpers/database.js';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 // Configure multer for audio uploads
 const uploadDir = path.join(process.cwd(), 'uploads', 'audio');
@@ -96,7 +95,7 @@ const router = Router();
  *       400:
  *         description: Invalid file or missing required fields
  */
-router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequest, res: Response) => {
+router.post('/upload', upload.single('file'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -105,7 +104,7 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
       });
     }
 
-    const createdBy = req.user?.email || String(req.user?.user_id || '');
+    const userId = (req as any).user?.userId || 'anonymous';
     const classId = (req.body as any).class_id ? Number((req.body as any).class_id) : undefined;
     const dayOfWeek = (req.body as any).day_of_week || undefined;
     const slotDate = (req.body as any).slot_date || undefined;
@@ -131,11 +130,8 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
     const soundFile = await createSoundFile({
       filename: decodedFilename,
       filepath: relativePath,
-      createdBy,
+      createdBy: userId,
       note: (req.body as any).note || null,
-      class_id: classId ?? null,
-      day_of_week: dayOfWeek ?? null,
-      slot_date: slotDate ?? null,
     });
 
     if (isText) {
@@ -144,12 +140,6 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
       const textContent = fs.readFileSync(req.file.path, 'utf-8');
       const { saveFragment } = await import('../services/speechService.js');
       await saveFragment(soundFile.file_id, textContent, 'ar', null, 0, 0, 1);
-      await synchronizeLectureRecordsForFile(soundFile.file_id, {
-        classId: classId ?? undefined,
-        dayOfWeek: dayOfWeek ?? undefined,
-        slotDate: slotDate ?? undefined,
-        preferredLanguage: 'ar',
-      });
       updateProgress(soundFile.file_id, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
       console.log(`[Upload] Text file saved to fragments table for file ${soundFile.file_id}`);
 
@@ -276,46 +266,6 @@ router.get('/', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: error instanceof Error ? error.message : 'Failed to retrieve sound files',
-    });
-  }
-});
-
-router.get('/fragments/failed', async (req: Request, res: Response) => {
-  try {
-    const fragments = await getFailedFragments();
-    res.status(200).json({
-      success: true,
-      message: 'Failed fragments retrieved successfully',
-      data: fragments,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error instanceof Error ? error.message : 'Failed to retrieve failed fragments',
-    });
-  }
-});
-
-router.post('/fragments/:fragmentId/retry-manual', async (req: Request, res: Response) => {
-  try {
-    const fragmentId = parseInt(req.params.fragmentId as string);
-    if (!fragmentId || Number.isNaN(fragmentId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid fragment ID',
-      });
-    }
-
-    const fragment = await retryFailedFragment(fragmentId);
-    res.status(200).json({
-      success: true,
-      message: 'Fragment retranscribed successfully',
-      data: fragment,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error instanceof Error ? error.message : 'Failed to retry fragment transcription',
     });
   }
 });
@@ -460,7 +410,7 @@ router.get('/:id/fragments', async (req: Request, res: Response) => {
     const fragments = await getMany(`
       SELECT * FROM fragments
       WHERE file_id = $1
-      ORDER BY fragment_order ASC
+      ORDER BY slot_order ASC
     `, [fileId]);
 
     res.status(200).json({
@@ -819,6 +769,50 @@ router.post('/:id/retranscribe', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: error instanceof Error ? error.message : 'Failed to start re-transcription',
+    });
+  }
+});
+
+/**
+ * POST /api/sound-files/:id/retranscribe-pending
+ * Re-transcribe only [transcription_pending] fragments without touching successful ones
+ */
+router.post('/:id/retranscribe-pending', async (req: Request, res: Response) => {
+  try {
+    const fileId = parseInt(req.params.id as string);
+    const soundFile = await getSoundFileById(fileId);
+    if (!soundFile) {
+      return res.status(404).json({ success: false, message: 'Sound file not found' });
+    }
+
+    let audioPath = path.isAbsolute(soundFile.filepath)
+      ? soundFile.filepath
+      : path.join(process.cwd(), soundFile.filepath);
+
+    // If video, convert to audio
+    const videoExts = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
+    if (videoExts.includes(path.extname(audioPath).toLowerCase())) {
+      const mp3Path = audioPath.replace(path.extname(audioPath), '.mp3');
+      audioPath = fs.existsSync(mp3Path) ? mp3Path : await convertVideoToAudio(audioPath);
+    }
+
+    const shouldDenoise = req.body.denoise === true;
+
+    // Run in background
+    retranscribePendingFragments(fileId, audioPath, shouldDenoise)
+      .then(({ retranscribed, failed }) =>
+        console.log(`[RetranscribePending] Done for file_id=${fileId}: ${retranscribed} ok, ${failed} failed`)
+      )
+      .catch((err) => console.error(`[RetranscribePending] Error for file_id=${fileId}:`, err));
+
+    res.status(200).json({
+      success: true,
+      message: 'Retranscription of pending fragments started in background',
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to start retranscription',
     });
   }
 });
