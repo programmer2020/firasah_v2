@@ -447,22 +447,22 @@ export const saveFragment = async (
       updated_at: new Date(),
     });
     
-    console.log(`[Fragment] ✅ Fragment saved successfully: id=${result.id}, file_id=${result.file_id}`);
+    console.log(`[Fragment] ✅ Fragment saved successfully: id=${result.fragment_id}, file_id=${result.file_id}`);
     
     // Automatically evaluate fragment against KPIs asynchronously
     if (isSuccessfulTranscript(transcript)) {
       setImmediate(async () => {
         try {
-          console.log(`[Evaluation] 🔄 Starting automatic KPI evaluation for fragment_id=${result.id}...`);
+          console.log(`[Evaluation] 🔄 Starting automatic KPI evaluation for fragment_id=${result.fragment_id}...`);
           const evaluations = await evaluateSpeechAgainstKPIs(
             transcript,
             fileId,
-            result.id,
+            result.fragment_id,
             undefined
           );
           console.log(`[Evaluation] ✅ Completed: Evaluated against all KPIs, found ${evaluations.length} evidence records`);
         } catch (evalErr) {
-          console.error(`[Evaluation] ⚠️ Non-blocking evaluation error for fragment_id=${result.id}:`, evalErr);
+          console.error(`[Evaluation] ⚠️ Non-blocking evaluation error for fragment_id=${result.fragment_id}:`, evalErr);
         }
       });
     }
@@ -716,7 +716,7 @@ export const synchronizeLectureRecordsForFile = async (
             time_slot_id = $2,
             updated_at = NOW()
         WHERE fragment_id = ANY($3::int[])
-      `, [lectureRecord.id, bucket.timeSlotId, fragmentIds]);
+      `, [lectureRecord.lecture_id, bucket.timeSlotId, fragmentIds]);
     }
   }
 
@@ -820,7 +820,7 @@ export const retryFailedFragment = async (fragmentId: number) => {
       last_error: null,
       last_transcription_attempt_at: new Date(),
       updated_at: new Date(),
-    }, 'id = $1', [fragmentId]);
+    }, 'fragment_id = $1', [fragmentId]);
 
     if (isSuccessfulTranscript(result.text)) {
       try {
@@ -860,7 +860,7 @@ export const retryFailedFragment = async (fragmentId: number) => {
       last_error: failureMessage,
       last_transcription_attempt_at: new Date(),
       updated_at: new Date(),
-    }, 'id = $1', [fragmentId]);
+    }, 'fragment_id = $1', [fragmentId]);
 
     updateProgress(fragment.file_id, {
       status: 'failed',
@@ -897,7 +897,7 @@ export const saveSpeech = async (
       updated_at: new Date(),
     });
     
-    console.log(`[Speech] ✅ Lecture saved successfully: id=${result.id}, file_id=${result.file_id}`);
+    console.log(`[Speech] ✅ Lecture saved successfully: id=${result.lecture_id}, file_id=${result.file_id}`);
     
     // Automatically evaluate lecture against KPIs asynchronously
     // Do not await - let it process in background without delaying the response
@@ -1140,7 +1140,7 @@ export const transcribeAndSave = async (
         }
       );
 
-      console.log(`[Speech] ✅ Fragment ${slotOrder} saved: fragment_id=${fragment.fragment_id}`);
+      console.log(`[Speech] ✅ Fragment ${slotOrder} saved: id=${fragment.fragment_id}`);
       results.push(fragment);
     } catch (err) {
       console.error(`[Speech] ❌ Error processing fragment ${slotOrder}:`, err);
@@ -1162,7 +1162,7 @@ export const transcribeAndSave = async (
             lastTranscriptionAttemptAt: new Date(),
           }
         );
-        console.log(`[Speech] ⚠️ Fragment ${slotOrder} saved as failed: fragment_id=${fragment.fragment_id}`);
+        console.log(`[Speech] ⚠️ Fragment ${slotOrder} saved as failed: id=${fragment.fragment_id}`);
         results.push(fragment);
       } catch (saveErr) {
         console.error(`[Speech] ❌ Failed to save placeholder for fragment ${slotOrder}:`, saveErr);

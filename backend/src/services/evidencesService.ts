@@ -25,13 +25,17 @@ export const getAllEvidences = async () => {
         e.evidence_id,
         e.kpi_id,
         e.lecture_id,
+        l.file_id,
         e.start_time,
         e.end_time,
         e.evidence_txt,
         e.created_at,
-        k.kpi_name
+        k.kpi_name,
+        s.filename
       FROM evidences e
       LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
+      LEFT JOIN lecture l ON e.lecture_id = l.lecture_id
+      LEFT JOIN sound_files s ON l.file_id = s.file_id
       ORDER BY e.created_at DESC
     `;
     return await getMany(query);
@@ -53,13 +57,17 @@ export const getEvidenceById = async (evidenceId: number) => {
         e.evidence_id,
         e.kpi_id,
         e.lecture_id,
+        l.file_id,
         e.start_time,
         e.end_time,
         e.evidence_txt,
         e.created_at,
-        k.kpi_name
+        k.kpi_name,
+        s.filename
       FROM evidences e
       LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
+      LEFT JOIN lecture l ON e.lecture_id = l.lecture_id
+      LEFT JOIN sound_files s ON l.file_id = s.file_id
       WHERE e.evidence_id = $1
     `;
     return await getOne(query, [evidenceId]);
@@ -146,13 +154,17 @@ export const getEvidencesByKPI = async (kpiId: number) => {
         e.evidence_id,
         e.kpi_id,
         e.lecture_id,
+        l.file_id,
         e.start_time,
         e.end_time,
         e.evidence_txt,
         e.created_at,
-        k.kpi_name
+        k.kpi_name,
+        s.filename
       FROM evidences e
       LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
+      LEFT JOIN lecture l ON e.lecture_id = l.lecture_id
+      LEFT JOIN sound_files s ON l.file_id = s.file_id
       WHERE e.kpi_id = $1
       ORDER BY e.created_at DESC
     `;
@@ -175,19 +187,56 @@ export const getEvidencesByLecture = async (lectureId: number) => {
         e.evidence_id,
         e.kpi_id,
         e.lecture_id,
+        l.file_id,
         e.start_time,
         e.end_time,
         e.evidence_txt,
         e.created_at,
-        k.kpi_name
+        k.kpi_name,
+        s.filename
       FROM evidences e
       LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
+      LEFT JOIN lecture l ON e.lecture_id = l.lecture_id
+      LEFT JOIN sound_files s ON l.file_id = s.file_id
       WHERE e.lecture_id = $1
       ORDER BY e.created_at DESC
     `;
     return await getMany(query, [lectureId]);
   } catch (error) {
     console.error('Error fetching evidences by lecture:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get evidences by file ID (via lecture join)
+ * @param fileId File ID
+ * @returns Promise with array of evidences
+ */
+export const getEvidencesByFile = async (fileId: number) => {
+  try {
+    const query = `
+      SELECT
+        e.evidence_id,
+        e.kpi_id,
+        e.lecture_id,
+        l.file_id,
+        e.start_time,
+        e.end_time,
+        e.evidence_txt,
+        e.created_at,
+        k.kpi_name,
+        s.filename
+      FROM evidences e
+      LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
+      LEFT JOIN lecture l ON e.lecture_id = l.lecture_id
+      LEFT JOIN sound_files s ON l.file_id = s.file_id
+      WHERE l.file_id = $1
+      ORDER BY e.created_at DESC
+    `;
+    return await getMany(query, [fileId]);
+  } catch (error) {
+    console.error('Error fetching evidences by file:', error);
     throw error;
   }
 };

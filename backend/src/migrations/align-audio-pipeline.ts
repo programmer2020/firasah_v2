@@ -16,7 +16,7 @@ async function run() {
 
   await executeQuery(`
     ALTER TABLE IF EXISTS fragments
-      ADD COLUMN IF NOT EXISTS lecture_id INTEGER REFERENCES lecture(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS lecture_id INTEGER REFERENCES lecture(lecture_id) ON DELETE CASCADE,
       ADD COLUMN IF NOT EXISTS time_slot_id INTEGER REFERENCES section_time_slots(time_slot_id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS fragment_order INTEGER,
       ADD COLUMN IF NOT EXISTS start_seconds DECIMAL(10, 2),

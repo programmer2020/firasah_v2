@@ -14,7 +14,7 @@ const openai = new OpenAI({
 });
 
 interface FragmentWithOrder {
-  id: number;
+  fragment_id: number;
   fragment_order: number;
   fragment_path: string;
   lecture_id: number;
@@ -292,7 +292,7 @@ export const getLectureWithTranscript = async (lectureId: number): Promise<any> 
     FROM lecture l
     JOIN sound_files sf ON l.file_id = sf.file_id
     LEFT JOIN section_time_slots ts ON l.time_slot_id = ts.time_slot_id
-    WHERE l.id = $1
+    WHERE l.lecture_id = $1
   `;
   return await getOne(query, [lectureId]);
 };
@@ -307,7 +307,7 @@ export const getFileTranscriptions = async (fileId: number): Promise<any[]> => {
     JOIN sound_files sf ON l.file_id = sf.file_id
     LEFT JOIN section_time_slots ts ON l.time_slot_id = ts.time_slot_id
     WHERE l.file_id = $1
-    ORDER BY l.id ASC
+    ORDER BY l.lecture_id ASC
   `;
   return await getMany(query, [fileId]);
 };
@@ -317,7 +317,7 @@ export const getFileTranscriptions = async (fileId: number): Promise<any[]> => {
  */
 export const getTranscriptionStatus = async (lectureId: number): Promise<any> => {
   const query = `
-    SELECT l.id, l.file_id, l.transcript, l.language, 
+    SELECT l.lecture_id, l.file_id, l.transcript, l.language,
            (SELECT COUNT(*) FROM fragments WHERE lecture_id = $1) as fragment_count,
            (SELECT SUM(duration) FROM fragments WHERE lecture_id = $1)::DECIMAL as total_duration,
            CASE 
@@ -326,7 +326,7 @@ export const getTranscriptionStatus = async (lectureId: number): Promise<any> =>
            END as status,
            l.created_at, l.updated_at
     FROM lecture l
-    WHERE l.id = $1
+    WHERE l.lecture_id = $1
   `;
   return await getOne(query, [lectureId]);
 };
@@ -338,7 +338,7 @@ export const clearLectureTranscript = async (lectureId: number): Promise<any> =>
   const query = `
     UPDATE lecture
     SET transcript = NULL, language = NULL, updated_at = NOW()
-    WHERE id = $1
+    WHERE lecture_id = $1
     RETURNING *
   `;
   return await getOne(query, [lectureId]);

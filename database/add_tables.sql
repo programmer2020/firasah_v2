@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS kpis (
 
 -- Create evidences table
 CREATE TABLE IF NOT EXISTS evidences (
-  id SERIAL PRIMARY KEY,
+  evidence_id SERIAL PRIMARY KEY,
   kpi_id INTEGER NOT NULL REFERENCES kpis(kpi_id) ON DELETE CASCADE,
   lecture_id INTEGER NOT NULL REFERENCES lecture(lecture_id) ON DELETE CASCADE,
   start_time TIMESTAMP,
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS evidences (
 
 -- Create evaluations table
 CREATE TABLE IF NOT EXISTS evaluations (
-  id SERIAL PRIMARY KEY,
+  evaluation_id SERIAL PRIMARY KEY,
   file_id INTEGER NOT NULL REFERENCES sound_files(file_id) ON DELETE CASCADE,
   kpi_id INTEGER NOT NULL REFERENCES kpis(kpi_id) ON DELETE CASCADE,
   evidence_count INTEGER DEFAULT 0,
@@ -112,7 +112,7 @@ COMMENT ON COLUMN kpis.kpi_description IS 'Detailed description of the KPI';
 COMMENT ON COLUMN kpis.createdBy IS 'User who created the KPI';
 COMMENT ON COLUMN kpis.note IS 'Additional notes about the KPI';
 
-COMMENT ON COLUMN evidences.id IS 'Unique identifier for evidence';
+COMMENT ON COLUMN evidences.evidence_id IS 'Unique identifier for evidence';
 COMMENT ON COLUMN evidences.kpi_id IS 'Foreign key to KPIs table';
 COMMENT ON COLUMN evidences.lecture_id IS 'Foreign key to lecture table';
 COMMENT ON COLUMN evidences.start_time IS 'Start time of the evidence';

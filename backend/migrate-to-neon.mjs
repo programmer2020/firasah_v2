@@ -60,7 +60,7 @@ FIRASAAI DATABASE CORE STRUCTURE - NEON MIGRATION
 
 -- users table
 CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
+    user_id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     name VARCHAR(255),
@@ -213,7 +213,7 @@ CREATE TABLE IF NOT EXISTS sound_files (
 
 -- lecture table
 CREATE TABLE IF NOT EXISTS lecture (
-    id SERIAL PRIMARY KEY,
+    lecture_id SERIAL PRIMARY KEY,
     file_id INTEGER NOT NULL REFERENCES sound_files(file_id) ON DELETE CASCADE,
     time_slot_id INTEGER REFERENCES section_time_slots(time_slot_id) ON DELETE SET NULL,
     transcript TEXT,
@@ -226,9 +226,9 @@ CREATE TABLE IF NOT EXISTS lecture (
 
 -- fragments table
 CREATE TABLE IF NOT EXISTS fragments (
-    id SERIAL PRIMARY KEY,
+    fragment_id SERIAL PRIMARY KEY,
     file_id INTEGER NOT NULL REFERENCES sound_files(file_id) ON DELETE CASCADE,
-    lecture_id INTEGER REFERENCES lecture(id) ON DELETE CASCADE,
+    lecture_id INTEGER REFERENCES lecture(lecture_id) ON DELETE CASCADE,
     time_slot_id INTEGER REFERENCES section_time_slots(time_slot_id) ON DELETE SET NULL,
     fragment_order INTEGER NOT NULL,
     start_seconds DECIMAL(10, 2) NOT NULL,
@@ -243,7 +243,7 @@ CREATE TABLE IF NOT EXISTS fragments (
 
 -- evidences table
 CREATE TABLE IF NOT EXISTS evidences (
-    id SERIAL PRIMARY KEY,
+    evidence_id SERIAL PRIMARY KEY,
     kpi_id INTEGER NOT NULL REFERENCES kpis(kpi_id) ON DELETE CASCADE,
     file_id INTEGER NOT NULL REFERENCES sound_files(file_id) ON DELETE CASCADE,
     start_time TIMESTAMP,
@@ -255,7 +255,7 @@ CREATE TABLE IF NOT EXISTS evidences (
 
 -- evaluations table
 CREATE TABLE IF NOT EXISTS evaluations (
-    id SERIAL PRIMARY KEY,
+    evaluation_id SERIAL PRIMARY KEY,
     file_id INTEGER NOT NULL REFERENCES sound_files(file_id) ON DELETE CASCADE,
     kpi_id INTEGER NOT NULL REFERENCES kpis(kpi_id) ON DELETE CASCADE,
     evidence_count INTEGER DEFAULT 0,

@@ -1,8 +1,8 @@
 -- Create fragments table for storing 15-minute audio fragments
 CREATE TABLE IF NOT EXISTS fragments (
-    id SERIAL PRIMARY KEY,
+    fragment_id SERIAL PRIMARY KEY,
     file_id INTEGER NOT NULL REFERENCES sound_files(file_id) ON DELETE CASCADE,
-    lecture_id INTEGER REFERENCES lecture(id) ON DELETE CASCADE,
+    lecture_id INTEGER REFERENCES lecture(lecture_id) ON DELETE CASCADE,
     time_slot_id INTEGER REFERENCES section_time_slots(time_slot_id) ON DELETE SET NULL,
     fragment_order INTEGER NOT NULL,
     start_seconds DECIMAL(10, 2) NOT NULL,

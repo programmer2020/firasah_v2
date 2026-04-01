@@ -105,7 +105,7 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
       });
     }
 
-    const createdBy = req.user?.email || String(req.user?.id || '');
+    const createdBy = req.user?.email || String(req.user?.user_id || '');
     const classId = (req.body as any).class_id ? Number((req.body as any).class_id) : undefined;
     const dayOfWeek = (req.body as any).day_of_week || undefined;
     const slotDate = (req.body as any).slot_date || undefined;

@@ -11,7 +11,7 @@ import { insert, getMany, getOne } from '../helpers/database.js';
 
 // Interface for fragment metadata
 interface Fragment {
-  id?: number;
+  fragment_id?: number;
   file_id: number;
   lecture_id?: number;
   time_slot_id?: number;
@@ -130,7 +130,7 @@ export const createFragmentRecords = async (
         updated_at: new Date(),
       });
 
-      console.log(`[Fragment] ✅ Fragment record ${fragment.fragment_order} created: fragment_id=${result.fragment_id}`);
+      console.log(`[Fragment] ✅ Fragment record ${fragment.fragment_order} created: id=${result.fragment_id}`);
       createdFragments.push(result);
     } catch (err) {
       console.error(`[Fragment] ❌ Failed to create fragment record ${fragment.fragment_order}:`, err);

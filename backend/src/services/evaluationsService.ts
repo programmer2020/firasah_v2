@@ -387,15 +387,33 @@ const getAllKPIsForEvaluation = async () => {
  * Main automatic evaluation function
  * Sends speech to OpenAI for KPI evaluation
  * Stores evidence records for KPIs that are found
+ *
+ * @param speechText  The transcript text to evaluate
+ * @param fileId      Sound file ID (used to look up lecture when lectureId is not provided)
+ * @param lectureId   Lecture ID to store evidence against (optional — resolved from fileId if omitted)
  */
 export const evaluateSpeechAgainstKPIs = async (
   speechText: string,
   fileId: number,
-  startTime?: string,
-  endTime?: string
+  lectureId?: number,
+  _unused?: any
 ): Promise<EvaluationResult[]> => {
   try {
-    console.log(`[Evaluation] Starting evaluation for file_id=${fileId}, text_length=${speechText.length}`);
+    console.log(`[Evaluation] Starting evaluation for file_id=${fileId}, lecture_id=${lectureId ?? 'auto'}, text_length=${speechText.length}`);
+
+    // Resolve lecture_id if not provided
+    let resolvedLectureId: number | null = lectureId ?? null;
+    if (!resolvedLectureId) {
+      try {
+        const lectureRow = await getOne(`SELECT lecture_id FROM lecture WHERE file_id = $1 ORDER BY slot_order ASC LIMIT 1`, [fileId]);
+        resolvedLectureId = lectureRow?.lecture_id ?? null;
+        if (resolvedLectureId) {
+          console.log(`[Evaluation] Resolved lecture_id=${resolvedLectureId} from file_id=${fileId}`);
+        }
+      } catch (err) {
+        console.warn(`[Evaluation] ⚠️ Could not resolve lecture_id from file_id=${fileId}:`, err);
+      }
+    }
 
     // Get timeslot information for this file
     let slotStartTime: Date | null = null;
@@ -605,7 +623,7 @@ ${kpiReference}
             
             const evidence = await insert('evidences', {
               kpi_id: kpiRecord.kpi_id,
-              file_id: fileId,
+              lecture_id: resolvedLectureId,
               evidence_txt: evidence_text,
               start_time: slotStartTime,
               end_time: slotEndTime,
@@ -639,9 +657,10 @@ ${kpiReference}
 export const getEvaluationResults = async (fileId: number) => {
   const query = `
     SELECT
-      e.evidence_id,
+      e.evidence_id as evidence_id,
       e.kpi_id,
-      e.file_id,
+      e.lecture_id,
+      l.file_id,
       e.evidence_txt,
       e.start_time,
       e.end_time,
@@ -653,7 +672,8 @@ export const getEvaluationResults = async (fileId: number) => {
     FROM evidences e
     JOIN kpis k ON e.kpi_id = k.kpi_id
     LEFT JOIN kpi_domains d ON k.domain_id = d.domain_id
-    WHERE e.file_id = $1
+    LEFT JOIN lecture l ON e.lecture_id = l.lecture_id
+    WHERE l.file_id = $1
     ORDER BY d.sort_order ASC, k.kpi_code ASC
   `;
   return await getMany(query, [fileId]);
@@ -698,7 +718,7 @@ export const generateEvaluationReport = async (fileId: number) => {
 export const testEvaluation = async (speechText: string, description?: string) => {
   try {
     console.log(`[Test Evaluation] Starting with text length: ${speechText.length}`);
-    
+
     // Create a temporary file record for testing
     const tempSoundFile = await insert('sound_files', {
       filename: description || 'test_evaluation.txt',
@@ -709,8 +729,20 @@ export const testEvaluation = async (speechText: string, description?: string) =
 
     console.log(`[Test Evaluation] Created temp file: ${tempSoundFile.file_id}`);
 
+    // Create a temporary lecture record for testing
+    const tempLecture = await insert('lecture', {
+      file_id: tempSoundFile.file_id,
+      transcript: speechText,
+      language: 'ar',
+      slot_order: 1,
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+
+    console.log(`[Test Evaluation] Created temp lecture: ${tempLecture.lecture_id}`);
+
     // Run evaluation
-    const results = await evaluateSpeechAgainstKPIs(speechText, tempSoundFile.file_id);
+    const results = await evaluateSpeechAgainstKPIs(speechText, tempSoundFile.file_id, tempLecture.lecture_id);
 
     console.log(`[Test Evaluation] Evaluation results: ${results.length} KPIs`);
 
@@ -718,6 +750,7 @@ export const testEvaluation = async (speechText: string, description?: string) =
       success: true,
       message: 'تم اختبار التقييم بنجاح',
       fileId: tempSoundFile.file_id,
+      lectureId: tempLecture.lecture_id,
       results,
       timestamp: new Date(),
     };
@@ -754,9 +787,10 @@ export const getEvaluationsWithFilters = async (options: {
   try {
     let query = `
       SELECT
-        e.evidence_id,
+        e.evidence_id as evidence_id,
         e.kpi_id,
-        e.file_id,
+        e.lecture_id,
+        l.file_id,
         e.evidence_txt,
         e.start_time,
         e.end_time,
@@ -769,15 +803,16 @@ export const getEvaluationsWithFilters = async (options: {
       FROM evidences e
       JOIN kpis k ON e.kpi_id = k.kpi_id
       LEFT JOIN kpi_domains d ON k.domain_id = d.domain_id
-      LEFT JOIN sound_files s ON e.file_id = s.file_id
+      LEFT JOIN lecture l ON e.lecture_id = l.lecture_id
+      LEFT JOIN sound_files s ON l.file_id = s.file_id
       WHERE 1=1
     `;
 
     const params: any[] = [];
 
-    // File ID filter
+    // File ID filter (via lecture join)
     if (fileId) {
-      query += ` AND e.file_id = $${params.length + 1}`;
+      query += ` AND l.file_id = $${params.length + 1}`;
       params.push(fileId);
     }
 
@@ -817,13 +852,14 @@ export const getEvaluationsWithFilters = async (options: {
       FROM evidences e
       JOIN kpis k ON e.kpi_id = k.kpi_id
       LEFT JOIN kpi_domains d ON k.domain_id = d.domain_id
-      LEFT JOIN sound_files s ON e.file_id = s.file_id
+      LEFT JOIN lecture l ON e.lecture_id = l.lecture_id
+      LEFT JOIN sound_files s ON l.file_id = s.file_id
       WHERE 1=1
     `;
 
     const countParams: any[] = [];
     if (fileId) {
-      countQuery += ` AND e.file_id = $${countParams.length + 1}`;
+      countQuery += ` AND l.file_id = $${countParams.length + 1}`;
       countParams.push(fileId);
     }
     if (status) {
