@@ -84,11 +84,12 @@ const EvaluationDashboard = () => {
 
   // Filtered evaluations
   const filteredEvaluations = evaluations.filter((ev) => {
-    const matchesSearch = searchText === '' || 
+    const matchesSearch = searchText === '' ||
       ev.kpi_name?.toLowerCase().includes(searchText.toLowerCase()) ||
-      ev.evidence_txt?.toLowerCase().includes(searchText.toLowerCase());
-    
-    const matchesStatus = filterStatus === '' || ev.evidence_txt?.includes(`[${filterStatus}]`);
+      ev.facts?.toLowerCase().includes(searchText.toLowerCase()) ||
+      ev.interpretation?.toLowerCase().includes(searchText.toLowerCase());
+
+    const matchesStatus = filterStatus === '' || ev.status === filterStatus;
     
     return matchesSearch && matchesStatus;
   });
@@ -99,14 +100,14 @@ const EvaluationDashboard = () => {
   const paginatedEvaluations = filteredEvaluations.slice(startIndex, startIndex + itemsPerPage);
 
   // Get status color and icon
-  const getStatusStyle = (evidenceText) => {
-    if (evidenceText?.includes('[Strong]')) {
+  const getStatusStyle = (status) => {
+    if (status === 'Strong') {
       return { color: '#10b981', label: 'قوي', bgColor: '#d1fae5' };
-    } else if (evidenceText?.includes('[Emerging]')) {
+    } else if (status === 'Emerging') {
       return { color: '#f59e0b', label: 'ناشئ', bgColor: '#fef3c7' };
-    } else if (evidenceText?.includes('[Limited]')) {
+    } else if (status === 'Limited') {
       return { color: '#ef4444', label: 'محدود', bgColor: '#fee2e2' };
-    } else if (evidenceText?.includes('[Insufficient]')) {
+    } else if (status === 'Insufficient') {
       return { color: '#9ca3af', label: 'غير كافي', bgColor: '#f3f4f6' };
     }
     return { color: '#6b7280', label: 'غير معروف', bgColor: '#f9fafb' };
@@ -236,7 +237,7 @@ const EvaluationDashboard = () => {
           <div className="evaluations-table">
             {paginatedEvaluations.length > 0 ? (
               paginatedEvaluations.map((ev, index) => {
-                const statusStyle = getStatusStyle(ev.evidence_txt);
+                const statusStyle = getStatusStyle(ev.status);
                 return (
                   <div key={ev.evidence_id} className="evaluation-item">
                     <div className="eval-index">{startIndex + index + 1}</div>
@@ -254,7 +255,12 @@ const EvaluationDashboard = () => {
                           {statusStyle.label}
                         </span>
                       </div>
-                      <div className="eval-text">{ev.evidence_txt}</div>
+                      <div className="eval-text">
+                        {ev.facts && <p><strong>الحقائق:</strong> {ev.facts}</p>}
+                        {ev.interpretation && <p><strong>التفسير:</strong> {ev.interpretation}</p>}
+                        {ev.limitations && <p><strong>القيود:</strong> {ev.limitations}</p>}
+                        {ev.confidence != null && <p><strong>الثقة:</strong> {ev.confidence}%</p>}
+                      </div>
                       <div className="eval-meta">
                         <span className="domain">{ev.domain_name}</span>
                         <span className="date">

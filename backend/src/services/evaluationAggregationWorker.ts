@@ -53,10 +53,7 @@ const getErrorMessage = (error: unknown): string => {
 };
 
 const SQL_CONFIDENCE_EXTRACT_EXPR = `
-  COALESCE(
-    ((regexp_match(COALESCE(e.evidence_txt, ''), 'Confidence:\\s*([0-9]+(?:\\.[0-9]+)?)%?', 'i'))[1])::numeric,
-    0
-  )
+  COALESCE(e.confidence, 0)
 `.trim();
 
 const sqlMarkExpression = (countExpr: string): string => `
@@ -93,12 +90,6 @@ export const ensureAggregationSchemaForCurrentDb = async (): Promise<void> => {
       ADD COLUMN IF NOT EXISTS iscalculated BOOLEAN NOT NULL DEFAULT FALSE;
     `);
 
-    // Add fragment_id column if it doesn't exist
-    await client.query(`
-      ALTER TABLE evidences
-      ADD COLUMN IF NOT EXISTS fragment_id INTEGER REFERENCES fragments(fragment_id) ON DELETE CASCADE;
-    `);
-
     await client.query(`
       ALTER TABLE evaluations
       ADD COLUMN IF NOT EXISTS avg_confidence NUMERIC(5, 2) NOT NULL DEFAULT 0,
@@ -133,11 +124,10 @@ export const ensureAggregationSchemaForCurrentDb = async (): Promise<void> => {
          OR kpi_score IS NULL;
     `);
 
-    // Safely create index, handling case where fragment_id column exists
+    // Create index for efficient aggregation queries
     await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_evidences_fragment_kpi_iscalculated
-      ON evidences(fragment_id, kpi_id, iscalculated)
-      WHERE fragment_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_evidences_lecture_kpi_iscalculated
+      ON evidences(lecture_id, kpi_id, iscalculated);
     `);
 
     // Merge duplicated evaluations rows before enforcing uniqueness.
@@ -188,17 +178,18 @@ export const ensureAggregationSchemaForCurrentDb = async (): Promise<void> => {
     `);
 
     // Reconcile evaluations from all evidence rows so legacy data also gets avg_confidence and kpi_score.
+    // Maps lecture_id → file_id via the lecture table for the evaluations table.
     await client.query(`
       WITH evidence_metrics AS (
         SELECT
-          COALESCE(f.file_id, e.file_id) AS file_id,
+          l.file_id,
           e.kpi_id,
           COUNT(*)::int AS evidence_count,
           ROUND(AVG(${SQL_CONFIDENCE_EXTRACT_EXPR})::numeric, 2) AS avg_confidence
         FROM evidences e
-        LEFT JOIN fragments f ON e.fragment_id = f.fragment_id
-        WHERE COALESCE(f.file_id, e.file_id) IS NOT NULL
-        GROUP BY COALESCE(f.file_id, e.file_id), e.kpi_id
+        JOIN lecture l ON l.lecture_id = e.lecture_id
+        WHERE e.lecture_id IS NOT NULL
+        GROUP BY l.file_id, e.kpi_id
       )
       INSERT INTO evaluations (
         file_id,
@@ -227,6 +218,42 @@ export const ensureAggregationSchemaForCurrentDb = async (): Promise<void> => {
         kpi_score = EXCLUDED.kpi_score,
         mark = EXCLUDED.mark,
         updated_at = NOW();
+    `);
+
+    // Populate lecture_kpi table: aggregate evidences directly by (lecture_id, kpi_id)
+    await client.query(`
+      WITH lecture_evidence_metrics AS (
+        SELECT
+          e.lecture_id,
+          e.kpi_id,
+          COUNT(*)::int AS evidence_count,
+          ROUND(AVG(${SQL_CONFIDENCE_EXTRACT_EXPR})::numeric, 2) AS avg_confidence
+        FROM evidences e
+        WHERE e.lecture_id IS NOT NULL
+        GROUP BY e.lecture_id, e.kpi_id
+      )
+      INSERT INTO lecture_kpi (
+        lecture_id,
+        kpi_id,
+        avg_confidence,
+        evidence_count,
+        score,
+        created_at
+      )
+      SELECT
+        lem.lecture_id,
+        lem.kpi_id,
+        COALESCE(lem.avg_confidence, 0),
+        lem.evidence_count,
+        ${sqlKpiScoreExpression('COALESCE(lem.avg_confidence, 0)', 'lem.evidence_count')},
+        NOW()
+      FROM lecture_evidence_metrics lem
+      ON CONFLICT (lecture_id, kpi_id)
+      DO UPDATE SET
+        avg_confidence = EXCLUDED.avg_confidence,
+        evidence_count = EXCLUDED.evidence_count,
+        score = EXCLUDED.score,
+        created_at = NOW();
     `);
   });
 
@@ -264,11 +291,12 @@ export const ensureAggregationFunctionForCurrentDb = async (): Promise<void> => 
         WITH pending AS (
           SELECT
             e.evidence_id,
-            COALESCE(f.file_id, e.file_id) AS file_id,
+            e.lecture_id,
+            l.file_id,
             e.kpi_id,
             ${SQL_CONFIDENCE_EXTRACT_EXPR} AS confidence
           FROM evidences e
-          LEFT JOIN fragments f ON e.fragment_id = f.fragment_id
+          LEFT JOIN lecture l ON l.lecture_id = e.lecture_id
           WHERE COALESCE(e.iscalculated, FALSE) = FALSE
           FOR UPDATE OF e SKIP LOCKED
         ),
@@ -332,6 +360,57 @@ export const ensureAggregationFunctionForCurrentDb = async (): Promise<void> => 
             mark = ${sqlMarkExpression('COALESCE(evaluations.evidence_count, 0) + EXCLUDED.evidence_count')},
             updated_at = NOW()
           RETURNING file_id, kpi_id
+        ),
+        lecture_grouped AS (
+          SELECT
+            lecture_id,
+            kpi_id,
+            COUNT(*)::int AS pending_count,
+            ROUND(AVG(confidence)::numeric, 2) AS pending_avg_confidence
+          FROM pending
+          WHERE lecture_id IS NOT NULL
+          GROUP BY lecture_id, kpi_id
+        ),
+        lecture_upserted AS (
+          INSERT INTO lecture_kpi (
+            lecture_id,
+            kpi_id,
+            avg_confidence,
+            evidence_count,
+            score,
+            created_at
+          )
+          SELECT
+            lg.lecture_id,
+            lg.kpi_id,
+            COALESCE(lg.pending_avg_confidence, 0),
+            lg.pending_count,
+            ${sqlKpiScoreExpression('COALESCE(lg.pending_avg_confidence, 0)', 'lg.pending_count')},
+            NOW()
+          FROM lecture_grouped lg
+          ON CONFLICT (lecture_id, kpi_id)
+          DO UPDATE SET
+            evidence_count = COALESCE(lecture_kpi.evidence_count, 0) + EXCLUDED.evidence_count,
+            avg_confidence = CASE
+              WHEN (COALESCE(lecture_kpi.evidence_count, 0) + EXCLUDED.evidence_count) > 0 THEN
+                ROUND((
+                  (COALESCE(lecture_kpi.avg_confidence, 0) * COALESCE(lecture_kpi.evidence_count, 0))
+                  + (COALESCE(EXCLUDED.avg_confidence, 0) * EXCLUDED.evidence_count)
+                ) / NULLIF(COALESCE(lecture_kpi.evidence_count, 0) + EXCLUDED.evidence_count, 0), 2)
+              ELSE 0
+            END,
+            score = ${sqlKpiScoreExpression(`
+              CASE
+                WHEN (COALESCE(lecture_kpi.evidence_count, 0) + EXCLUDED.evidence_count) > 0 THEN
+                  ROUND((
+                    (COALESCE(lecture_kpi.avg_confidence, 0) * COALESCE(lecture_kpi.evidence_count, 0))
+                    + (COALESCE(EXCLUDED.avg_confidence, 0) * EXCLUDED.evidence_count)
+                  ) / NULLIF(COALESCE(lecture_kpi.evidence_count, 0) + EXCLUDED.evidence_count, 0), 2)
+                ELSE 0
+              END
+            `, 'COALESCE(lecture_kpi.evidence_count, 0) + EXCLUDED.evidence_count')},
+            created_at = NOW()
+          RETURNING lecture_id, kpi_id
         ),
         marked AS (
           UPDATE evidences e

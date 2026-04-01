@@ -15,8 +15,8 @@ CREATE TABLE IF NOT EXISTS sound_files (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create kpi_domains table for teaching evaluation framework
-CREATE TABLE IF NOT EXISTS kpi_domains (
+-- Create domains table for teaching evaluation framework
+CREATE TABLE IF NOT EXISTS domains (
   domain_id SERIAL PRIMARY KEY,
   domain_code VARCHAR(20) NOT NULL UNIQUE COLLATE "C",
   domain_name VARCHAR(255) NOT NULL COLLATE "C",
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS kpi_domains (
 -- Create kpis table with domain reference
 CREATE TABLE IF NOT EXISTS kpis (
   kpi_id SERIAL PRIMARY KEY,
-  domain_id INTEGER REFERENCES kpi_domains(domain_id) ON DELETE CASCADE,
+  domain_id INTEGER REFERENCES domains(domain_id) ON DELETE CASCADE,
   kpi_code VARCHAR(20) COLLATE "C",
   kpi_name VARCHAR(255) NOT NULL COLLATE "C",
   kpi_description TEXT COLLATE "C",
@@ -45,12 +45,27 @@ CREATE TABLE IF NOT EXISTS evidences (
   evidence_id SERIAL PRIMARY KEY,
   kpi_id INTEGER NOT NULL REFERENCES kpis(kpi_id) ON DELETE CASCADE,
   lecture_id INTEGER NOT NULL REFERENCES lecture(lecture_id) ON DELETE CASCADE,
-  start_time TIMESTAMP,
-  end_time TIMESTAMP,
-  evidence_txt TEXT COLLATE "C",
+  start_time TIME,
+  end_time TIME,
+  status VARCHAR(50),
+  facts TEXT,
+  interpretation TEXT,
+  limitations TEXT,
+  confidence INTEGER,
   iscalculated BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create lecture_kpi table
+CREATE TABLE IF NOT EXISTS lecture_kpi (
+  lecture_id INTEGER NOT NULL REFERENCES lecture(lecture_id) ON DELETE CASCADE,
+  kpi_id INTEGER NOT NULL REFERENCES kpis(kpi_id) ON DELETE CASCADE,
+  avg_confidence NUMERIC,
+  evidence_count INTEGER DEFAULT 0,
+  score NUMERIC(5, 2) DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (lecture_id, kpi_id)
 );
 
 -- Create evaluations table
@@ -70,7 +85,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_sound_files_filename ON sound_files(filename);
 CREATE INDEX IF NOT EXISTS idx_sound_files_createdby ON sound_files(createdBy);
-CREATE INDEX IF NOT EXISTS idx_kpi_domains_code ON kpi_domains(domain_code);
+CREATE INDEX IF NOT EXISTS idx_domains_code ON domains(domain_code);
 CREATE INDEX IF NOT EXISTS idx_kpis_domain_id ON kpis(domain_id);
 CREATE INDEX IF NOT EXISTS idx_kpis_code ON kpis(kpi_code);
 CREATE INDEX IF NOT EXISTS idx_kpis_kpi_name ON kpis(kpi_name);
@@ -83,7 +98,7 @@ CREATE INDEX IF NOT EXISTS idx_evaluations_kpi_id ON evaluations(kpi_id);
 
 -- Add comments to tables
 COMMENT ON TABLE sound_files IS 'Stores audio file metadata for the application';
-COMMENT ON TABLE kpi_domains IS 'Teaching evaluation framework domains (8 domains)';
+COMMENT ON TABLE domains IS 'Teaching evaluation framework domains (8 domains)';
 COMMENT ON TABLE kpis IS 'Stores KPI (Key Performance Indicator) data with domain reference';
 COMMENT ON TABLE evidences IS 'Stores evidence records linking KPIs to sound files with time ranges';
 COMMENT ON TABLE evaluations IS 'Stores evaluation scores and evidence counts for KPIs and sound files';
@@ -98,11 +113,11 @@ COMMENT ON COLUMN sound_files.transcript IS 'Full transcript aggregated from all
 COMMENT ON COLUMN sound_files.transcript_language IS 'Detected or selected transcript language';
 COMMENT ON COLUMN sound_files.transcript_updated_at IS 'When the aggregated transcript was last rebuilt';
 
-COMMENT ON COLUMN kpi_domains.domain_id IS 'Unique identifier for teaching domain';
-COMMENT ON COLUMN kpi_domains.domain_code IS 'Domain code (D1-D8)';
-COMMENT ON COLUMN kpi_domains.domain_name IS 'Domain name in Arabic and English';
-COMMENT ON COLUMN kpi_domains.domain_description IS 'Description of the domain';
-COMMENT ON COLUMN kpi_domains.sort_order IS 'Order for display';
+COMMENT ON COLUMN domains.domain_id IS 'Unique identifier for teaching domain';
+COMMENT ON COLUMN domains.domain_code IS 'Domain code (D1-D8)';
+COMMENT ON COLUMN domains.domain_name IS 'Domain name in Arabic and English';
+COMMENT ON COLUMN domains.domain_description IS 'Description of the domain';
+COMMENT ON COLUMN domains.sort_order IS 'Order for display';
 
 COMMENT ON COLUMN kpis.kpi_id IS 'Unique identifier for KPI';
 COMMENT ON COLUMN kpis.domain_id IS 'Reference to KPI domain (foreign key)';

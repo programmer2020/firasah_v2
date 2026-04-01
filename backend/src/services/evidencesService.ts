@@ -8,10 +8,14 @@ import { getOne, getMany, insert, update, deleteRecord } from '../helpers/databa
 interface Evidence {
   evidence_id?: number;
   kpi_id: number;
-  file_id: number;
+  lecture_id: number;
   start_time?: string;
   end_time?: string;
-  evidence_txt?: string;
+  status?: string;
+  facts?: string;
+  interpretation?: string;
+  limitations?: string;
+  confidence?: number;
 }
 
 /**
@@ -24,16 +28,18 @@ export const getAllEvidences = async () => {
       SELECT
         e.evidence_id,
         e.kpi_id,
-        e.file_id,
-        TO_CHAR(e.start_time, 'HH24:MI:SS') as start_time,
-        TO_CHAR(e.end_time, 'HH24:MI:SS') as end_time,
-        e.evidence_txt,
+        e.lecture_id,
+        e.start_time,
+        e.end_time,
+        e.status,
+        e.facts,
+        e.interpretation,
+        e.limitations,
+        e.confidence,
         e.created_at,
-        k.kpi_name,
-        s.filename
+        k.kpi_name
       FROM evidences e
       LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
-      LEFT JOIN sound_files s ON e.file_id = s.file_id
       ORDER BY e.created_at DESC
     `;
     return await getMany(query);
@@ -54,16 +60,18 @@ export const getEvidenceById = async (evidenceId: number) => {
       SELECT
         e.evidence_id,
         e.kpi_id,
-        e.file_id,
-        TO_CHAR(e.start_time, 'HH24:MI:SS') as start_time,
-        TO_CHAR(e.end_time, 'HH24:MI:SS') as end_time,
-        e.evidence_txt,
+        e.lecture_id,
+        e.start_time,
+        e.end_time,
+        e.status,
+        e.facts,
+        e.interpretation,
+        e.limitations,
+        e.confidence,
         e.created_at,
-        k.kpi_name,
-        s.filename
+        k.kpi_name
       FROM evidences e
       LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
-      LEFT JOIN sound_files s ON e.file_id = s.file_id
       WHERE e.evidence_id = $1
     `;
     return await getOne(query, [evidenceId]);
@@ -80,16 +88,20 @@ export const getEvidenceById = async (evidenceId: number) => {
  */
 export const createEvidence = async (data: Evidence) => {
   try {
-    if (!data.kpi_id || !data.file_id) {
-      throw new Error('kpi_id and file_id are required');
+    if (!data.kpi_id || !data.lecture_id) {
+      throw new Error('kpi_id and lecture_id are required');
     }
 
     return await insert('evidences', {
       kpi_id: data.kpi_id,
-      file_id: data.file_id,
+      lecture_id: data.lecture_id,
       start_time: data.start_time || null,
       end_time: data.end_time || null,
-      evidence_txt: data.evidence_txt || null,
+      status: data.status || null,
+      facts: data.facts || null,
+      interpretation: data.interpretation || null,
+      limitations: data.limitations || null,
+      confidence: data.confidence ?? null,
     });
   } catch (error) {
     console.error('Error creating evidence:', error);
@@ -108,10 +120,14 @@ export const updateEvidence = async (evidenceId: number, data: Partial<Evidence>
     const updateData: Record<string, any> = {};
 
     if (data.kpi_id) updateData.kpi_id = data.kpi_id;
-    if (data.file_id) updateData.file_id = data.file_id;
+    if (data.lecture_id) updateData.lecture_id = data.lecture_id;
     if (data.start_time !== undefined) updateData.start_time = data.start_time;
     if (data.end_time !== undefined) updateData.end_time = data.end_time;
-    if (data.evidence_txt !== undefined) updateData.evidence_txt = data.evidence_txt;
+    if (data.status !== undefined) updateData.status = data.status;
+    if (data.facts !== undefined) updateData.facts = data.facts;
+    if (data.interpretation !== undefined) updateData.interpretation = data.interpretation;
+    if (data.limitations !== undefined) updateData.limitations = data.limitations;
+    if (data.confidence !== undefined) updateData.confidence = data.confidence;
 
     if (Object.keys(updateData).length === 0) {
       throw new Error('No fields to update');
@@ -149,16 +165,18 @@ export const getEvidencesByKPI = async (kpiId: number) => {
       SELECT
         e.evidence_id,
         e.kpi_id,
-        e.file_id,
-        TO_CHAR(e.start_time, 'HH24:MI:SS') as start_time,
-        TO_CHAR(e.end_time, 'HH24:MI:SS') as end_time,
-        e.evidence_txt,
+        e.lecture_id,
+        e.start_time,
+        e.end_time,
+        e.status,
+        e.facts,
+        e.interpretation,
+        e.limitations,
+        e.confidence,
         e.created_at,
-        k.kpi_name,
-        s.filename
+        k.kpi_name
       FROM evidences e
       LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
-      LEFT JOIN sound_files s ON e.file_id = s.file_id
       WHERE e.kpi_id = $1
       ORDER BY e.created_at DESC
     `;
@@ -170,32 +188,34 @@ export const getEvidencesByKPI = async (kpiId: number) => {
 };
 
 /**
- * Get evidences by file ID
- * @param fileId File ID
+ * Get evidences by lecture ID
+ * @param lectureId Lecture ID
  * @returns Promise with array of evidences
  */
-export const getEvidencesByFile = async (fileId: number) => {
+export const getEvidencesByLecture = async (lectureId: number) => {
   try {
     const query = `
       SELECT
         e.evidence_id,
         e.kpi_id,
-        e.file_id,
-        TO_CHAR(e.start_time, 'HH24:MI:SS') as start_time,
-        TO_CHAR(e.end_time, 'HH24:MI:SS') as end_time,
-        e.evidence_txt,
+        e.lecture_id,
+        e.start_time,
+        e.end_time,
+        e.status,
+        e.facts,
+        e.interpretation,
+        e.limitations,
+        e.confidence,
         e.created_at,
-        k.kpi_name,
-        s.filename
+        k.kpi_name
       FROM evidences e
       LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
-      LEFT JOIN sound_files s ON e.file_id = s.file_id
-      WHERE e.file_id = $1
+      WHERE e.lecture_id = $1
       ORDER BY e.created_at DESC
     `;
-    return await getMany(query, [fileId]);
+    return await getMany(query, [lectureId]);
   } catch (error) {
-    console.error('Error fetching evidences by file:', error);
+    console.error('Error fetching evidences by lecture:', error);
     throw error;
   }
 };
