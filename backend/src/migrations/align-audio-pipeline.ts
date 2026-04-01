@@ -55,7 +55,6 @@ async function run() {
 
   await executeQuery(`CREATE INDEX IF NOT EXISTS idx_fragments_file_id ON fragments(file_id);`);
   await executeQuery(`CREATE INDEX IF NOT EXISTS idx_fragments_lecture_id ON fragments(lecture_id);`);
-  await executeQuery(`CREATE INDEX IF NOT EXISTS idx_fragments_time_slot_id ON fragments(time_slot_id);`);
   await executeQuery(`CREATE INDEX IF NOT EXISTS idx_fragments_order ON fragments(file_id, fragment_order);`);
 
   console.log('✅ Audio pipeline schema aligned successfully');

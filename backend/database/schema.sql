@@ -142,6 +142,8 @@ Example: Sunday 7:00–8:00 AM for Class (Grade 6A).
 CREATE TABLE section_time_slots (
     time_slot_id SERIAL PRIMARY KEY,
     class_id INT NOT NULL,
+    subject_id INT NOT NULL,
+    teacher_id INT REFERENCES teachers(teacher_id) ON DELETE SET NULL,
     day_of_week VARCHAR(10) NOT NULL,
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,
@@ -151,45 +153,16 @@ CREATE TABLE section_time_slots (
         REFERENCES classes(class_id)
         ON DELETE CASCADE,
 
+    CONSTRAINT fk_timeslot_subject
+        FOREIGN KEY (subject_id)
+        REFERENCES subjects(subject_id),
+
     CONSTRAINT chk_valid_time
         CHECK (end_time > start_time)
 );
 
-
-/* ============================================================
-TABLE: class_schedule
-Description:
-Defines which subject and teacher is assigned to a class
-during a specific time slot.
-============================================================ */
-
-CREATE TABLE class_schedule (
-    schedule_id SERIAL PRIMARY KEY,
-    class_id INT NOT NULL,
-    subject_id INT NOT NULL,
-    teacher_id INT NOT NULL,
-    time_slot_id INT NOT NULL,
-
-    CONSTRAINT fk_schedule_class
-        FOREIGN KEY (class_id)
-        REFERENCES classes(class_id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT fk_schedule_subject
-        FOREIGN KEY (subject_id)
-        REFERENCES subjects(subject_id),
-
-    CONSTRAINT fk_schedule_teacher
-        FOREIGN KEY (teacher_id)
-        REFERENCES teachers(teacher_id),
-
-    CONSTRAINT fk_schedule_timeslot
-        FOREIGN KEY (time_slot_id)
-        REFERENCES section_time_slots(time_slot_id),
-
-    CONSTRAINT uq_class_timeslot
-        UNIQUE (class_id, time_slot_id)
-);
+CREATE INDEX idx_section_time_slots_subject_id ON section_time_slots(subject_id);
+CREATE INDEX idx_section_time_slots_teacher_id ON section_time_slots(teacher_id);
 
 
 /* ============================================================
@@ -262,24 +235,115 @@ VALUES
 (1,'John Smith','john.smith@school.com','0503333333');
 
 
-/* Time Slots */
+/* Time Slots — Sun–Thu, 45 min (105 rows); subject_id → subjects, teacher_id → teachers (FKs) */
 
-INSERT INTO section_time_slots (class_id, day_of_week, start_time, end_time)
+INSERT INTO section_time_slots (class_id, subject_id, teacher_id, day_of_week, start_time, end_time)
 VALUES
-(1,'Sunday','07:00','08:00'),
-(1,'Sunday','08:00','09:00'),
-(1,'Monday','07:00','08:00'),
-(2,'Sunday','07:00','08:00');
-
-
-/* Class Schedule */
-
-INSERT INTO class_schedule (class_id, subject_id, teacher_id, time_slot_id)
-VALUES
-(1,1,1,1), -- Sunday 7-8 Math Grade 6A
-(1,2,2,2), -- Sunday 8-9 Science Grade 6A
-(1,3,3,3), -- Monday 7-8 English Grade 6A
-(2,1,1,4); -- Sunday 7-8 Math Grade 6B
+(1,3,1,'Sunday','07:00','07:45'),
+(1,1,3,'Sunday','07:45','08:30'),
+(1,2,2,'Sunday','08:30','09:15'),
+(1,3,1,'Sunday','09:30','10:15'),
+(1,1,3,'Sunday','10:15','11:00'),
+(1,2,2,'Sunday','11:00','11:45'),
+(1,3,1,'Sunday','12:00','12:45'),
+(1,2,2,'Monday','07:00','07:45'),
+(1,3,1,'Monday','07:45','08:30'),
+(1,1,3,'Monday','08:30','09:15'),
+(1,2,2,'Monday','09:30','10:15'),
+(1,3,1,'Monday','10:15','11:00'),
+(1,1,3,'Monday','11:00','11:45'),
+(1,2,2,'Monday','12:00','12:45'),
+(1,1,3,'Tuesday','07:00','07:45'),
+(1,2,2,'Tuesday','07:45','08:30'),
+(1,3,1,'Tuesday','08:30','09:15'),
+(1,1,3,'Tuesday','09:30','10:15'),
+(1,2,2,'Tuesday','10:15','11:00'),
+(1,3,1,'Tuesday','11:00','11:45'),
+(1,1,3,'Tuesday','12:00','12:45'),
+(1,3,1,'Wednesday','07:00','07:45'),
+(1,1,3,'Wednesday','07:45','08:30'),
+(1,2,2,'Wednesday','08:30','09:15'),
+(1,3,1,'Wednesday','09:30','10:15'),
+(1,1,3,'Wednesday','10:15','11:00'),
+(1,2,2,'Wednesday','11:00','11:45'),
+(1,3,1,'Wednesday','12:00','12:45'),
+(1,2,2,'Thursday','07:00','07:45'),
+(1,3,1,'Thursday','07:45','08:30'),
+(1,1,3,'Thursday','08:30','09:15'),
+(1,2,2,'Thursday','09:30','10:15'),
+(1,3,1,'Thursday','10:15','11:00'),
+(1,1,3,'Thursday','11:00','11:45'),
+(1,2,2,'Thursday','12:00','12:45'),
+(2,3,3,'Sunday','07:00','07:45'),
+(2,1,2,'Sunday','07:45','08:30'),
+(2,2,1,'Sunday','08:30','09:15'),
+(2,3,3,'Sunday','09:30','10:15'),
+(2,1,2,'Sunday','10:15','11:00'),
+(2,2,1,'Sunday','11:00','11:45'),
+(2,3,3,'Sunday','12:00','12:45'),
+(2,2,1,'Monday','07:00','07:45'),
+(2,3,3,'Monday','07:45','08:30'),
+(2,1,2,'Monday','08:30','09:15'),
+(2,2,1,'Monday','09:30','10:15'),
+(2,3,3,'Monday','10:15','11:00'),
+(2,1,2,'Monday','11:00','11:45'),
+(2,2,1,'Monday','12:00','12:45'),
+(2,1,2,'Tuesday','07:00','07:45'),
+(2,2,1,'Tuesday','07:45','08:30'),
+(2,3,3,'Tuesday','08:30','09:15'),
+(2,1,2,'Tuesday','09:30','10:15'),
+(2,2,1,'Tuesday','10:15','11:00'),
+(2,3,3,'Tuesday','11:00','11:45'),
+(2,1,2,'Tuesday','12:00','12:45'),
+(2,3,3,'Wednesday','07:00','07:45'),
+(2,1,2,'Wednesday','07:45','08:30'),
+(2,2,1,'Wednesday','08:30','09:15'),
+(2,3,3,'Wednesday','09:30','10:15'),
+(2,1,2,'Wednesday','10:15','11:00'),
+(2,2,1,'Wednesday','11:00','11:45'),
+(2,3,3,'Wednesday','12:00','12:45'),
+(2,2,1,'Thursday','07:00','07:45'),
+(2,3,3,'Thursday','07:45','08:30'),
+(2,1,2,'Thursday','08:30','09:15'),
+(2,2,1,'Thursday','09:30','10:15'),
+(2,3,3,'Thursday','10:15','11:00'),
+(2,1,2,'Thursday','11:00','11:45'),
+(2,2,1,'Thursday','12:00','12:45'),
+(3,3,2,'Sunday','07:00','07:45'),
+(3,1,1,'Sunday','07:45','08:30'),
+(3,2,3,'Sunday','08:30','09:15'),
+(3,3,2,'Sunday','09:30','10:15'),
+(3,1,1,'Sunday','10:15','11:00'),
+(3,2,3,'Sunday','11:00','11:45'),
+(3,3,2,'Sunday','12:00','12:45'),
+(3,2,3,'Monday','07:00','07:45'),
+(3,3,2,'Monday','07:45','08:30'),
+(3,1,1,'Monday','08:30','09:15'),
+(3,2,3,'Monday','09:30','10:15'),
+(3,3,2,'Monday','10:15','11:00'),
+(3,1,1,'Monday','11:00','11:45'),
+(3,2,3,'Monday','12:00','12:45'),
+(3,1,1,'Tuesday','07:00','07:45'),
+(3,2,3,'Tuesday','07:45','08:30'),
+(3,3,2,'Tuesday','08:30','09:15'),
+(3,1,1,'Tuesday','09:30','10:15'),
+(3,2,3,'Tuesday','10:15','11:00'),
+(3,3,2,'Tuesday','11:00','11:45'),
+(3,1,1,'Tuesday','12:00','12:45'),
+(3,3,2,'Wednesday','07:00','07:45'),
+(3,1,1,'Wednesday','07:45','08:30'),
+(3,2,3,'Wednesday','08:30','09:15'),
+(3,3,2,'Wednesday','09:30','10:15'),
+(3,1,1,'Wednesday','10:15','11:00'),
+(3,2,3,'Wednesday','11:00','11:45'),
+(3,3,2,'Wednesday','12:00','12:45'),
+(3,2,3,'Thursday','07:00','07:45'),
+(3,3,2,'Thursday','07:45','08:30'),
+(3,1,1,'Thursday','08:30','09:15'),
+(3,2,3,'Thursday','09:30','10:15'),
+(3,3,2,'Thursday','10:15','11:00'),
+(3,1,1,'Thursday','11:00','11:45'),
+(3,2,3,'Thursday','12:00','12:45');
 
 
 /* ============================================================

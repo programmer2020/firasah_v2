@@ -3,11 +3,7 @@ BEGIN;
 ALTER TABLE IF EXISTS section_time_slots
   ADD COLUMN IF NOT EXISTS subject_id INTEGER;
 
-UPDATE section_time_slots ts
-SET subject_id = cs.subject_id
-FROM class_schedule cs
-WHERE cs.time_slot_id = ts.time_slot_id
-  AND ts.subject_id IS NULL;
+-- (Removed) syncing subject_id from class_schedule — table dropped; use migrate_drop_class_schedule.sql for upgrades.
 
 DO $$
 BEGIN

@@ -28,6 +28,8 @@ const openai = new OpenAI({
 interface TimeSlot {
   time_slot_id: number;
   class_id: number;
+  subject_id?: number | null;
+  teacher_id?: number | null;
   day_of_week: string;
   slot_date: string | null;
   start_time: string;
@@ -41,7 +43,7 @@ export const getTimeSlots = async (classId: number, dayOfWeek: string, slotDate?
   // 1. Prefer exact date match
   if (slotDate) {
     const query = `
-      SELECT time_slot_id, class_id, day_of_week, slot_date::text,
+      SELECT time_slot_id, class_id, subject_id, teacher_id, day_of_week, slot_date::text,
              start_time::text, end_time::text
       FROM section_time_slots
       WHERE class_id = $1 AND slot_date = $2
@@ -52,7 +54,7 @@ export const getTimeSlots = async (classId: number, dayOfWeek: string, slotDate?
   }
   // 2. Fallback: match by day_of_week
   const query2 = `
-    SELECT time_slot_id, class_id, day_of_week, slot_date::text,
+    SELECT time_slot_id, class_id, subject_id, teacher_id, day_of_week, slot_date::text,
            start_time::text, end_time::text
     FROM section_time_slots
     WHERE class_id = $1 AND day_of_week = $2
@@ -64,7 +66,7 @@ export const getTimeSlots = async (classId: number, dayOfWeek: string, slotDate?
   // 3. Last fallback: any time slots for this class (regardless of day)
   console.log(`[Speech] No slots for day=${dayOfWeek}, trying any day for class=${classId}`);
   const query3 = `
-    SELECT DISTINCT ON (start_time) time_slot_id, class_id, day_of_week, slot_date::text,
+    SELECT DISTINCT ON (start_time) time_slot_id, class_id, subject_id, teacher_id, day_of_week, slot_date::text,
            start_time::text, end_time::text
     FROM section_time_slots
     WHERE class_id = $1

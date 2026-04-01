@@ -1,6 +1,7 @@
 /**
  * Schedule Service
- * Handles class schedule, time slots, and related lookups
+ * Handles class schedule, time slots, and related lookups.
+ * Teacher + subject live on section_time_slots (no class_schedule table).
  */
 
 import { getMany, getOne, insert, executeQuery } from '../helpers/database.js';
@@ -42,15 +43,12 @@ export const getAllSubjects = async () => {
 export const getTimeSlotsByClass = async (classId: number) => {
   const query = `
     SELECT ts.time_slot_id, ts.class_id, ts.day_of_week, ts.subject_id,
+           ts.teacher_id,
            ts.start_time::text, ts.end_time::text,
-           cs.schedule_id, cs.teacher_id,
            sub.subject_name, t.teacher_name
     FROM section_time_slots ts
-    LEFT JOIN class_schedule cs
-      ON ts.time_slot_id = cs.time_slot_id
-     AND ts.class_id = cs.class_id
     LEFT JOIN subjects sub ON ts.subject_id = sub.subject_id
-    LEFT JOIN teachers t ON cs.teacher_id = t.teacher_id
+    LEFT JOIN teachers t ON ts.teacher_id = t.teacher_id
     WHERE ts.class_id = $1
     ORDER BY ts.day_of_week, ts.start_time ASC
   `;
@@ -63,6 +61,7 @@ export const createTimeSlot = async (data: {
   start_time: string;
   end_time: string;
   subject_id: number;
+  teacher_id?: number | null;
 }) => {
   return await insert('section_time_slots', {
     class_id: data.class_id,
@@ -70,12 +69,11 @@ export const createTimeSlot = async (data: {
     start_time: data.start_time,
     end_time: data.end_time,
     subject_id: data.subject_id,
+    teacher_id: data.teacher_id ?? null,
   });
 };
 
 export const deleteTimeSlot = async (timeSlotId: number) => {
-  // Delete schedule entry first (FK), then the time slot
-  await executeQuery('DELETE FROM class_schedule WHERE time_slot_id = $1', [timeSlotId]);
   const result = await executeQuery(
     'DELETE FROM section_time_slots WHERE time_slot_id = $1 RETURNING *',
     [timeSlotId]
@@ -83,7 +81,7 @@ export const deleteTimeSlot = async (timeSlotId: number) => {
   return result.rows[0] || null;
 };
 
-// ── Schedule (assign teacher + subject to time slot) ────
+// ── Assign / update subject + teacher on a slot ────────
 
 export const assignSchedule = async (data: {
   class_id: number;
@@ -91,49 +89,32 @@ export const assignSchedule = async (data: {
   subject_id: number;
   teacher_id: number;
 }) => {
-  // Upsert: if a schedule already exists for this class+timeslot, update it
-  const existing = await getOne(
-    'SELECT schedule_id FROM class_schedule WHERE class_id = $1 AND time_slot_id = $2',
-    [data.class_id, data.time_slot_id]
+  const slot = await getOne(
+    'SELECT time_slot_id FROM section_time_slots WHERE time_slot_id = $1 AND class_id = $2',
+    [data.time_slot_id, data.class_id]
   );
-
-  if (existing) {
-    await executeQuery(
-      `UPDATE section_time_slots
-       SET subject_id = $1
-       WHERE time_slot_id = $2`,
-      [data.subject_id, data.time_slot_id]
-    );
-
-    const result = await executeQuery(
-      `UPDATE class_schedule
-       SET subject_id = $1, teacher_id = $2
-       WHERE schedule_id = $3
-       RETURNING *`,
-      [data.subject_id, data.teacher_id, existing.schedule_id]
-    );
-    return result.rows[0];
+  if (!slot) {
+    throw new Error('Time slot not found for this class');
   }
 
-  await executeQuery(
+  const result = await executeQuery(
     `UPDATE section_time_slots
-     SET subject_id = $1
-     WHERE time_slot_id = $2`,
-    [data.subject_id, data.time_slot_id]
+     SET subject_id = $1, teacher_id = $2
+     WHERE time_slot_id = $3 AND class_id = $4
+     RETURNING *`,
+    [data.subject_id, data.teacher_id, data.time_slot_id, data.class_id]
   );
-
-  return await insert('class_schedule', {
-    class_id: data.class_id,
-    time_slot_id: data.time_slot_id,
-    subject_id: data.subject_id,
-    teacher_id: data.teacher_id,
-  });
+  return result.rows[0];
 };
 
-export const removeSchedule = async (scheduleId: number) => {
+/** Remove teacher assignment (teacher_id NULL); keeps subject/times on the slot */
+export const removeSchedule = async (timeSlotId: number) => {
   const result = await executeQuery(
-    'DELETE FROM class_schedule WHERE schedule_id = $1 RETURNING *',
-    [scheduleId]
+    `UPDATE section_time_slots
+     SET teacher_id = NULL
+     WHERE time_slot_id = $1
+     RETURNING *`,
+    [timeSlotId]
   );
   return result.rows[0] || null;
 };
@@ -143,17 +124,13 @@ export const removeSchedule = async (scheduleId: number) => {
 export const getFullSchedule = async (classId: number) => {
   const query = `
     SELECT
-      cs.schedule_id,
-      ts.time_slot_id, ts.day_of_week, ts.subject_id,
+      ts.time_slot_id, ts.day_of_week, ts.subject_id, ts.teacher_id,
       ts.start_time::text, ts.end_time::text,
       sub.subject_name,
       t.teacher_id, t.teacher_name
     FROM section_time_slots ts
-    LEFT JOIN class_schedule cs
-      ON cs.time_slot_id = ts.time_slot_id
-     AND cs.class_id = ts.class_id
     LEFT JOIN subjects sub ON ts.subject_id = sub.subject_id
-    LEFT JOIN teachers t ON cs.teacher_id = t.teacher_id
+    LEFT JOIN teachers t ON ts.teacher_id = t.teacher_id
     WHERE ts.class_id = $1
     ORDER BY ts.day_of_week, ts.start_time ASC
   `;

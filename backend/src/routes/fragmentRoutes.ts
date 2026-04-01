@@ -179,8 +179,7 @@ router.post('/process-all', authenticate, async (req: AuthRequest, res: Response
             const fragments = await processLectureFragments(
               file.file_id,
               file.filepath,
-              lecture.lecture_id,
-              lecture.time_slot_id
+              lecture.lecture_id
             );
             results.push({
               file_id: file.file_id,

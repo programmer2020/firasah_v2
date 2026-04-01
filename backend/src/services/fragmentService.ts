@@ -14,7 +14,6 @@ interface Fragment {
   fragment_id?: number;
   file_id: number;
   lecture_id?: number;
-  time_slot_id?: number;
   fragment_order: number;
   start_seconds: number;
   end_seconds: number;
@@ -101,14 +100,12 @@ export const splitAudioIntoFragments = async (
  * Create fragment records in database for a lecture
  * @param fileId Sound file ID
  * @param lectureId Lecture ID
- * @param timeSlotId Time slot ID
  * @param fragments Fragment metadata array
  * @returns Array of created fragment records
  */
 export const createFragmentRecords = async (
   fileId: number,
   lectureId: number | null,
-  timeSlotId: number | null,
   fragments: Fragment[]
 ): Promise<any[]> => {
   const createdFragments = [];
@@ -118,7 +115,6 @@ export const createFragmentRecords = async (
       const result = await insert('fragments', {
         file_id: fileId,
         lecture_id: lectureId,
-        time_slot_id: timeSlotId,
         fragment_order: fragment.fragment_order,
         start_seconds: fragment.start_seconds,
         end_seconds: fragment.end_seconds,
@@ -174,8 +170,9 @@ export const getFragmentsByTimeSlot = async (timeSlotId: number) => {
   const query = `
     SELECT f.*, ts.start_time, ts.end_time, ts.day_of_week
     FROM fragments f
-    LEFT JOIN section_time_slots ts ON f.time_slot_id = ts.time_slot_id
-    WHERE f.time_slot_id = $1
+    JOIN lecture l ON f.lecture_id = l.lecture_id
+    LEFT JOIN section_time_slots ts ON l.time_slot_id = ts.time_slot_id
+    WHERE l.time_slot_id = $1
     ORDER BY f.fragment_order ASC
   `;
   return await getMany(query, [timeSlotId]);
@@ -186,14 +183,12 @@ export const getFragmentsByTimeSlot = async (timeSlotId: number) => {
  * @param fileId Sound file ID
  * @param filePath Path to audio file
  * @param lectureId Lecture ID (optional)
- * @param timeSlotId Time slot ID (optional)
  * @returns Array of created fragment records
  */
 export const processLectureFragments = async (
   fileId: number,
   filePath: string,
-  lectureId?: number,
-  timeSlotId?: number
+  lectureId?: number
 ): Promise<any[]> => {
   try {
     console.log(`[Fragment] Starting fragment processing for file_id=${fileId}`);
@@ -206,7 +201,6 @@ export const processLectureFragments = async (
     const createdFragments = await createFragmentRecords(
       fileId,
       lectureId || null,
-      timeSlotId || null,
       fragments
     );
 

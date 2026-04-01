@@ -152,8 +152,8 @@ export default function Schedule() {
     }
   };
 
-  const openDeleteAssignModal = (scheduleId) => {
-    setDeleteAssignId(scheduleId);
+  const openDeleteAssignModal = (timeSlotId) => {
+    setDeleteAssignId(timeSlotId);
     setShowDeleteAssignModal(true);
   };
 
@@ -362,12 +362,12 @@ export default function Schedule() {
                             className="bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200 text-sm"
                             onClick={() => openAssignForm(slot)}
                           >
-                            {slot.schedule_id ? 'تعديل' : 'تعيين'}
+                            {slot.teacher_id ? 'تعديل' : 'تعيين'}
                           </button>
-                          {slot.schedule_id && (
+                          {slot.teacher_id && (
                             <button
                               className="bg-orange-100 text-orange-700 px-3 py-1 rounded hover:bg-orange-200 text-sm"
-                              onClick={() => openDeleteAssignModal(slot.schedule_id)}
+                              onClick={() => openDeleteAssignModal(slot.time_slot_id)}
                             >
                               إزالة التعيين
                             </button>

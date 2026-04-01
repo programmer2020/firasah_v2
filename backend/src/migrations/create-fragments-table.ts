@@ -15,7 +15,6 @@ async function createFragmentsTable() {
         fragment_id SERIAL PRIMARY KEY,
         file_id INTEGER NOT NULL REFERENCES sound_files(file_id) ON DELETE CASCADE,
         lecture_id INTEGER REFERENCES lecture(lecture_id) ON DELETE CASCADE,
-        time_slot_id INTEGER REFERENCES section_time_slots(time_slot_id) ON DELETE SET NULL,
         fragment_order INTEGER NOT NULL,
         start_seconds DECIMAL(10, 2) NOT NULL,
         end_seconds DECIMAL(10, 2) NOT NULL,
@@ -42,8 +41,8 @@ async function createFragmentsTable() {
     `);
 
     await executeQuery(`
-      CREATE INDEX IF NOT EXISTS idx_fragments_time_slot_id 
-      ON fragments(time_slot_id);
+      CREATE INDEX IF NOT EXISTS idx_fragments_lecture_id
+      ON fragments(lecture_id);
     `);
 
     await executeQuery(`

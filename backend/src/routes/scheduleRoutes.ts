@@ -103,12 +103,12 @@ router.post('/assign', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/assign/:scheduleId', async (req: Request, res: Response) => {
+router.delete('/assign/:timeSlotId', async (req: Request, res: Response) => {
   try {
-    const scheduleId = parseInt(req.params.scheduleId as string, 10);
-    const deleted = await removeSchedule(scheduleId);
-    if (!deleted) return res.status(404).json({ error: 'Schedule entry not found' });
-    res.json({ message: 'Schedule entry removed', deleted });
+    const timeSlotId = parseInt(req.params.timeSlotId as string, 10);
+    const deleted = await removeSchedule(timeSlotId);
+    if (!deleted) return res.status(404).json({ error: 'Time slot not found' });
+    res.json({ message: 'Teacher assignment cleared', deleted });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

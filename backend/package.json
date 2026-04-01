@@ -9,6 +9,7 @@
     "dev": "npm run build && node dist/index.js",
     "build": "tsc",
     "seed": "node --loader ts-node/esm seed.ts",
+    "seed:slots": "node run-section-time-slots-seed.mjs",
     "migrate:slot-order": "node --loader ts-node/esm src/migrations/add-slot-order.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

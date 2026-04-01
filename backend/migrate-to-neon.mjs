@@ -42,7 +42,6 @@ const TABLE_ORDER = [
   'subjects',
   'teachers',
   'section_time_slots',
-  'class_schedule',
   'kpi_domains',
   'kpis',
   'sound_files',
@@ -135,10 +134,12 @@ CREATE TABLE IF NOT EXISTS teachers (
         ON DELETE CASCADE
 );
 
--- section_time_slots table
+-- section_time_slots table (subject + teacher on each row)
 CREATE TABLE IF NOT EXISTS section_time_slots (
     time_slot_id SERIAL PRIMARY KEY,
     class_id INT NOT NULL,
+    subject_id INT NOT NULL,
+    teacher_id INT REFERENCES teachers(teacher_id) ON DELETE SET NULL,
     day_of_week VARCHAR(10) NOT NULL,
     slot_date DATE,
     start_time TIME NOT NULL,
@@ -147,33 +148,15 @@ CREATE TABLE IF NOT EXISTS section_time_slots (
         FOREIGN KEY (class_id)
         REFERENCES classes(class_id)
         ON DELETE CASCADE,
+    CONSTRAINT fk_timeslot_subject
+        FOREIGN KEY (subject_id)
+        REFERENCES subjects(subject_id),
     CONSTRAINT chk_valid_time
         CHECK (end_time > start_time)
 );
 
--- class_schedule table
-CREATE TABLE IF NOT EXISTS class_schedule (
-    schedule_id SERIAL PRIMARY KEY,
-    class_id INT NOT NULL,
-    subject_id INT NOT NULL,
-    teacher_id INT NOT NULL,
-    time_slot_id INT NOT NULL,
-    CONSTRAINT fk_schedule_class
-        FOREIGN KEY (class_id)
-        REFERENCES classes(class_id)
-        ON DELETE CASCADE,
-    CONSTRAINT fk_schedule_subject
-        FOREIGN KEY (subject_id)
-        REFERENCES subjects(subject_id),
-    CONSTRAINT fk_schedule_teacher
-        FOREIGN KEY (teacher_id)
-        REFERENCES teachers(teacher_id),
-    CONSTRAINT fk_schedule_timeslot
-        FOREIGN KEY (time_slot_id)
-        REFERENCES section_time_slots(time_slot_id),
-    CONSTRAINT uq_class_timeslot
-        UNIQUE (class_id, time_slot_id)
-);
+CREATE INDEX IF NOT EXISTS idx_section_time_slots_subject_id ON section_time_slots(subject_id);
+CREATE INDEX IF NOT EXISTS idx_section_time_slots_teacher_id ON section_time_slots(teacher_id);
 
 -- kpi_domains table
 CREATE TABLE IF NOT EXISTS kpi_domains (
