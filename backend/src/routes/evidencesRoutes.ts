@@ -11,7 +11,7 @@ import {
   updateEvidence,
   deleteEvidence,
   getEvidencesByKPI,
-  getEvidencesByFile,
+  getEvidencesByLecture,
 } from '../services/evidencesService.js';
 
 const router = Router();
@@ -23,7 +23,7 @@ const router = Router();
  *     tags:
  *       - Evidences
  *     summary: Get all evidences
- *     description: Retrieve all evidence records with KPI and file details
+ *     description: Retrieve all evidence records with KPI and lecture details
  *     responses:
  *       200:
  *         description: List of evidences retrieved successfully
@@ -116,11 +116,11 @@ router.get('/:id', async (req: Request, res: Response) => {
  *             type: object
  *             required:
  *               - kpi_id
- *               - file_id
+ *               - lecture_id
  *             properties:
  *               kpi_id:
  *                 type: integer
- *               file_id:
+ *               lecture_id:
  *                 type: integer
  *               start_time:
  *                 type: string
@@ -136,18 +136,18 @@ router.get('/:id', async (req: Request, res: Response) => {
  */
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { kpi_id, file_id, start_time, end_time, evidence_txt } = req.body;
+    const { kpi_id, lecture_id, start_time, end_time, evidence_txt } = req.body;
 
-    if (!kpi_id || !file_id) {
+    if (!kpi_id || !lecture_id) {
       return res.status(400).json({
         success: false,
-        message: 'kpi_id and file_id are required',
+        message: 'kpi_id and lecture_id are required',
       });
     }
 
     const evidence = await createEvidence({
       kpi_id,
-      file_id,
+      lecture_id,
       start_time,
       end_time,
       evidence_txt,
@@ -300,14 +300,14 @@ router.get('/kpi/:kpiId', async (req: Request, res: Response) => {
 
 /**
  * @swagger
- * /api/evidences/file/{fileId}:
+ * /api/evidences/lecture/{lectureId}:
  *   get:
  *     tags:
  *       - Evidences
- *     summary: Get evidences by file
+ *     summary: Get evidences by lecture
  *     parameters:
  *       - in: path
- *         name: fileId
+ *         name: lectureId
  *         required: true
  *         schema:
  *           type: integer
@@ -315,10 +315,10 @@ router.get('/kpi/:kpiId', async (req: Request, res: Response) => {
  *       200:
  *         description: Evidences retrieved successfully
  */
-router.get('/file/:fileId', async (req: Request, res: Response) => {
+router.get('/lecture/:lectureId', async (req: Request, res: Response) => {
   try {
-    const fileId = req.params.fileId as string;
-    const evidences = await getEvidencesByFile(parseInt(fileId));
+    const lectureId = req.params.lectureId as string;
+    const evidences = await getEvidencesByLecture(parseInt(lectureId));
 
     res.status(200).json({
       success: true,

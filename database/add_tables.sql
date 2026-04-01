@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS kpis (
 CREATE TABLE IF NOT EXISTS evidences (
   id SERIAL PRIMARY KEY,
   kpi_id INTEGER NOT NULL REFERENCES kpis(kpi_id) ON DELETE CASCADE,
-  file_id INTEGER NOT NULL REFERENCES sound_files(file_id) ON DELETE CASCADE,
+  lecture_id INTEGER NOT NULL REFERENCES lecture(lecture_id) ON DELETE CASCADE,
   start_time TIMESTAMP,
   end_time TIMESTAMP,
   evidence_txt TEXT COLLATE "C",
@@ -76,8 +76,8 @@ CREATE INDEX IF NOT EXISTS idx_kpis_code ON kpis(kpi_code);
 CREATE INDEX IF NOT EXISTS idx_kpis_kpi_name ON kpis(kpi_name);
 CREATE INDEX IF NOT EXISTS idx_kpis_createdby ON kpis(createdBy);
 CREATE INDEX IF NOT EXISTS idx_evidences_kpi_id ON evidences(kpi_id);
-CREATE INDEX IF NOT EXISTS idx_evidences_file_id ON evidences(file_id);
-CREATE INDEX IF NOT EXISTS idx_evidences_file_kpi_iscalculated ON evidences(file_id, kpi_id, iscalculated);
+CREATE INDEX IF NOT EXISTS idx_evidences_lecture_id ON evidences(lecture_id);
+CREATE INDEX IF NOT EXISTS idx_evidences_lecture_kpi_iscalculated ON evidences(lecture_id, kpi_id, iscalculated);
 CREATE INDEX IF NOT EXISTS idx_evaluations_file_id ON evaluations(file_id);
 CREATE INDEX IF NOT EXISTS idx_evaluations_kpi_id ON evaluations(kpi_id);
 
@@ -114,7 +114,7 @@ COMMENT ON COLUMN kpis.note IS 'Additional notes about the KPI';
 
 COMMENT ON COLUMN evidences.id IS 'Unique identifier for evidence';
 COMMENT ON COLUMN evidences.kpi_id IS 'Foreign key to KPIs table';
-COMMENT ON COLUMN evidences.file_id IS 'Foreign key to sound_files table';
+COMMENT ON COLUMN evidences.lecture_id IS 'Foreign key to lecture table';
 COMMENT ON COLUMN evidences.start_time IS 'Start time of the evidence';
 COMMENT ON COLUMN evidences.end_time IS 'End time of the evidence';
 COMMENT ON COLUMN evidences.evidence_txt IS 'Text description of the evidence';

@@ -1,13 +1,13 @@
 /**
- * Migration: Replace file_id with fragment_id in evidences table
- * Purpose: Link evidences directly to fragments instead of sound files
+ * Migration: Replace lecture_id with fragment_id in evidences table
+ * Purpose: Link evidences directly to fragments instead of lecture
  */
 
 import pool from '../src/config/database.js';
 
 export const up = async () => {
   try {
-    console.log('[Migration] Replacing file_id with fragment_id in evidences table...');
+    console.log('[Migration] Replacing lecture_id with fragment_id in evidences table...');
     
     // Add fragment_id column (nullable initially)
     const fragmentIdExists = await pool.query(`
@@ -25,26 +25,26 @@ export const up = async () => {
       console.log('[Migration] ✅ fragment_id column added');
     }
     
-    // Remove the old file_id column if it exists
-    const fileIdExists = await pool.query(`
+    // Remove the old lecture_id column if it exists
+    const lectureIdExists = await pool.query(`
       SELECT column_name 
       FROM information_schema.columns 
-      WHERE table_name = 'evidences' AND column_name = 'file_id'
+      WHERE table_name = 'evidences' AND column_name = 'lecture_id'
     `);
     
-    if (fileIdExists.rows.length > 0) {
-      console.log('[Migration] Dropping old file_id column and indexes...');
+    if (lectureIdExists.rows.length > 0) {
+      console.log('[Migration] Dropping old lecture_id column and indexes...');
       
-      // Drop indexes that reference file_id
-      await pool.query(`DROP INDEX IF EXISTS idx_evidences_file_id`);
-      await pool.query(`DROP INDEX IF EXISTS idx_evidences_file_kpi_iscalculated`);
+      // Drop indexes that reference lecture_id
+      await pool.query(`DROP INDEX IF EXISTS idx_evidences_lecture_id`);
+      await pool.query(`DROP INDEX IF EXISTS idx_evidences_lecture_kpi_iscalculated`);
       
       // Drop the column
       await pool.query(`
         ALTER TABLE evidences 
-        DROP COLUMN file_id
+        DROP COLUMN lecture_id
       `);
-      console.log('[Migration] ✅ file_id column dropped');
+      console.log('[Migration] ✅ lecture_id column dropped');
     }
     
     // Create new indexes for fragment_id
@@ -64,7 +64,7 @@ export const up = async () => {
 
 export const down = async () => {
   try {
-    console.log('[Migration] Rolling back: reverting to file_id in evidences table...');
+    console.log('[Migration] Rolling back: reverting to lecture_id in evidences table...');
     
     // Drop new indexes
     await pool.query(`DROP INDEX IF EXISTS idx_evidences_fragment_id`);
@@ -84,25 +84,25 @@ export const down = async () => {
       `);
     }
     
-    // Recreate file_id column with original foreign key
-    const fileIdExists = await pool.query(`
+    // Recreate lecture_id column with original foreign key
+    const lectureIdExists = await pool.query(`
       SELECT column_name 
       FROM information_schema.columns 
-      WHERE table_name = 'evidences' AND column_name = 'file_id'
+      WHERE table_name = 'evidences' AND column_name = 'lecture_id'
     `);
     
-    if (fileIdExists.rows.length === 0) {
+    if (lectureIdExists.rows.length === 0) {
       await pool.query(`
         ALTER TABLE evidences 
-        ADD COLUMN file_id INTEGER NOT NULL REFERENCES sound_files(file_id) ON DELETE CASCADE
+        ADD COLUMN lecture_id INTEGER NOT NULL REFERENCES lecture(lecture_id) ON DELETE CASCADE
       `);
       
       // Recreate old indexes
       await pool.query(`
-        CREATE INDEX IF NOT EXISTS idx_evidences_file_id ON evidences(file_id)
+        CREATE INDEX IF NOT EXISTS idx_evidences_lecture_id ON evidences(lecture_id)
       `);
       await pool.query(`
-        CREATE INDEX IF NOT EXISTS idx_evidences_file_kpi_iscalculated ON evidences(file_id, kpi_id, iscalculated)
+        CREATE INDEX IF NOT EXISTS idx_evidences_lecture_kpi_iscalculated ON evidences(lecture_id, kpi_id, iscalculated)
       `);
     }
     
