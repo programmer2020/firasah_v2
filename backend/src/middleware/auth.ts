@@ -42,7 +42,7 @@ export const authenticate = (
     }
 
     req.user = {
-      id: payload.id,
+      id: payload.user_id,
       email: payload.email,
     };
 

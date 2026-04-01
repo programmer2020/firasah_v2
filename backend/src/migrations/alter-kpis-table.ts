@@ -23,7 +23,7 @@ async function alterTable() {
     // Add domain_id column
     try {
       console.log('▶️  Adding domain_id column to kpis table...');
-      await client.query(`ALTER TABLE kpis ADD COLUMN domain_id INTEGER REFERENCES kpi_domains(domain_id) ON DELETE CASCADE;`);
+      await client.query(`ALTER TABLE kpis ADD COLUMN domain_id INTEGER REFERENCES domains(domain_id) ON DELETE CASCADE;`);
       console.log('   ✅ domain_id column added');
     } catch (err: any) {
       if (err.message.includes('already exists')) {

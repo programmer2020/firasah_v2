@@ -11,7 +11,11 @@ interface Evidence {
   lecture_id: number;
   start_time?: string;
   end_time?: string;
-  evidence_txt?: string;
+  status?: string;
+  facts?: string;
+  interpretation?: string;
+  limitations?: string;
+  confidence?: number;
 }
 
 /**
@@ -27,7 +31,11 @@ export const getAllEvidences = async () => {
         e.lecture_id,
         e.start_time,
         e.end_time,
-        e.evidence_txt,
+        e.status,
+        e.facts,
+        e.interpretation,
+        e.limitations,
+        e.confidence,
         e.created_at,
         k.kpi_name
       FROM evidences e
@@ -55,7 +63,11 @@ export const getEvidenceById = async (evidenceId: number) => {
         e.lecture_id,
         e.start_time,
         e.end_time,
-        e.evidence_txt,
+        e.status,
+        e.facts,
+        e.interpretation,
+        e.limitations,
+        e.confidence,
         e.created_at,
         k.kpi_name
       FROM evidences e
@@ -85,7 +97,11 @@ export const createEvidence = async (data: Evidence) => {
       lecture_id: data.lecture_id,
       start_time: data.start_time || null,
       end_time: data.end_time || null,
-      evidence_txt: data.evidence_txt || null,
+      status: data.status || null,
+      facts: data.facts || null,
+      interpretation: data.interpretation || null,
+      limitations: data.limitations || null,
+      confidence: data.confidence ?? null,
     });
   } catch (error) {
     console.error('Error creating evidence:', error);
@@ -107,7 +123,11 @@ export const updateEvidence = async (evidenceId: number, data: Partial<Evidence>
     if (data.lecture_id) updateData.lecture_id = data.lecture_id;
     if (data.start_time !== undefined) updateData.start_time = data.start_time;
     if (data.end_time !== undefined) updateData.end_time = data.end_time;
-    if (data.evidence_txt !== undefined) updateData.evidence_txt = data.evidence_txt;
+    if (data.status !== undefined) updateData.status = data.status;
+    if (data.facts !== undefined) updateData.facts = data.facts;
+    if (data.interpretation !== undefined) updateData.interpretation = data.interpretation;
+    if (data.limitations !== undefined) updateData.limitations = data.limitations;
+    if (data.confidence !== undefined) updateData.confidence = data.confidence;
 
     if (Object.keys(updateData).length === 0) {
       throw new Error('No fields to update');
@@ -148,7 +168,11 @@ export const getEvidencesByKPI = async (kpiId: number) => {
         e.lecture_id,
         e.start_time,
         e.end_time,
-        e.evidence_txt,
+        e.status,
+        e.facts,
+        e.interpretation,
+        e.limitations,
+        e.confidence,
         e.created_at,
         k.kpi_name
       FROM evidences e
@@ -177,7 +201,11 @@ export const getEvidencesByLecture = async (lectureId: number) => {
         e.lecture_id,
         e.start_time,
         e.end_time,
-        e.evidence_txt,
+        e.status,
+        e.facts,
+        e.interpretation,
+        e.limitations,
+        e.confidence,
         e.created_at,
         k.kpi_name
       FROM evidences e

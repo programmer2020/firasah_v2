@@ -1,17 +1,17 @@
 /**
  * Evaluations Routes
- * API endpoints for evaluation record management
+ * API endpoints for lecture_kpi record management
  */
 
 import { Router, Request, Response } from 'express';
 import {
   getAllEvaluations,
-  getEvaluationById,
+  getEvaluationByLectureAndKPI,
   createEvaluation,
   updateEvaluation,
   deleteEvaluation,
   getEvaluationsByKPI,
-  getEvaluationsByFile,
+  getEvaluationsByLecture,
 } from '../services/evaluationsService.js';
 
 const router = Router();
@@ -22,24 +22,7 @@ const router = Router();
  *   get:
  *     tags:
  *       - Evaluations
- *     summary: Get all evaluations
- *     description: Retrieve all evaluation records with KPI and file details
- *     responses:
- *       200:
- *         description: List of evaluations retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 message:
- *                   type: string
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Evaluation'
+ *     summary: Get all lecture_kpi records
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -59,28 +42,17 @@ router.get('/', async (req: Request, res: Response) => {
 
 /**
  * @swagger
- * /api/evaluations/{id}:
+ * /api/evaluations/lecture/{lectureId}/kpi/{kpiId}:
  *   get:
  *     tags:
  *       - Evaluations
- *     summary: Get evaluation by ID
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Evaluation retrieved successfully
- *       404:
- *         description: Evaluation not found
+ *     summary: Get lecture_kpi by lecture and KPI
  */
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/lecture/:lectureId/kpi/:kpiId', async (req: Request, res: Response) => {
   try {
-    const id = req.params.id as string;
-    const evaluation = await getEvaluationById(parseInt(id));
-    
+    const { lectureId, kpiId } = req.params;
+    const evaluation = await getEvaluationByLectureAndKPI(parseInt(lectureId), parseInt(kpiId));
+
     if (!evaluation) {
       return res.status(404).json({
         success: false,
@@ -107,7 +79,7 @@ router.get('/:id', async (req: Request, res: Response) => {
  *   post:
  *     tags:
  *       - Evaluations
- *     summary: Create a new evaluation
+ *     summary: Create a new lecture_kpi record
  *     requestBody:
  *       required: true
  *       content:
@@ -115,38 +87,34 @@ router.get('/:id', async (req: Request, res: Response) => {
  *           schema:
  *             type: object
  *             required:
- *               - file_id
+ *               - lecture_id
  *               - kpi_id
  *             properties:
- *               file_id:
+ *               lecture_id:
  *                 type: integer
  *               kpi_id:
  *                 type: integer
  *               evidence_count:
  *                 type: integer
- *               mark:
+ *               avg_confidence:
  *                 type: number
- *                 format: decimal
- *     responses:
- *       201:
- *         description: Evaluation created successfully
  */
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { file_id, kpi_id, evidence_count, mark } = req.body;
+    const { lecture_id, kpi_id, evidence_count, avg_confidence } = req.body;
 
-    if (!file_id || !kpi_id) {
+    if (!lecture_id || !kpi_id) {
       return res.status(400).json({
         success: false,
-        message: 'file_id and kpi_id are required',
+        message: 'lecture_id and kpi_id are required',
       });
     }
 
     const evaluation = await createEvaluation({
-      file_id,
+      lecture_id,
       kpi_id,
       evidence_count,
-      mark,
+      avg_confidence,
     });
 
     res.status(201).json({
@@ -164,34 +132,18 @@ router.post('/', async (req: Request, res: Response) => {
 
 /**
  * @swagger
- * /api/evaluations/{id}:
+ * /api/evaluations/lecture/{lectureId}/kpi/{kpiId}:
  *   put:
  *     tags:
  *       - Evaluations
- *     summary: Update an evaluation
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *     responses:
- *       200:
- *         description: Evaluation updated successfully
+ *     summary: Update a lecture_kpi record
  */
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/lecture/:lectureId/kpi/:kpiId', async (req: Request, res: Response) => {
   try {
-    const id = req.params.id as string;
+    const { lectureId, kpiId } = req.params;
     const data = req.body;
 
-    // Check if evaluation exists
-    const existing = await getEvaluationById(parseInt(id));
+    const existing = await getEvaluationByLectureAndKPI(parseInt(lectureId), parseInt(kpiId));
     if (!existing) {
       return res.status(404).json({
         success: false,
@@ -199,7 +151,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       });
     }
 
-    const evaluation = await updateEvaluation(parseInt(id), data);
+    const evaluation = await updateEvaluation(parseInt(lectureId), parseInt(kpiId), data);
 
     res.status(200).json({
       success: true,
@@ -216,27 +168,17 @@ router.put('/:id', async (req: Request, res: Response) => {
 
 /**
  * @swagger
- * /api/evaluations/{id}:
+ * /api/evaluations/lecture/{lectureId}/kpi/{kpiId}:
  *   delete:
  *     tags:
  *       - Evaluations
- *     summary: Delete an evaluation
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Evaluation deleted successfully
+ *     summary: Delete a lecture_kpi record
  */
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/lecture/:lectureId/kpi/:kpiId', async (req: Request, res: Response) => {
   try {
-    const id = req.params.id as string;
+    const { lectureId, kpiId } = req.params;
 
-    // Check if evaluation exists
-    const existing = await getEvaluationById(parseInt(id));
+    const existing = await getEvaluationByLectureAndKPI(parseInt(lectureId), parseInt(kpiId));
     if (!existing) {
       return res.status(404).json({
         success: false,
@@ -244,7 +186,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
       });
     }
 
-    const evaluation = await deleteEvaluation(parseInt(id));
+    const evaluation = await deleteEvaluation(parseInt(lectureId), parseInt(kpiId));
 
     res.status(200).json({
       success: true,
@@ -266,15 +208,6 @@ router.delete('/:id', async (req: Request, res: Response) => {
  *     tags:
  *       - Evaluations
  *     summary: Get evaluations by KPI
- *     parameters:
- *       - in: path
- *         name: kpiId
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Evaluations retrieved successfully
  */
 router.get('/kpi/:kpiId', async (req: Request, res: Response) => {
   try {
@@ -296,25 +229,16 @@ router.get('/kpi/:kpiId', async (req: Request, res: Response) => {
 
 /**
  * @swagger
- * /api/evaluations/file/{fileId}:
+ * /api/evaluations/lecture/{lectureId}:
  *   get:
  *     tags:
  *       - Evaluations
- *     summary: Get evaluations by file
- *     parameters:
- *       - in: path
- *         name: fileId
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Evaluations retrieved successfully
+ *     summary: Get evaluations by lecture
  */
-router.get('/file/:fileId', async (req: Request, res: Response) => {
+router.get('/lecture/:lectureId', async (req: Request, res: Response) => {
   try {
-    const fileId = req.params.fileId as string;
-    const evaluations = await getEvaluationsByFile(parseInt(fileId));
+    const lectureId = req.params.lectureId as string;
+    const evaluations = await getEvaluationsByLecture(parseInt(lectureId));
 
     res.status(200).json({
       success: true,

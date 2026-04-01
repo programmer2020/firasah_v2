@@ -144,7 +144,7 @@ export const getAllKPIDomains = async () => {
         sort_order,
         created_at,
         updated_at
-      FROM kpi_domains
+      FROM domains
       ORDER BY sort_order ASC
     `;
     return await getMany(query);
@@ -170,7 +170,7 @@ export const getKPIDomainById = async (domainId: number) => {
         sort_order,
         created_at,
         updated_at
-      FROM kpi_domains
+      FROM domains
       WHERE domain_id = $1
     `;
     return await getOne(query, [domainId]);
@@ -204,7 +204,7 @@ export const getKPIsGroupedByDomain = async () => {
             'note', k.note
           ) ORDER BY k.kpi_code
         ) as kpis
-      FROM kpi_domains d
+      FROM domains d
       LEFT JOIN kpis k ON d.domain_id = k.domain_id
       GROUP BY d.domain_id, d.domain_code, d.domain_name, d.domain_description, d.sort_order
       ORDER BY d.sort_order ASC
@@ -236,7 +236,7 @@ export const getKPIsByDomain = async (domainId: number) => {
         d.domain_name,
         d.domain_code
       FROM kpis k
-      JOIN kpi_domains d ON k.domain_id = d.domain_id
+      JOIN domains d ON k.domain_id = d.domain_id
       WHERE k.domain_id = $1
       ORDER BY k.kpi_code ASC
     `;

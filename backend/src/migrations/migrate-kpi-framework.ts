@@ -21,7 +21,7 @@ async function runMigration() {
     console.log('✅ Connected to database');
 
     // Read the SQL file
-    const sqlPath = join(process.cwd(), '../database/add_kpi_domains.sql');
+    const sqlPath = join(process.cwd(), '../database/add_domains.sql');
     const sql = readFileSync(sqlPath, 'utf-8');
 
     console.log('\n📝 Executing KPI domains migration...');
@@ -50,13 +50,13 @@ async function runMigration() {
     // Verify the data
     console.log('\n📊 Verification:');
     
-    const domainCount = await client.query('SELECT COUNT(*) as count FROM kpi_domains');
+    const domainCount = await client.query('SELECT COUNT(*) as count FROM domains');
     console.log(`   ✓ KPI Domains: ${domainCount.rows[0].count}`);
 
     const kpiCount = await client.query('SELECT COUNT(*) as count FROM kpis WHERE domain_id IS NOT NULL');
     console.log(`   ✓ KPIs with domains: ${kpiCount.rows[0].count}`);
 
-    const domains = await client.query('SELECT domain_code, domain_name FROM kpi_domains ORDER BY sort_order');
+    const domains = await client.query('SELECT domain_code, domain_name FROM domains ORDER BY sort_order');
     console.log('\n   Domains created:');
     domains.rows.forEach((row: any) => {
       console.log(`     • ${row.domain_code}: ${row.domain_name}`);

@@ -128,15 +128,23 @@ router.get('/:id', async (req: Request, res: Response) => {
  *               end_time:
  *                 type: string
  *                 format: date-time
- *               evidence_txt:
+ *               status:
  *                 type: string
+ *               facts:
+ *                 type: string
+ *               interpretation:
+ *                 type: string
+ *               limitations:
+ *                 type: string
+ *               confidence:
+ *                 type: integer
  *     responses:
  *       201:
  *         description: Evidence created successfully
  */
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { kpi_id, lecture_id, start_time, end_time, evidence_txt } = req.body;
+    const { kpi_id, lecture_id, start_time, end_time, status, facts, interpretation, limitations, confidence } = req.body;
 
     if (!kpi_id || !lecture_id) {
       return res.status(400).json({
@@ -150,7 +158,11 @@ router.post('/', async (req: Request, res: Response) => {
       lecture_id,
       start_time,
       end_time,
-      evidence_txt,
+      status,
+      facts,
+      interpretation,
+      limitations,
+      confidence,
     });
 
     res.status(201).json({
