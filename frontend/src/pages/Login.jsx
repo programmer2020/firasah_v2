@@ -5,10 +5,10 @@ import DatabaseSwitch from '../components/DatabaseSwitch';
 import useAutoHideMessage from '../hooks/useAutoHideMessage';
 
 export const Login = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState(() => sessionStorage.getItem('login_email') || localStorage.getItem('rememberedEmail') || '');
+  const [password, setPassword] = useState(() => sessionStorage.getItem('login_password') || '');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem('rememberedEmail'));
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -37,6 +37,10 @@ export const Login = () => {
       } else {
         localStorage.removeItem('rememberedEmail');
       }
+
+      // Clear temporary session storage on successful login
+      sessionStorage.removeItem('login_email');
+      sessionStorage.removeItem('login_password');
 
       // Redirect to dashboard
       navigate('/dashboard');
@@ -111,7 +115,7 @@ export const Login = () => {
                 type="email"
                 placeholder="Enter your email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); sessionStorage.setItem('login_email', e.target.value); }}
                 disabled={loading}
                 required
                 className="w-full border-0 border-b-2 border-[#bdc9c2] bg-[#f3f4f5] px-4 py-3.5 font-body text-sm text-[#191c1d] placeholder-[#6e7a74] transition-colors duration-200 focus:border-[#006049] focus:bg-[#edeeef] focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50"
@@ -128,7 +132,7 @@ export const Login = () => {
                 type={showPassword ? 'text' : 'password'}
                 placeholder="••••••••"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => { setPassword(e.target.value); sessionStorage.setItem('login_password', e.target.value); }}
                 disabled={loading}
                 required
                 className="w-full border-0 border-b-2 border-[#bdc9c2] bg-[#f3f4f5] px-4 py-3.5 font-body text-sm text-[#191c1d] placeholder-[#6e7a74] transition-colors duration-200 focus:border-[#006049] focus:bg-[#edeeef] focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50"
