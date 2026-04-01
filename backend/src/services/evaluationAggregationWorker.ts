@@ -96,7 +96,7 @@ export const ensureAggregationSchemaForCurrentDb = async (): Promise<void> => {
     // Add fragment_id column if it doesn't exist
     await client.query(`
       ALTER TABLE evidences
-      ADD COLUMN IF NOT EXISTS fragment_id INTEGER REFERENCES fragments(id) ON DELETE CASCADE;
+      ADD COLUMN IF NOT EXISTS fragment_id INTEGER REFERENCES fragments(fragment_id) ON DELETE CASCADE;
     `);
 
     await client.query(`
@@ -146,7 +146,7 @@ export const ensureAggregationSchemaForCurrentDb = async (): Promise<void> => {
         SELECT
           file_id,
           kpi_id,
-          MIN(id) AS keep_id,
+          MIN(evaluation_id) AS keep_id,
           SUM(COALESCE(evidence_count, 0))::int AS merged_evidence_count,
           MAX(mark) AS merged_mark,
           MAX(updated_at) AS latest_updated_at
@@ -165,12 +165,12 @@ export const ensureAggregationSchemaForCurrentDb = async (): Promise<void> => {
         END,
         updated_at = COALESCE(dg.latest_updated_at, NOW())
       FROM duplicate_groups dg
-      WHERE e.id = dg.keep_id;
+      WHERE e.evaluation_id = dg.keep_id;
     `);
 
     await client.query(`
       WITH duplicate_groups AS (
-        SELECT file_id, kpi_id, MIN(id) AS keep_id
+        SELECT file_id, kpi_id, MIN(evaluation_id) AS keep_id
         FROM evaluations
         GROUP BY file_id, kpi_id
         HAVING COUNT(*) > 1
@@ -179,7 +179,7 @@ export const ensureAggregationSchemaForCurrentDb = async (): Promise<void> => {
       USING duplicate_groups dg
       WHERE e.file_id = dg.file_id
         AND e.kpi_id = dg.kpi_id
-        AND e.id <> dg.keep_id;
+        AND e.evaluation_id <> dg.keep_id;
     `);
 
     await client.query(`
@@ -196,7 +196,7 @@ export const ensureAggregationSchemaForCurrentDb = async (): Promise<void> => {
           COUNT(*)::int AS evidence_count,
           ROUND(AVG(${SQL_CONFIDENCE_EXTRACT_EXPR})::numeric, 2) AS avg_confidence
         FROM evidences e
-        LEFT JOIN fragments f ON e.fragment_id = f.id
+        LEFT JOIN fragments f ON e.fragment_id = f.fragment_id
         WHERE COALESCE(f.file_id, e.file_id) IS NOT NULL
         GROUP BY COALESCE(f.file_id, e.file_id), e.kpi_id
       )
@@ -263,12 +263,12 @@ export const ensureAggregationFunctionForCurrentDb = async (): Promise<void> => 
         RETURN QUERY
         WITH pending AS (
           SELECT
-            e.id,
+            e.evidence_id,
             COALESCE(f.file_id, e.file_id) AS file_id,
             e.kpi_id,
             ${SQL_CONFIDENCE_EXTRACT_EXPR} AS confidence
           FROM evidences e
-          LEFT JOIN fragments f ON e.fragment_id = f.id
+          LEFT JOIN fragments f ON e.fragment_id = f.fragment_id
           WHERE COALESCE(e.iscalculated, FALSE) = FALSE
           FOR UPDATE OF e SKIP LOCKED
         ),
@@ -338,8 +338,8 @@ export const ensureAggregationFunctionForCurrentDb = async (): Promise<void> => 
           SET
             iscalculated = TRUE,
             updated_at = NOW()
-          WHERE e.id IN (SELECT id FROM pending)
-          RETURNING e.id
+          WHERE e.evidence_id IN (SELECT evidence_id FROM pending)
+          RETURNING e.evidence_id
         )
         SELECT
           FALSE::BOOLEAN,

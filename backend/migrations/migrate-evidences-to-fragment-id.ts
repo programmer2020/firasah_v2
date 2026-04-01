@@ -20,7 +20,7 @@ export const up = async () => {
       console.log('[Migration] Adding fragment_id column...');
       await pool.query(`
         ALTER TABLE evidences 
-        ADD COLUMN fragment_id INTEGER REFERENCES fragments(id) ON DELETE CASCADE
+        ADD COLUMN fragment_id INTEGER REFERENCES fragments(fragment_id) ON DELETE CASCADE
       `);
       console.log('[Migration] ✅ fragment_id column added');
     }

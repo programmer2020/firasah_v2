@@ -8,7 +8,7 @@ import { verifyToken } from '../services/authService.js';
 
 export interface AuthRequest extends Request {
   user?: {
-    id: number;
+    user_id: number;
     email: string;
   };
 }
@@ -42,7 +42,7 @@ export const authenticate = (
     }
 
     req.user = {
-      id: payload.id,
+      user_id: payload.user_id,
       email: payload.email,
     };
 
