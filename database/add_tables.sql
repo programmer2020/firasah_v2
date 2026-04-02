@@ -64,7 +64,9 @@ CREATE TABLE IF NOT EXISTS lecture_kpi (
   avg_confidence NUMERIC,
   evidence_count INTEGER DEFAULT 0,
   score NUMERIC(5, 2) DEFAULT 0,
+  mark VARCHAR(1) DEFAULT 'n',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (lecture_id, kpi_id)
 );
 
@@ -127,10 +129,13 @@ COMMENT ON COLUMN kpis.kpi_description IS 'Detailed description of the KPI';
 COMMENT ON COLUMN kpis.createdBy IS 'User who created the KPI';
 COMMENT ON COLUMN kpis.note IS 'Additional notes about the KPI';
 
+COMMENT ON COLUMN lecture_kpi.mark IS 'Computed KPI mark based on evidence count';
+COMMENT ON COLUMN lecture_kpi.updated_at IS 'Last time the lecture KPI row was updated';
+
 COMMENT ON COLUMN evidences.evidence_id IS 'Unique identifier for evidence';
 COMMENT ON COLUMN evidences.kpi_id IS 'Foreign key to KPIs table';
 COMMENT ON COLUMN evidences.lecture_id IS 'Foreign key to lecture table';
 COMMENT ON COLUMN evidences.start_time IS 'Start time of the evidence';
 COMMENT ON COLUMN evidences.end_time IS 'End time of the evidence';
-COMMENT ON COLUMN evidences.evidence_txt IS 'Text description of the evidence';
+COMMENT ON COLUMN evidences.facts IS 'Text description of the evidence';
 COMMENT ON COLUMN evidences.iscalculated IS 'Whether this evidence row was already aggregated into evaluations';
