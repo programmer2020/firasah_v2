@@ -11,7 +11,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 // @ts-ignore
 import ffprobeStatic from 'ffprobe-static';
-import { insert, getOne, getMany, update } from '../helpers/database.js';
+import { insert, getOne, getMany, update, executeQuery } from '../helpers/database.js';
 import { updateProgress } from './progressService.js';
 import { evaluateSpeechAgainstKPIs } from './evaluationsService.js';
 
@@ -381,35 +381,103 @@ export const saveFragment = async (
 ) => {
   try {
     console.log(`[Fragment] Saving fragment: file_id=${fileId}, start=${startTime}s, end=${endTime}s, order=${slotOrder}, transcript_len=${transcript.length}`);
-    
-    const result = await insert('fragments', {
-      file_id: fileId,
-      transcript,
-      language,
-      duration,
-      start_time: startTime,
-      end_time: endTime,
-      slot_order: slotOrder,
-      created_at: new Date(),
-      updated_at: new Date(),
-    });
-    
-    console.log(`[Fragment] ✅ Fragment saved successfully: id=${result.id}, file_id=${result.file_id}`);
+
+    const resolvedDuration =
+      duration != null && Number.isFinite(Number(duration))
+        ? Number(duration)
+        : Math.max(0, Number(endTime) - Number(startTime));
+
+    let lectureId: number | null = null;
+    try {
+      const lec = await getOne(
+        'SELECT lecture_id FROM lecture WHERE file_id = $1 ORDER BY lecture_id DESC LIMIT 1',
+        [fileId]
+      );
+      if (lec?.lecture_id != null) {
+        lectureId = Number(lec.lecture_id);
+      }
+    } catch {
+      /* optional link to lecture row */
+    }
+
+    // Explicit INSERT so canonical columns (fragment_order, start_seconds, end_seconds) are always set.
+    // Generic insert() + JS object key ordering caused some deployments to leave them NULL.
+    const ins = await executeQuery(
+      `
+      INSERT INTO fragments (
+        file_id,
+        lecture_id,
+        transcript,
+        language,
+        duration,
+        start_time,
+        end_time,
+        slot_order,
+        fragment_order,
+        start_seconds,
+        end_seconds,
+        created_at,
+        updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10,
+        $11, $12, $13
+      )
+      RETURNING *
+      `,
+      [
+        fileId,
+        lectureId,
+        transcript,
+        language,
+        resolvedDuration,
+        startTime,
+        endTime,
+        slotOrder,
+        slotOrder,
+        startTime,
+        endTime,
+        new Date(),
+        new Date(),
+      ]
+    );
+
+    const result = ins.rows[0];
+
+    // Belt-and-suspenders: ensure mirrored columns match (covers triggers / old partial rows)
+    const fid = result.fragment_id ?? result.id;
+    if (fid != null) {
+      await executeQuery(
+        `
+        UPDATE fragments SET
+          fragment_order = $2,
+          start_seconds = $3,
+          end_seconds = $4,
+          updated_at = NOW()
+        WHERE fragment_id = $1
+        `,
+        [fid, slotOrder, startTime, endTime]
+      );
+    }
+
+    console.log(
+      `[Fragment] ✅ Fragment saved successfully: fragment_id=${fid}, file_id=${result.file_id}`
+    );
     
     // Automatically evaluate fragment against KPIs asynchronously
     if (transcript && transcript.trim() && transcript !== '[transcription_pending]') {
       setImmediate(async () => {
         try {
-          console.log(`[Evaluation] 🔄 Starting automatic KPI evaluation for fragment_id=${result.id}...`);
+          console.log(`[Evaluation] 🔄 Starting automatic KPI evaluation for fragment_id=${fid}...`);
           const evaluations = await evaluateSpeechAgainstKPIs(
             transcript,
             fileId,
-            result.id,
+            fid,
             undefined
           );
           console.log(`[Evaluation] ✅ Completed: Evaluated against all KPIs, found ${evaluations.length} evidence records`);
         } catch (evalErr) {
-          console.error(`[Evaluation] ⚠️ Non-blocking evaluation error for fragment_id=${result.id}:`, evalErr);
+          console.error(`[Evaluation] ⚠️ Non-blocking evaluation error for fragment_id=${fid}:`, evalErr);
         }
       });
     }
@@ -754,6 +822,9 @@ export const retranscribePendingFragments = async (
             transcript: result.text,
             language: result.language,
             updated_at: new Date(),
+            fragment_order: row.slot_order ?? row.fragment_order ?? 0,
+            start_seconds: startSec,
+            end_seconds: endSec,
           },
           whereCol,
           [pk]
