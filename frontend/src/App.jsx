@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DatabaseProvider } from './context/DatabaseContext';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -16,6 +17,7 @@ import FailedFragments from './pages/FailedFragments';
 import Schedule from './pages/Schedule';
 import EvaluationDashboard from './pages/EvaluationDashboard';
 import WorkerJobs from './pages/WorkerJobs';
+import TeacherDashboard from './pages/TeacherDashboard';
 import ThemeTest from './components/ThemeTest';
 import './App.css';
 
@@ -32,12 +34,31 @@ const ProtectedRoute = ({ element }) => {
     );
   }
 
-  return isAuthenticated ? element : <Navigate to="/login" replace />;
+  return isAuthenticated ? element : <Navigate to="/" replace />;
+};
+
+// Home Route - Shows Landing if not authenticated, Dashboard if authenticated
+const HomeRoute = () => {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
+  return isAuthenticated ? <Navigate to="/dashboard" replace /> : <Landing />;
 };
 
 function AppRoutes() {
   return (
     <Routes>
+      {/* Home Route - Landing page or Dashboard if authenticated */}
+      <Route path="/" element={<HomeRoute />} />
+      
       {/* Public Routes */}
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
@@ -56,12 +77,10 @@ function AppRoutes() {
       <Route path="/schedule" element={<ProtectedRoute element={<Schedule />} />} />
       <Route path="/evaluations" element={<ProtectedRoute element={<EvaluationDashboard />} />} />
       <Route path="/worker-jobs" element={<ProtectedRoute element={<WorkerJobs />} />} />
-
-      {/* Default Route */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/teacher-dashboard" element={<ProtectedRoute element={<TeacherDashboard />} />} />
 
       {/* 404 Route */}
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

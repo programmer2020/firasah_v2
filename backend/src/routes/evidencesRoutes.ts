@@ -332,4 +332,86 @@ router.get('/file/:fileId', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/evidences/extract/{lectureId}:
+ *   post:
+ *     tags:
+ *       - Evidences
+ *     summary: Extract evidence from lecture transcript using Detection Signals
+ *     description: Analyzes lecture transcript and automatically extracts evidence based on KPI Detection Signals
+ *     parameters:
+ *       - in: path
+ *         name: lectureId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Evidence extracted and saved successfully
+ */
+router.post('/extract/:lectureId', async (req: Request, res: Response) => {
+  try {
+    const lectureId = parseInt(req.params.lectureId);
+
+    if (isNaN(lectureId) || lectureId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid lecture ID',
+      });
+    }
+
+    // Call Python evidence extraction service
+    const { spawn } = await import('child_process');
+    const python = spawn('python', [
+      './evidence_api.py',
+      'extract',
+      lectureId.toString(),
+    ]);
+
+    let output = '';
+    let errorOutput = '';
+
+    python.stdout.on('data', (data: Buffer) => {
+      output += data.toString();
+    });
+
+    python.stderr.on('data', (data: Buffer) => {
+      errorOutput += data.toString();
+    });
+
+    python.on('close', (code: number) => {
+      if (code === 0) {
+        try {
+          const result = JSON.parse(output);
+          res.status(200).json({
+            success: true,
+            message: 'Evidence extracted successfully',
+            data: result,
+          });
+        } catch (parseError) {
+          res.status(200).json({
+            success: true,
+            message: 'Evidence extraction completed',
+            data: {
+              lectureId,
+              status: 'processing',
+            },
+          });
+        }
+      } else {
+        res.status(500).json({
+          success: false,
+          message: errorOutput || 'Evidence extraction failed',
+        });
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Evidence extraction error',
+    });
+  }
+});
+
 export default router;

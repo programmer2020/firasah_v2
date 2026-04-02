@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const MenuIcon = () => (
@@ -51,6 +51,7 @@ const routeMeta = {
 const Header = ({ onOpenSidebar }) => {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [showMenu, setShowMenu] = useState(false);
   const currentRoute = routeMeta[location.pathname] || routeMeta['/dashboard'];
 
@@ -113,6 +114,7 @@ const Header = ({ onOpenSidebar }) => {
                       type="button"
                       onClick={() => {
                         logout();
+                        navigate('/');
                         setShowMenu(false);
                       }}
                       className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--dashboard-primary)] transition hover:opacity-80"

@@ -1,0 +1,107 @@
+/* Teacher Dashboard Styles */
+
+.teacher-dashboard-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f8f9fa 0%, #f0f4f8 100%);
+}
+
+.stat-card {
+  transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 104, 122, 0.1);
+}
+
+.heatmap-cell {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.heatmap-cell:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.chart-container {
+  position: relative;
+  height: 300px;
+}
+
+.evidence-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.evidence-table tbody tr:hover {
+  background-color: rgba(0, 104, 122, 0.05);
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  background-color: #f3f4f6;
+  color: #374151;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.filter-chip.active {
+  background-color: #dbeafe;
+  color: #0369a1;
+}
+
+/* Filter Panel Animations */
+.filter-panel {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Select and Input Styling */
+select,
+input {
+  transition: all 0.2s ease;
+}
+
+select:focus,
+input:focus {
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
+}
+
+/* Button Transitions */
+button {
+  transition: all 0.2s ease;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .evidence-table {
+    font-size: 0.875rem;
+  }
+
+  .stat-card {
+    padding: 1.25rem;
+  }
+
+  .filter-panel {
+    grid-template-columns: 1fr;
+  }
+}
