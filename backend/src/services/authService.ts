@@ -87,12 +87,15 @@ export const verifyToken = (token: string): JWTPayload | null => {
  * @param credentials User credentials (email, password, name)
  * @returns Promise with created user
  */
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
 export const registerUser = async (credentials: UserCredentials) => {
   try {
+    const emailNorm = normalizeEmail(credentials.email);
     // Check if user exists
     const existingUser = await getOne(
-      'SELECT user_id FROM users WHERE email = $1',
-      [credentials.email]
+      'SELECT user_id FROM users WHERE LOWER(TRIM(email)) = $1',
+      [emailNorm]
     );
 
     if (existingUser) {
@@ -144,8 +147,11 @@ export const registerUser = async (credentials: UserCredentials) => {
  */
 export const loginUser = async (email: string, password: string) => {
   try {
-    // Find user
-    const user = await getOne('SELECT * FROM users WHERE email = $1', [email]);
+    const emailNorm = normalizeEmail(email);
+    // Find user (case-insensitive + trim so pasted emails still match)
+    const user = await getOne('SELECT * FROM users WHERE LOWER(TRIM(email)) = $1', [
+      emailNorm,
+    ]);
 
     if (!user) {
       throw new Error('Invalid email or password');

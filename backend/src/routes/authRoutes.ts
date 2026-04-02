@@ -204,7 +204,7 @@ router.get('/profile', authenticate, async (req: AuthRequest, res: Response) => 
       });
     }
 
-    const user = await getUserById(req.user.user_id);
+    const user = await getUserById(req.user.id);
 
     res.status(200).json({
       success: true,
@@ -270,7 +270,7 @@ router.put('/profile', authenticate, async (req: AuthRequest, res: Response) => 
 
     const { name, email } = req.body;
 
-    const updatedUser = await updateUser(req.user.user_id, {
+    const updatedUser = await updateUser(req.user.id, {
       name,
       email,
     });
@@ -356,7 +356,7 @@ router.post(
         });
       }
 
-      await changePassword(req.user.user_id, oldPassword, newPassword);
+      await changePassword(req.user.id, oldPassword, newPassword);
 
       res.status(200).json({
         success: true,

@@ -211,9 +211,13 @@ export const AudioUpload = () => {
     formData.append('day_of_week', dayOfWeek);
 
     try {
+      // Instance default is application/json; that makes axios stringify FormData → server gets no file.
+      // Content-Type: false removes the default so the browser sets multipart/form-data with boundary.
+      const token = localStorage.getItem('authToken');
       const response = await api.post('/sound-files/upload', formData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          'Content-Type': false,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round(

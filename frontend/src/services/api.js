@@ -31,7 +31,11 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // Do not redirect on failed login/register — those return 401/400 with a message for the form.
+    const reqUrl = error.config?.url || '';
+    const isAuthAttempt =
+      reqUrl.includes('/auth/login') || reqUrl.includes('/auth/register');
+    if (error.response?.status === 401 && !isAuthAttempt) {
       localStorage.removeItem('authToken');
       window.location.href = '/login';
     }

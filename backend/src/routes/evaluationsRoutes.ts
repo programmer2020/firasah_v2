@@ -7,7 +7,7 @@ import { Router, Request, Response } from 'express';
 import {
   getAllEvaluations,
   getEvaluationByLectureAndKPI,
-  createEvaluation,
+  createEvaluationForLecture,
   updateEvaluation,
   deleteEvaluation,
   getEvaluationsByKPI,
@@ -110,12 +110,11 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
 
-    const evaluation = await createEvaluation({
+    const evaluation = await createEvaluationForLecture(
       lecture_id,
       kpi_id,
-      evidence_count,
-      avg_confidence,
-    });
+      evidence_count ?? avg_confidence
+    );
 
     res.status(201).json({
       success: true,
@@ -186,7 +185,7 @@ router.delete('/lecture/:lectureId/kpi/:kpiId', async (req: Request, res: Respon
       });
     }
 
-    const evaluation = await deleteEvaluation(parseInt(lectureId), parseInt(kpiId));
+    const evaluation = await deleteEvaluation(existing.id);
 
     res.status(200).json({
       success: true,

@@ -219,6 +219,77 @@ export const getEvaluationsByFile = async (fileId: number) => {
 };
 
 /**
+ * Evaluations linked to a lecture (evaluations.file_id = lecture.file_id)
+ */
+export const getEvaluationsByLecture = async (lectureId: number) => {
+  try {
+    const query = `
+      SELECT
+        e.id,
+        e.file_id,
+        e.kpi_id,
+        e.evidence_count,
+        e.mark,
+        e.created_at,
+        k.kpi_name,
+        s.filename
+      FROM evaluations e
+      INNER JOIN lecture l ON e.file_id = l.file_id AND l.lecture_id = $1
+      LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
+      LEFT JOIN sound_files s ON e.file_id = s.file_id
+      ORDER BY e.created_at DESC
+    `;
+    return await getMany(query, [lectureId]);
+  } catch (error) {
+    console.error('Error fetching evaluations by lecture:', error);
+    throw error;
+  }
+};
+
+export const getEvaluationByLectureAndKPI = async (lectureId: number, kpiId: number) => {
+  try {
+    const query = `
+      SELECT
+        e.id,
+        e.file_id,
+        e.kpi_id,
+        e.evidence_count,
+        e.mark,
+        e.created_at,
+        k.kpi_name,
+        s.filename
+      FROM evaluations e
+      INNER JOIN lecture l ON e.file_id = l.file_id AND l.lecture_id = $1
+      LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
+      LEFT JOIN sound_files s ON e.file_id = s.file_id
+      WHERE e.kpi_id = $2
+      LIMIT 1
+    `;
+    return await getOne(query, [lectureId, kpiId]);
+  } catch (error) {
+    console.error('Error fetching evaluation by lecture and KPI:', error);
+    throw error;
+  }
+};
+
+/** Create evaluation row from lecture_id (resolves file_id from lecture) */
+export const createEvaluationForLecture = async (
+  lectureId: number,
+  kpiId: number,
+  evidenceCount?: number
+) => {
+  const lec = await getOne(`SELECT file_id FROM lecture WHERE lecture_id = $1`, [lectureId]);
+  if (lec == null || lec.file_id == null) {
+    throw new Error('Lecture not found');
+  }
+  return createEvaluation({
+    file_id: lec.file_id,
+    kpi_id: kpiId,
+    evidence_count: evidenceCount,
+  });
+};
+
+/**
  * --- AUTOMATIC KPI EVALUATION FUNCTIONS ---
  * Used for real-time speech evaluation against teaching quality standards
  */

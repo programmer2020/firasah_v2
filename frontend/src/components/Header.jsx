@@ -42,8 +42,8 @@ const routeMeta = {
   '/grades': { section: 'Dashboard', title: 'Grades' },
   '/sections': { section: 'Dashboard', title: 'Sections' },
   '/audio-upload': { section: 'Dashboard', title: 'Lectures' },
-  '/failed-fragments': { section: 'Dashboard', title: 'Clips' },
-  '/schedule': { section: 'Dashboard', title: 'Patterns' },
+  '/failed-fragments': { section: 'Dashboard', title: 'Failed Fragments' },
+  '/schedule': { section: 'Dashboard', title: 'Class Schedule' },
   '/evaluations': { section: 'Dashboard', title: 'Highlights' },
   '/worker-jobs': { section: 'Dashboard', title: 'Admin Upload' },
 };

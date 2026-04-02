@@ -205,3 +205,36 @@ export const getEvidencesByLecture = async (lectureId: number) => {
     throw error;
   }
 };
+
+/**
+ * Get evidences for a sound file (via lecture.file_id)
+ */
+export const getEvidencesByFile = async (fileId: number) => {
+  try {
+    const query = `
+      SELECT
+        e.evidence_id,
+        e.kpi_id,
+        e.lecture_id,
+        e.start_time,
+        e.end_time,
+        e.status,
+        e.facts,
+        e.interpretation,
+        e.limitations,
+        e.confidence,
+        e.created_at,
+        k.kpi_name,
+        l.file_id
+      FROM evidences e
+      LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
+      JOIN lecture l ON e.lecture_id = l.lecture_id
+      WHERE l.file_id = $1
+      ORDER BY e.created_at DESC
+    `;
+    return await getMany(query, [fileId]);
+  } catch (error) {
+    console.error('Error fetching evidences by file:', error);
+    throw error;
+  }
+};

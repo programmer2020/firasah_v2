@@ -4,6 +4,8 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { verifyToken } from '../services/authService.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -69,6 +71,19 @@ const upload = multer({
 
 const router = Router();
 
+/** Who uploaded the file (email preferred for display; id as string fallback). */
+function resolveCreatedBy(req: AuthRequest): string {
+  if (req.user?.email) return req.user.email;
+  if (req.user?.id != null) return String(req.user.id);
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ')) {
+    const payload = verifyToken(authHeader.slice(7));
+    if (payload?.email) return payload.email;
+    if (payload?.user_id != null) return String(payload.user_id);
+  }
+  return 'anonymous';
+}
+
 /**
  * @swagger
  * /api/sound-files/upload:
@@ -95,7 +110,7 @@ const router = Router();
  *       400:
  *         description: Invalid file or missing required fields
  */
-router.post('/upload', upload.single('file'), async (req: Request, res: Response) => {
+router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -104,7 +119,7 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       });
     }
 
-    const userId = (req as any).user?.userId || 'anonymous';
+    const userId = resolveCreatedBy(req);
     const classId = (req.body as any).class_id ? Number((req.body as any).class_id) : undefined;
     const dayOfWeek = (req.body as any).day_of_week || undefined;
     const slotDate = (req.body as any).slot_date || undefined;

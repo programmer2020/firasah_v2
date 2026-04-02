@@ -62,8 +62,8 @@ export const Sidebar = ({ isOpen, onClose }) => {
   const menuItems = [
     { label: 'Dashboard', href: '/dashboard', icon: IconDashboard },
     { label: 'Lectures', href: '/audio-upload', icon: IconSchool },
-    { label: 'Clips', href: '/failed-fragments', icon: IconClips },
-    { label: 'Patterns', href: '/schedule', icon: IconTexture },
+    { label: 'Failed Fragments', href: '/failed-fragments', icon: IconClips },
+    { label: 'Class Schedule', href: '/schedule', icon: IconTexture },
     { label: 'Highlights', href: '/evaluations', icon: IconHighlights },
     { label: 'Admin Upload', href: '/worker-jobs', icon: IconUpload },
   ];

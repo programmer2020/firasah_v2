@@ -11,7 +11,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 // @ts-ignore
 import ffprobeStatic from 'ffprobe-static';
-import { insert, getOne, getMany } from '../helpers/database.js';
+import { insert, getOne, getMany, update } from '../helpers/database.js';
 import { updateProgress } from './progressService.js';
 import { evaluateSpeechAgainstKPIs } from './evaluationsService.js';
 
@@ -681,4 +681,112 @@ export const transcribeAndSave = async (
       console.log(`[FFmpeg] Cleaned up denoised file`);
     }
   }
+};
+
+const PENDING_TRANSCRIPT = '[transcription_pending]';
+
+/**
+ * Re-transcribe fragments that were saved with [transcription_pending] (e.g. after API errors).
+ */
+export const retranscribePendingFragments = async (
+  fileId: number,
+  audioPath: string,
+  shouldDenoise: boolean = true
+): Promise<{ retranscribed: number; failed: number }> => {
+  const absolutePath = path.isAbsolute(audioPath)
+    ? audioPath
+    : path.join(process.cwd(), audioPath);
+
+  let denoisedPath = absolutePath;
+  let denoisedCleanup = false;
+  if (shouldDenoise) {
+    denoisedPath = await denoiseAudio(absolutePath, fileId);
+    denoisedCleanup = denoisedPath !== absolutePath;
+  }
+
+  let retranscribed = 0;
+  let failed = 0;
+  const tempDir = path.join(path.dirname(denoisedPath), 'temp_segments_retrans');
+  const ext = path.extname(absolutePath) || '.mp3';
+
+  try {
+    const pending = await getMany(
+      `SELECT * FROM fragments
+       WHERE file_id = $1 AND transcript = $2
+       ORDER BY COALESCE(slot_order, fragment_order, 0) ASC`,
+      [fileId, PENDING_TRANSCRIPT]
+    );
+
+    if (pending.length === 0) {
+      return { retranscribed: 0, failed: 0 };
+    }
+
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    for (const row of pending) {
+      const pk = row.fragment_id ?? row.id;
+      const startSec = Number(row.start_seconds ?? row.start_time ?? 0);
+      let endSec = Number(row.end_seconds ?? row.end_time ?? startSec);
+      if (!Number.isFinite(endSec) || endSec <= startSec) {
+        const dur = Number(row.duration ?? 0);
+        endSec = startSec + (Number.isFinite(dur) && dur > 0 ? dur : 0);
+      }
+      const effectiveDuration = Math.max(0, endSec - startSec);
+      const segmentFile = path.join(tempDir, `retrans_${pk}${ext}`);
+
+      if (effectiveDuration <= 0 || pk == null) {
+        failed++;
+        continue;
+      }
+
+      try {
+        await splitAudioSegment(denoisedPath, segmentFile, startSec, effectiveDuration);
+        if (!fs.existsSync(segmentFile)) {
+          throw new Error(`Segment not created: ${segmentFile}`);
+        }
+        const result = await transcribeAudio(segmentFile, fileId);
+        const whereCol = row.fragment_id != null ? 'fragment_id = $1' : 'id = $1';
+        await update(
+          'fragments',
+          {
+            transcript: result.text,
+            language: result.language,
+            updated_at: new Date(),
+          },
+          whereCol,
+          [pk]
+        );
+        retranscribed++;
+        setImmediate(async () => {
+          try {
+            await evaluateSpeechAgainstKPIs(result.text, fileId);
+          } catch (evalErr) {
+            console.error(`[Evaluation] ⚠️ After retranscribe fragment_id=${pk}:`, evalErr);
+          }
+        });
+      } catch (err) {
+        console.error(`[RetranscribePending] Fragment pk=${pk}:`, err);
+        failed++;
+      } finally {
+        if (fs.existsSync(segmentFile)) {
+          fs.unlinkSync(segmentFile);
+        }
+      }
+    }
+  } finally {
+    try {
+      if (fs.existsSync(tempDir)) {
+        fs.rmdirSync(tempDir);
+      }
+    } catch {
+      /* ignore */
+    }
+    if (denoisedCleanup && fs.existsSync(denoisedPath)) {
+      fs.unlinkSync(denoisedPath);
+    }
+  }
+
+  return { retranscribed, failed };
 };
