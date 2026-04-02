@@ -17,10 +17,10 @@ import {
   deleteSoundFile,
   getSoundFilesByCreator,
 } from '../services/soundFilesService.js';
-import { transcribeAndSave, convertVideoToAudio, getSpeechByFileId, retranscribePendingFragments } from '../services/speechService.js';
+import { transcribeAndSave, convertVideoToAudio, getSpeechByFileId, retranscribePendingFragments, transcribeAudio } from '../services/speechService.js';
 import { getProgress, addSSEClient, updateProgress } from '../services/progressService.js';
 import { getEvaluationResults, generateEvaluationReport, testEvaluation, getEvaluationsWithFilters, exportEvaluationToJSON, generateComprehensiveReport } from '../services/evaluationsService.js';
-import { getMany, executeQuery } from '../helpers/database.js';
+import { getOne, getMany, executeQuery, update } from '../helpers/database.js';
 
 // Configure multer for audio uploads
 const uploadDir = path.join(process.cwd(), 'uploads', 'audio');
@@ -204,6 +204,140 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
     res.status(400).json({
       success: false,
       message: error instanceof Error ? error.message : 'Failed to upload file',
+    });
+  }
+});
+
+/**
+ * GET /api/sound-files/fragments/failed
+ * Get all fragments with transcription_status = 'failed' (retry_count >= 3)
+ */
+router.get('/fragments/failed', async (req: Request, res: Response) => {
+  try {
+    const rows = await getMany(
+      `SELECT f.fragment_id, f.file_id, f.fragment_order, f.start_seconds, f.end_seconds,
+              f.duration, f.transcription_status, f.retry_count, f.last_error,
+              sf.filename
+       FROM fragments f
+       LEFT JOIN sound_files sf ON sf.file_id = f.file_id
+       WHERE f.transcription_status = 'failed'
+       ORDER BY f.file_id ASC, f.fragment_order ASC`,
+      []
+    );
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error('[SoundFiles] Error fetching failed fragments:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to fetch failed fragments',
+    });
+  }
+});
+
+/**
+ * POST /api/sound-files/fragments/:fragmentId/retry-manual
+ * Manually retry transcription for a single failed fragment
+ */
+router.post('/fragments/:fragmentId/retry-manual', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const fragmentId = parseInt(req.params.fragmentId as string);
+    if (isNaN(fragmentId)) {
+      return res.status(400).json({ success: false, message: 'Invalid fragment ID' });
+    }
+
+    const fragment = await getOne(
+      'SELECT * FROM fragments WHERE fragment_id = $1',
+      [fragmentId]
+    );
+    if (!fragment) {
+      return res.status(404).json({ success: false, message: 'Fragment not found' });
+    }
+
+    const soundFile = await getOne(
+      'SELECT * FROM sound_files WHERE file_id = $1',
+      [fragment.file_id]
+    );
+    if (!soundFile || !fs.existsSync(soundFile.filepath)) {
+      return res.status(404).json({ success: false, message: 'Audio file not found on disk' });
+    }
+
+    const startSec = Number(fragment.start_seconds ?? 0);
+    let endSec = Number(fragment.end_seconds ?? startSec);
+    if (endSec <= startSec) {
+      const dur = Number(fragment.duration ?? 0);
+      endSec = startSec + (dur > 0 ? dur : 0);
+    }
+    const effectiveDuration = Math.max(0, endSec - startSec);
+
+    if (effectiveDuration <= 0) {
+      return res.status(400).json({ success: false, message: 'Fragment has zero duration' });
+    }
+
+    // Extract the segment using ffmpeg
+    const ext = path.extname(soundFile.filepath) || '.mp3';
+    const tempDir = path.join(path.dirname(soundFile.filepath), 'temp_retry');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    const segmentFile = path.join(tempDir, `retry_${fragmentId}${ext}`);
+
+    // Use ffmpeg to extract segment
+    const { execSync } = await import('child_process');
+    execSync(
+      `ffmpeg -y -ss ${startSec} -t ${effectiveDuration} -i "${soundFile.filepath}" -acodec copy "${segmentFile}"`,
+      { stdio: 'pipe' }
+    );
+
+    if (!fs.existsSync(segmentFile)) {
+      return res.status(500).json({ success: false, message: 'Failed to extract audio segment' });
+    }
+
+    try {
+      const result = await transcribeAudio(segmentFile, fragment.file_id);
+
+      await update(
+        'fragments',
+        {
+          transcript: result.text,
+          language: result.language,
+          transcription_status: 'completed',
+          last_error: null,
+          updated_at: new Date(),
+        },
+        'fragment_id = $1',
+        [fragmentId]
+      );
+
+      // Update the lecture transcript in background
+      setImmediate(async () => {
+        try {
+          const lecture = await getOne('SELECT lecture_id FROM lecture WHERE file_id = $1 LIMIT 1', [fragment.file_id]);
+          if (lecture?.lecture_id) {
+            const allFragments = await getMany(
+              `SELECT transcript FROM fragments WHERE file_id = $1 ORDER BY COALESCE(fragment_order, 0) ASC`,
+              [fragment.file_id]
+            );
+            const fullTranscript = allFragments.map((f: any) => f.transcript).filter(Boolean).join(' ');
+            await executeQuery(
+              'UPDATE lecture SET transcription = $1, updated_at = NOW() WHERE lecture_id = $2',
+              [fullTranscript, lecture.lecture_id]
+            );
+          }
+        } catch (err) {
+          console.error(`[ManualRetry] Error updating lecture transcript:`, err);
+        }
+      });
+
+      res.json({ success: true, message: 'Fragment retranscribed successfully', data: result });
+    } finally {
+      if (fs.existsSync(segmentFile)) fs.unlinkSync(segmentFile);
+      try { fs.rmdirSync(tempDir); } catch { /* ignore */ }
+    }
+  } catch (error) {
+    console.error('[SoundFiles] Manual retry error:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Manual retry failed',
     });
   }
 });

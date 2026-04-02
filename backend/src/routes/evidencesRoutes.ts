@@ -136,21 +136,20 @@ router.get('/:id', async (req: Request, res: Response) => {
  */
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { kpi_id, file_id, start_time, end_time, evidence_txt } = req.body;
+    const { kpi_id, lecture_id, start_time, end_time } = req.body;
 
-    if (!kpi_id || !file_id) {
+    if (!kpi_id || !lecture_id) {
       return res.status(400).json({
         success: false,
-        message: 'kpi_id and file_id are required',
+        message: 'kpi_id and lecture_id are required',
       });
     }
 
     const evidence = await createEvidence({
       kpi_id,
-      file_id,
+      lecture_id,
       start_time,
       end_time,
-      evidence_txt,
     });
 
     res.status(201).json({

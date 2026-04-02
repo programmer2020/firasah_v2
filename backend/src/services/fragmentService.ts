@@ -122,6 +122,7 @@ export const createFragmentRecords = async (
         fragment_path: fragment.fragment_path,
         transcript: fragment.transcript || null,
         language: fragment.language || null,
+        last_transcription_attempt_at: new Date(),
         created_at: new Date(),
         updated_at: new Date(),
       });

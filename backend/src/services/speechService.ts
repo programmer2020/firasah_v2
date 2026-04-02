@@ -377,7 +377,8 @@ export const saveFragment = async (
   duration: number | null,
   startTime: number = 0,
   endTime: number = 0,
-  slotOrder: number = 0
+  slotOrder: number = 0,
+  fragmentPath: string | null = null
 ) => {
   try {
     console.log(`[Fragment] Saving fragment: file_id=${fileId}, start=${startTime}s, end=${endTime}s, order=${slotOrder}, transcript_len=${transcript.length}`);
@@ -416,12 +417,14 @@ export const saveFragment = async (
         fragment_order,
         start_seconds,
         end_seconds,
+        fragment_path,
+        last_transcription_attempt_at,
         created_at,
         updated_at
       ) VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
-        $11, $12, $13
+        $11, $12, $13, $14, $15
       )
       RETURNING *
       `,
@@ -437,6 +440,8 @@ export const saveFragment = async (
         slotOrder,
         startTime,
         endTime,
+        fragmentPath,
+        new Date(),
         new Date(),
         new Date(),
       ]
@@ -468,12 +473,16 @@ export const saveFragment = async (
     if (transcript && transcript.trim() && transcript !== '[transcription_pending]') {
       setImmediate(async () => {
         try {
+          // Resolve lecture_id from file_id
+          const lecture = await getOne(`SELECT lecture_id FROM lecture WHERE file_id = $1 LIMIT 1`, [fileId]);
+          if (!lecture?.lecture_id) {
+            console.warn(`[Evaluation] No lecture found for file_id=${fileId}, skipping evaluation`);
+            return;
+          }
           console.log(`[Evaluation] 🔄 Starting automatic KPI evaluation for fragment_id=${fid}...`);
           const evaluations = await evaluateSpeechAgainstKPIs(
             transcript,
-            fileId,
-            fid,
-            undefined
+            lecture.lecture_id
           );
           console.log(`[Evaluation] ✅ Completed: Evaluated against all KPIs, found ${evaluations.length} evidence records`);
         } catch (evalErr) {
@@ -515,20 +524,18 @@ export const saveSpeech = async (
     
     // Automatically evaluate lecture against KPIs asynchronously
     // Do not await - let it process in background without delaying the response
-    if (transcript && transcript.trim() && transcript !== '[transcription_pending]') {
+    const lectureId = result.lecture_id ?? result.id;
+    if (transcript && transcript.trim() && transcript !== '[transcription_pending]' && lectureId) {
       setImmediate(async () => {
         try {
-          console.log(`[Evaluation] 🔄 Starting automatic KPI evaluation for file_id=${fileId}...`);
+          console.log(`[Evaluation] 🔄 Starting automatic KPI evaluation for lecture_id=${lectureId}...`);
           const evaluations = await evaluateSpeechAgainstKPIs(
             transcript,
-            fileId,
-            undefined,
-            undefined
+            lectureId
           );
           console.log(`[Evaluation] ✅ Completed: Evaluated against all KPIs, found ${evaluations.length} evidence records`);
         } catch (evalErr) {
-          console.error(`[Evaluation] ⚠️ Non-blocking evaluation error for file_id=${fileId}:`, evalErr);
-          // Don't re-throw - this is background processing
+          console.error(`[Evaluation] ⚠️ Non-blocking evaluation error for lecture_id=${lectureId}:`, evalErr);
         }
       });
     }
@@ -612,6 +619,23 @@ export const transcribeAndSave = async (
   const totalDuration = await getAudioDuration(denoisedPath);
   console.log(`[Speech] Total audio duration: ${totalDuration}s`);
 
+  // Create lecture row upfront so fragments can reference it
+  let lectureId: number | null = null;
+  try {
+    const lectureRow = await insert('lecture', {
+      file_id: fileId,
+      transcript: '',
+      language: 'ar',
+      duration: totalDuration,
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+    lectureId = lectureRow.lecture_id ?? lectureRow.id ?? null;
+    console.log(`[Speech] ✅ Lecture row created upfront: lecture_id=${lectureId}`);
+  } catch (lecErr) {
+    console.warn(`[Speech] ⚠️ Could not create lecture row upfront:`, lecErr);
+  }
+
   // Calculate 15-minute fragments
   const totalFragments = Math.ceil(totalDuration / FRAGMENT_DURATION_SEC);
   console.log(`[Speech] Splitting into ${totalFragments} fragment(s) of ${FRAGMENT_DURATION_SEC / 60} minutes each`);
@@ -623,7 +647,13 @@ export const transcribeAndSave = async (
     updateProgress(fileId, { status: 'transcribing', message: 'جاري تحويل الصوت إلى نص...', percent: 30 });
     const result = await transcribeAudio(denoisedPath, fileId);
     updateProgress(fileId, { status: 'saving', message: 'جاري حفظ النص...', percent: 90 });
-    const fragment = await saveFragment(fileId, result.text, result.language, totalDuration, 0, totalDuration, 1);
+    const fragment = await saveFragment(fileId, result.text, result.language, totalDuration, 0, totalDuration, 1, denoisedPath);
+
+    // Update lecture with transcript
+    if (lectureId) {
+      await executeQuery('UPDATE lecture SET transcript = $1, language = $2, updated_at = NOW() WHERE lecture_id = $3', [result.text, result.language, lectureId]);
+    }
+
     updateProgress(fileId, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
     return [fragment];
   }
@@ -704,7 +734,8 @@ export const transcribeAndSave = async (
         effectiveDuration,
         startSec,
         endSec,
-        slotOrder
+        slotOrder,
+        segmentFile
       );
 
       console.log(`[Speech] ✅ Fragment ${slotOrder} saved: id=${fragment.id}`);
@@ -720,7 +751,8 @@ export const transcribeAndSave = async (
           effectiveDuration,
           startSec,
           endSec,
-          slotOrder
+          slotOrder,
+          segmentFile
         );
         console.log(`[Speech] ⚠️ Fragment ${slotOrder} saved as pending: id=${fragment.id}`);
         results.push(fragment);
@@ -738,6 +770,24 @@ export const transcribeAndSave = async (
   try {
     fs.rmdirSync(tempDir);
   } catch { /* ignore if not empty */ }
+
+  // Update lecture row with combined transcript from all fragments
+  if (lectureId) {
+    try {
+      const allFragments = await getMany(
+        'SELECT transcript FROM fragments WHERE file_id = $1 ORDER BY COALESCE(fragment_order, 0) ASC',
+        [fileId]
+      );
+      const fullTranscript = allFragments.map((f: any) => f.transcript).filter((t: string) => t && t !== '[transcription_pending]').join(' ');
+      await executeQuery(
+        'UPDATE lecture SET transcript = $1, updated_at = NOW() WHERE lecture_id = $2',
+        [fullTranscript, lectureId]
+      );
+      console.log(`[Speech] ✅ Lecture transcript updated: lecture_id=${lectureId}, length=${fullTranscript.length}`);
+    } catch (err) {
+      console.error(`[Speech] ⚠️ Failed to update lecture transcript:`, err);
+    }
+  }
 
   console.log(`[Speech] ✅ Completed: ${results.length}/${totalFragments} fragments transcribed for file_id=${fileId}`);
   updateProgress(fileId, { status: 'completed', message: `تم الانتهاء! تم معالجة ${results.length} من ${totalFragments} مقطع.`, percent: 100 });
@@ -832,7 +882,10 @@ export const retranscribePendingFragments = async (
         retranscribed++;
         setImmediate(async () => {
           try {
-            await evaluateSpeechAgainstKPIs(result.text, fileId);
+            const lecture = await getOne(`SELECT lecture_id FROM lecture WHERE file_id = $1 LIMIT 1`, [fileId]);
+            if (lecture?.lecture_id) {
+              await evaluateSpeechAgainstKPIs(result.text, lecture.lecture_id);
+            }
           } catch (evalErr) {
             console.error(`[Evaluation] ⚠️ After retranscribe fragment_id=${pk}:`, evalErr);
           }

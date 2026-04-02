@@ -51,7 +51,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/lecture/:lectureId/kpi/:kpiId', async (req: Request, res: Response) => {
   try {
     const { lectureId, kpiId } = req.params;
-    const evaluation = await getEvaluationByLectureAndKPI(parseInt(lectureId), parseInt(kpiId));
+    const evaluation = await getEvaluationByLectureAndKPI(parseInt(lectureId as string), parseInt(kpiId as string));
 
     if (!evaluation) {
       return res.status(404).json({
@@ -101,7 +101,7 @@ router.get('/lecture/:lectureId/kpi/:kpiId', async (req: Request, res: Response)
  */
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { lecture_id, kpi_id, evidence_count, avg_confidence } = req.body;
+    const { lecture_id, kpi_id, evidence_count } = req.body;
 
     if (!lecture_id || !kpi_id) {
       return res.status(400).json({
@@ -110,11 +110,7 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
 
-    const evaluation = await createEvaluationForLecture(
-      lecture_id,
-      kpi_id,
-      evidence_count ?? avg_confidence
-    );
+    const evaluation = await createEvaluationForLecture(lecture_id, kpi_id, evidence_count);
 
     res.status(201).json({
       success: true,
@@ -139,10 +135,11 @@ router.post('/', async (req: Request, res: Response) => {
  */
 router.put('/lecture/:lectureId/kpi/:kpiId', async (req: Request, res: Response) => {
   try {
-    const { lectureId, kpiId } = req.params;
+    const lectureId = parseInt(req.params.lectureId as string);
+    const kpiId = parseInt(req.params.kpiId as string);
     const data = req.body;
 
-    const existing = await getEvaluationByLectureAndKPI(parseInt(lectureId), parseInt(kpiId));
+    const existing = await getEvaluationByLectureAndKPI(lectureId, kpiId);
     if (!existing) {
       return res.status(404).json({
         success: false,
@@ -150,7 +147,7 @@ router.put('/lecture/:lectureId/kpi/:kpiId', async (req: Request, res: Response)
       });
     }
 
-    const evaluation = await updateEvaluation(parseInt(lectureId), parseInt(kpiId), data);
+    const evaluation = await updateEvaluation(lectureId, kpiId, data);
 
     res.status(200).json({
       success: true,
@@ -175,9 +172,10 @@ router.put('/lecture/:lectureId/kpi/:kpiId', async (req: Request, res: Response)
  */
 router.delete('/lecture/:lectureId/kpi/:kpiId', async (req: Request, res: Response) => {
   try {
-    const { lectureId, kpiId } = req.params;
+    const lectureId = parseInt(req.params.lectureId as string);
+    const kpiId = parseInt(req.params.kpiId as string);
 
-    const existing = await getEvaluationByLectureAndKPI(parseInt(lectureId), parseInt(kpiId));
+    const existing = await getEvaluationByLectureAndKPI(lectureId, kpiId);
     if (!existing) {
       return res.status(404).json({
         success: false,
@@ -185,7 +183,7 @@ router.delete('/lecture/:lectureId/kpi/:kpiId', async (req: Request, res: Respon
       });
     }
 
-    const evaluation = await deleteEvaluation(existing.id);
+    const evaluation = await deleteEvaluation(lectureId, kpiId);
 
     res.status(200).json({
       success: true,

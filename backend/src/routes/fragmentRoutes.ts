@@ -120,8 +120,7 @@ router.post('/process/:fileId', authenticate, async (req: AuthRequest, res: Resp
     const fragments = await processLectureFragments(
       fileId,
       soundFile.filepath,
-      lectureId ? parseInt(lectureId as string) : undefined,
-      timeSlotId ? parseInt(timeSlotId as string) : undefined
+      lectureId ? parseInt(lectureId as string) : undefined
     );
 
     res.json({
