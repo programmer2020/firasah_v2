@@ -1,9 +1,10 @@
 import psycopg2
+import os
 
 DB_HOST = "ep-flat-king-a80gh336-pooler.eastus2.azure.neon.tech"
 DB_PORT = 5432
 DB_USER = "neondb_owner"
-DB_PASSWORD = "npg_o4iEtH5mkKIz"
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 DB_NAME = "neondb"
 
 try:
