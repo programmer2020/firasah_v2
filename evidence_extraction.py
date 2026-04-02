@@ -1,18 +1,19 @@
 import psycopg2
 import json
 import re
+import os
 from openai import OpenAI
 
 # Database configuration
 DB_HOST = "ep-flat-king-a80gh336-pooler.eastus2.azure.neon.tech"
 DB_PORT = 5432
 DB_USER = "neondb_owner"
-DB_PASSWORD = "npg_o4iEtH5mkKIz"
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 DB_NAME = "neondb"
 DB_SSL = True
 
 # OpenAI API
-client = OpenAI(api_key="sk-proj-C5Kv-T6T3K5LxCq-6a5yPPX_N9GuRDVvWFpGUL5h5hnGKz1rVl0xN4tYPsZpkJvJ7-6G-hJ3b7T3BlbkFJaKz1-eX7NrsNHQfLVV4Bh5v6SjGqCx9A2mJqxXqLx8E3rAyEMxl")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
 
 # Load KPI detection signals
 with open('kpi_detection_signals.json', 'r', encoding='utf-8') as f:
