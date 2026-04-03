@@ -726,7 +726,7 @@ const TeacherDashboard = () => {
         </section>
 
         {/* Stats Section */}
-        <section className="mb-4 grid grid-cols-1 gap-0 md:grid-cols-4">
+        <section className="mb-0 grid grid-cols-1 gap-0 md:grid-cols-4">
           {/* Lectures Analyzed */}
           <div className="dashboard-panel dashboard-ghost-top px-8 py-8">
             <p className="font-dashboard-mono mb-4 text-[10px] uppercase tracking-[0.28em] text-[#7e8f89]">Lectures Analyzed</p>
@@ -780,7 +780,7 @@ const TeacherDashboard = () => {
       </div>
 
       {/* Header with Filters */}
-      <div className="mb-4 space-y-4">
+      <div className="mb-2 space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-headline text-3xl font-bold tracking-tight text-gray-900">
