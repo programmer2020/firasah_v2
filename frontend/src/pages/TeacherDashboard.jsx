@@ -716,7 +716,7 @@ const TeacherDashboard = () => {
     <ProtectedLayout>
       <div className="mx-auto max-w-[1500px]">
         {/* Welcome Section */}
-        <section className="mb-3 pt-2">
+        <section className="mb-1 pt-2">
           <h2 className="font-headline mb-1 text-5xl font-bold tracking-[-0.08em] text-[var(--dashboard-primary)]">
             Welcome back, {user?.name || 'User'}
           </h2>
@@ -780,7 +780,7 @@ const TeacherDashboard = () => {
       </div>
 
       {/* Header with Filters */}
-      <div className="space-y-1 mb-2 mt-2">
+      <div className="space-y-0 mb-2 mt-0">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-headline text-3xl font-bold tracking-tight text-gray-900">
