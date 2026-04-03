@@ -716,7 +716,7 @@ const TeacherDashboard = () => {
     <ProtectedLayout>
       <div className="mx-auto max-w-[1500px]">
         {/* Welcome Section */}
-        <section className="mb-1 pt-2">
+        <section className="mb-1 pt-2 -mt-4">
           <h2 className="font-headline mb-1 text-5xl font-bold tracking-[-0.08em] text-[var(--dashboard-primary)]">
             Welcome back, {user?.name || 'User'}
           </h2>
