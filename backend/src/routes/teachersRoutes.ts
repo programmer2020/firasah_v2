@@ -11,8 +11,59 @@ import {
   deleteTeacher,
 } from '../services/teachersService.js';
 import { errorHandler } from '../middleware/auth.js';
+import { getMany } from '../helpers/database.js';
 
 const router = Router();
+
+/**
+ * GET /api/teachers/logins
+ * Get teacher logins (account creations) for a date range
+ */
+router.get('/logins/stats', async (req: Request, res: Response) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate query parameters are required',
+      });
+    }
+
+    const start = new Date(String(startDate));
+    const end = new Date(String(endDate));
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid date format. Use ISO 8601 format (e.g., 2024-01-15T00:00:00Z)',
+      });
+    }
+
+    // Get teacher logins by joining users with teachers table
+    const teacherLogins = await getMany(
+      `SELECT DISTINCT t.teacher_id, t.teacher_name, t.teacher_email, u.created_at
+       FROM teachers t
+       INNER JOIN users u ON LOWER(TRIM(t.teacher_email)) = LOWER(TRIM(u.email))
+       WHERE u.created_at >= $1 AND u.created_at < $2
+       ORDER BY u.created_at DESC`,
+      [start.toISOString(), end.toISOString()]
+    );
+
+    res.status(200).json({
+      success: true,
+      count: teacherLogins.length,
+      data: teacherLogins,
+    });
+  } catch (error: any) {
+    console.error('Error fetching teacher logins:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch teacher logins',
+      error: error.message,
+    });
+  }
+});
 
 router.get('/', errorHandler, async (req: Request, res: Response) => {
   try {

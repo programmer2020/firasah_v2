@@ -352,7 +352,7 @@ router.get('/file/:fileId', async (req: Request, res: Response) => {
  */
 router.post('/extract/:lectureId', async (req: Request, res: Response) => {
   try {
-    const lectureId = parseInt(req.params.lectureId);
+    const lectureId = parseInt(req.params.lectureId as string);
 
     if (isNaN(lectureId) || lectureId <= 0) {
       return res.status(400).json({

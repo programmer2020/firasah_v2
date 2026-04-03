@@ -11,7 +11,9 @@ import {
   getUserById,
   updateUser,
   changePassword,
+  recordLoginEvent,
 } from '../services/authService.js';
+import { getOne } from '../helpers/database.js';
 
 const router = Router();
 
@@ -152,6 +154,11 @@ router.post('/login', async (req: Request, res: Response) => {
 
     // Login user
     const result = await loginUser(email, password);
+
+    // Record login event
+    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    await recordLoginEvent(result.user.user_id, email, ipAddress, userAgent);
 
     res.status(200).json({
       success: true,
@@ -370,5 +377,72 @@ router.post(
     }
   }
 );
+
+/**
+ * GET /api/auth/logins/stats
+ * Get count of login events for a date range
+ */
+router.get('/logins/stats', async (req: Request, res: Response) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate query parameters are required',
+      });
+    }
+
+    const start = new Date(String(startDate));
+    const end = new Date(String(endDate));
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid date format. Use ISO 8601 format (e.g., 2024-01-15T00:00:00Z)',
+      });
+    }
+
+    // Ensure table exists first
+    await getOne(
+      `CREATE TABLE IF NOT EXISTS login_events (
+        login_id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+        email VARCHAR(255),
+        login_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ip_address VARCHAR(50),
+        user_agent TEXT
+      );`,
+      []
+    ).catch(() => {}); // Ignore if already exists
+
+    // Count distinct users who logged in during this date range
+    const result = await getOne(
+      `SELECT COUNT(DISTINCT user_id) as user_count
+       FROM login_events
+       WHERE login_timestamp >= $1 AND login_timestamp < $2`,
+      [start.toISOString(), end.toISOString()]
+    );
+
+    const userCount = parseInt(result?.user_count || '0', 10);
+
+    res.status(200).json({
+      success: true,
+      count: userCount,
+      data: {
+        period_start: start.toISOString(),
+        period_end: end.toISOString(),
+        user_count: userCount,
+      },
+    });
+  } catch (error: any) {
+    console.error('Error fetching user login stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch user login statistics',
+      error: error.message,
+    });
+  }
+});
 
 export default router;

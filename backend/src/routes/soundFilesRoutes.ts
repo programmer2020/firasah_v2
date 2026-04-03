@@ -1094,4 +1094,66 @@ router.get('/:id/evaluation/report/comprehensive', async (req: Request, res: Res
   }
 });
 
+/**
+ * GET /api/sound-files/upload-hours/stats
+ * Get total upload hours (duration of sound files) for a date range
+ */
+router.get('/upload-hours/stats', async (req: Request, res: Response) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate query parameters are required',
+      });
+    }
+
+    const start = new Date(String(startDate));
+    const end = new Date(String(endDate));
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid date format. Use ISO 8601 format (e.g., 2024-01-15T00:00:00Z)',
+      });
+    }
+
+    // Get total duration in seconds from fragments table, then convert to hours
+    const result = await getOne(
+      `SELECT COALESCE(SUM(CAST(duration AS DECIMAL)), 0) as total_seconds,
+              COUNT(DISTINCT f.file_id) as file_count
+       FROM fragments f
+       INNER JOIN sound_files sf ON f.file_id = sf.file_id
+       WHERE sf.created_at >= $1 AND sf.created_at < $2`,
+      [start.toISOString(), end.toISOString()]
+    );
+
+    const totalSeconds = parseFloat(result?.total_seconds || '0');
+    const totalHours = totalSeconds / 3600; // Convert seconds to hours
+    const fileCount = result?.file_count || 0;
+
+    res.status(200).json({
+      success: true,
+      count: Math.round(totalHours),
+      decimal_hours: parseFloat(totalHours.toFixed(2)),
+      total_seconds: totalSeconds,
+      file_count: fileCount,
+      data: {
+        period_start: start.toISOString(),
+        period_end: end.toISOString(),
+        total_hours: Math.round(totalHours),
+        decimal_hours: parseFloat(totalHours.toFixed(2)),
+      },
+    });
+  } catch (error: any) {
+    console.error('Error fetching upload hours stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch upload hours statistics',
+      error: error.message,
+    });
+  }
+});
+
 export default router;

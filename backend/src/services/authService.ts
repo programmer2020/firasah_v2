@@ -183,6 +183,46 @@ export const loginUser = async (email: string, password: string) => {
 };
 
 /**
+ * Record login event for user
+ * @param userId User ID (optional)
+ * @param email User email
+ * @param ipAddress IP address of login request
+ * @param userAgent User agent string
+ */
+export const recordLoginEvent = async (
+  userId: number | null,
+  email: string,
+  ipAddress?: string,
+  userAgent?: string
+) => {
+  try {
+    // Ensure login_events table exists
+    await executeQuery(`
+      CREATE TABLE IF NOT EXISTS login_events (
+        login_id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+        email VARCHAR(255),
+        login_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ip_address VARCHAR(50),
+        user_agent TEXT
+      );
+    `);
+
+    // Insert login event
+    await executeQuery(
+      `INSERT INTO login_events (user_id, email, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4)`,
+      [userId, email, ipAddress || 'unknown', userAgent || 'unknown']
+    );
+
+    console.log(`✅ Login event recorded for user ${userId || email}`);
+  } catch (error) {
+    console.error('Error recording login event:', error);
+    // Don't throw - logging failure shouldn't block login
+  }
+};
+
+/**
  * Get user by ID
  * @param userId User ID
  * @returns Promise with user

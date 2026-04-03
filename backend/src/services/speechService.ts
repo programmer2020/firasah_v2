@@ -21,9 +21,20 @@ if (ffmpegStatic) {
 }
 ffmpeg.setFfprobePath(ffprobeStatic.path);
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+/* Lazy initialization of OpenAI client */
+let openai: OpenAI | null = null;
+
+const getOpenAIClient = (): OpenAI => {
+  if (!openai) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY environment variable is not set');
+    }
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+  return openai;
+};
 
 interface TimeSlot {
   time_slot_id: number;
@@ -290,7 +301,7 @@ export const transcribeAudio = async (filePath: string, fileId?: number, slotInf
 
           // gpt-4o-transcribe only supports 'json' or 'text'; whisper-1 supports 'verbose_json'
           const isGpt4o = model.startsWith('gpt-4o');
-          const transcription = await openai.audio.transcriptions.create({
+          const transcription = await getOpenAIClient().audio.transcriptions.create({
             file,
             model,
             response_format: isGpt4o ? 'json' : 'verbose_json',
