@@ -926,7 +926,7 @@ const TeacherDashboard = () => {
       </div>
 
       {/* KPI Overview Cards */}
-      <section className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <section className="mb-0 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat, idx) => (
           <div
             key={idx}
@@ -956,10 +956,10 @@ const TeacherDashboard = () => {
       </section>
 
       {/* Heatmaps */}
-      <section className="mb-8 space-y-6">
+      <section className="mb-0 space-y-2">
         {/* Domains Score vs Weeks */}
         <div className="rounded-3xl border border-gray-200 bg-white p-8">
-          <div className="mb-6 flex items-center justify-between">
+          <div className="mb-3 flex items-center justify-between">
             <div>
               <h2 className="font-headline text-xl font-bold text-gray-900">Domains Score vs Weeks</h2>
               <p className="mt-2 text-sm text-gray-600">8-week performance progression across all domains</p>
@@ -1006,11 +1006,11 @@ const TeacherDashboard = () => {
 
         {/* Domains vs Subject */}
         <div className="rounded-3xl border border-gray-200 bg-white p-6">
-          <div className="mb-6 flex items-center justify-between">
+          <div className="mb-3 flex items-center justify-between">
             <h2 className="font-headline text-lg font-bold text-gray-900">Domains vs Subject</h2>
             <span className="text-gray-400">📊</span>
           </div>
-          <div className="space-y-3 overflow-x-auto">
+          <div className="space-y-2 overflow-x-auto">
             <div className="flex items-center text-xs font-bold uppercase tracking-widest text-gray-500">
               <div className="w-32">KPI Name</div>
               <div className="flex flex-1 justify-between px-2">
