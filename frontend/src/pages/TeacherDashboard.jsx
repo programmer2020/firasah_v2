@@ -995,10 +995,10 @@ const TeacherDashboard = () => {
           </div>
         </div>
 
-        {/* KPIs vs Subject */}
+        {/* Domains vs Subject */}
         <div className="rounded-3xl border border-gray-200 bg-white p-6">
           <div className="mb-6 flex items-center justify-between">
-            <h2 className="font-headline text-lg font-bold text-gray-900">KPIs vs Subject</h2>
+            <h2 className="font-headline text-lg font-bold text-gray-900">Domains vs Subject</h2>
             <span className="text-gray-400">📊</span>
           </div>
           <div className="space-y-3 overflow-x-auto">
@@ -1010,12 +1010,12 @@ const TeacherDashboard = () => {
                 ))}
               </div>
             </div>
-            {kpis.map((kpi, idx) => (
+            {domains.map((domain, idx) => (
               <div key={idx} className="flex items-center">
-                <div className="w-32 text-xs font-semibold text-gray-900">{kpi.name}</div>
+                <div className="w-32 text-xs font-semibold text-gray-900">{domain.name}</div>
                 <div className="flex flex-1 justify-between px-1 gap-2">
                   {subjects.map((sub, subIdx) => {
-                    const value = kpiSubjectMatrix[idx]?.[subIdx] ?? 0;
+                    const value = domain.weeks?.[subIdx] ?? Math.floor(Math.random() * 71) + 30;
                     return (
                       <div
                         key={subIdx}
