@@ -1045,53 +1045,61 @@ const TeacherDashboard = () => {
 
       {/* Charts Section */}
       <section className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Teacher Overall Score */}
+        {/* Teacher Overall Score - Donut Chart */}
         <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm hover:shadow-md transition-shadow">
           <div className="mb-8">
             <h3 className="font-headline text-xl font-bold text-gray-900">Teacher Overall Score</h3>
-            <p className="text-sm text-gray-500 mt-1">8-Week Progress Trend</p>
+            <p className="text-sm text-gray-500 mt-1">Performance Distribution</p>
           </div>
-          <div className="relative h-56 w-full">
-            <svg className="h-full w-full" viewBox="0 0 400 180" preserveAspectRatio="xMidYMid meet">
-              <defs>
-                <linearGradient id="grad1" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="#006d4a" stopOpacity="0.15" />
-                  <stop offset="100%" stopColor="#006d4a" stopOpacity="0" />
-                </linearGradient>
-                <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-                  <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.1"/>
-                </filter>
-              </defs>
-              {/* Grid lines */}
-              <line x1="0" y1="140" x2="400" y2="140" stroke="#f0f0f0" strokeWidth="1" />
-              <line x1="0" y1="100" x2="400" y2="100" stroke="#f0f0f0" strokeWidth="1" />
-              <line x1="0" y1="60" x2="400" y2="60" stroke="#f0f0f0" strokeWidth="1" />
-              {/* Filled area under curve */}
-              <path
-                d="M0,140 Q50,90 100,85 T200,50 T300,75 T400,35 L400,180 L0,180 Z"
-                fill="url(#grad1)"
-              />
-              {/* Main curve */}
-              <path
-                d="M0,140 Q50,90 100,85 T200,50 T300,75 T400,35"
-                fill="none"
-                stroke="#006d4a"
-                strokeWidth="4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                filter="url(#shadow)"
-              />
-              {/* Data points */}
-              <circle cx="100" cy="85" r="5" fill="#006d4a" stroke="white" strokeWidth="2" />
-              <circle cx="200" cy="50" r="5" fill="#006d4a" stroke="white" strokeWidth="2" />
-              <circle cx="300" cy="75" r="5" fill="#006d4a" stroke="white" strokeWidth="2" />
-              <circle cx="400" cy="35" r="5" fill="#006d4a" stroke="white" strokeWidth="2" />
-            </svg>
+          <div className="flex items-center justify-center">
+            <div className="relative w-56 h-56">
+              <svg className="w-full h-full" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet">
+                <defs>
+                  <filter id="donut-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.1"/>
+                  </filter>
+                </defs>
+                {/* Donut segments */}
+                <circle cx="100" cy="100" r="70" fill="none" stroke="#006d4a" strokeWidth="18" strokeDasharray="110 440" strokeDashoffset="0" filter="url(#donut-shadow)" opacity="0.95"/>
+                <circle cx="100" cy="100" r="70" fill="none" stroke="#22c55e" strokeWidth="18" strokeDasharray="77 440" strokeDashoffset="-110" filter="url(#donut-shadow)" opacity="0.85"/>
+                <circle cx="100" cy="100" r="70" fill="none" stroke="#84cc16" strokeWidth="18" strokeDasharray="66 440" strokeDashoffset="-187" filter="url(#donut-shadow)" opacity="0.75"/>
+                <circle cx="100" cy="100" r="70" fill="none" stroke="#fbbf24" strokeWidth="18" strokeDasharray="110 440" strokeDashoffset="-253" filter="url(#donut-shadow)" opacity="0.85"/>
+                <circle cx="100" cy="100" r="70" fill="none" stroke="#f97316" strokeWidth="18" strokeDasharray="77 440" strokeDashoffset="-363" filter="url(#donut-shadow)" opacity="0.80"/>
+                
+                {/* Center text */}
+                <text x="100" y="95" textAnchor="middle" className="font-headline font-bold" fontSize="24" fill="#172b26">92</text>
+                <text x="100" y="115" textAnchor="middle" fontSize="12" fill="#7e8f89" fontWeight="600">%</text>
+              </svg>
+              {/* Center circle (white) */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="bg-white rounded-full w-32 h-32 flex flex-col items-center justify-center shadow-sm">
+                  <div className="text-3xl font-bold text-[#006d4a]">92</div>
+                  <div className="text-xs text-gray-500 font-semibold">Overall</div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="mt-6 flex justify-between text-xs font-bold uppercase tracking-wider text-gray-600 px-1">
-            <span>Week 1</span>
-            <span>Week 4</span>
-            <span>Week 8</span>
+          <div className="mt-8 grid grid-cols-5 gap-2 text-center">
+            <div className="px-2">
+              <div className="w-3 h-3 rounded-full mx-auto mb-2" style={{backgroundColor: '#006d4a'}}></div>
+              <div className="text-xs font-semibold text-gray-700">25%</div>
+            </div>
+            <div className="px-2">
+              <div className="w-3 h-3 rounded-full mx-auto mb-2" style={{backgroundColor: '#22c55e'}}></div>
+              <div className="text-xs font-semibold text-gray-700">18%</div>
+            </div>
+            <div className="px-2">
+              <div className="w-3 h-3 rounded-full mx-auto mb-2" style={{backgroundColor: '#84cc16'}}></div>
+              <div className="text-xs font-semibold text-gray-700">15%</div>
+            </div>
+            <div className="px-2">
+              <div className="w-3 h-3 rounded-full mx-auto mb-2" style={{backgroundColor: '#fbbf24'}}></div>
+              <div className="text-xs font-semibold text-gray-700">25%</div>
+            </div>
+            <div className="px-2">
+              <div className="w-3 h-3 rounded-full mx-auto mb-2" style={{backgroundColor: '#f97316'}}></div>
+              <div className="text-xs font-semibold text-gray-700">17%</div>
+            </div>
           </div>
         </div>
 

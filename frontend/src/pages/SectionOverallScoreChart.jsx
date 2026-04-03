@@ -55,31 +55,44 @@ export default function SectionOverallScoreChart() {
     <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm hover:shadow-md transition-shadow">
       <div className="mb-8">
         <h3 className="font-headline text-xl font-bold text-gray-900">Section Overall Score</h3>
-        <p className="text-sm text-gray-500 mt-1">Comparative Batch Data</p>
+        <p className="text-sm text-gray-500 mt-1">Area Chart - Comparative Batch Data</p>
       </div>
       <div className="relative h-56 w-full">
         <svg className="h-full w-full" viewBox={`0 0 ${svgW} ${svgH}`} preserveAspectRatio="xMidYMid meet">
           <defs>
-            <filter id="chart-shadow" x="-50%" y="-50%" width="200%" height="200%">
-              <feDropShadow dx="0" dy="1" stdDeviation="2" floodOpacity="0.08"/>
+            <filter id="area-shadow" x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow dx="0" dy="2" stdDeviation="2" floodOpacity="0.08"/>
             </filter>
           </defs>
+          
           {/* Grid lines */}
           <line x1={chartPad} y1={chartPad + chartH * 0.75} x2={svgW - chartPad} y2={chartPad + chartH * 0.75} stroke="#f0f0f0" strokeWidth="1" />
           <line x1={chartPad} y1={chartPad + chartH * 0.5} x2={svgW - chartPad} y2={chartPad + chartH * 0.5} stroke="#f0f0f0" strokeWidth="1" />
           <line x1={chartPad} y1={chartPad + chartH * 0.25} x2={svgW - chartPad} y2={chartPad + chartH * 0.25} stroke="#f0f0f0" strokeWidth="1" />
           
+          {/* Area charts */}
           {sectionData.map((scores, sIdx) => {
-            // Build line path
-            let d = '';
+            // Build area path
+            let linePath = '';
             scores.forEach((val, i) => {
               const cx = x(i), cy = y(val);
-              d += i === 0 ? `M${cx},${cy}` : ` L${cx},${cy}`;
+              linePath += i === 0 ? `M${cx},${cy}` : ` L${cx},${cy}`;
             });
+            
+            // Create area path (close the bottom)
+            const areaPath = linePath + ` L${x(weeks.length - 1)},${chartPad + chartH} L${chartPad},${chartPad + chartH} Z`;
+            
             return (
-              <g key={sIdx} filter="url(#chart-shadow)">
+              <g key={sIdx} filter="url(#area-shadow)">
+                {/* Filled area */}
                 <path
-                  d={d}
+                  d={areaPath}
+                  fill={getColor(sIdx)}
+                  opacity="0.25"
+                />
+                {/* Line on top */}
+                <path
+                  d={linePath}
                   fill="none"
                   stroke={getColor(sIdx)}
                   strokeWidth="3.5"
@@ -87,6 +100,7 @@ export default function SectionOverallScoreChart() {
                   strokeLinejoin="round"
                   opacity="0.95"
                 />
+                {/* Data points */}
                 {scores.map((val, i) => (
                   <circle key={i} cx={x(i)} cy={y(val)} r="4" fill={getColor(sIdx)} stroke="white" strokeWidth="1.5" />
                 ))}
@@ -94,6 +108,7 @@ export default function SectionOverallScoreChart() {
             );
           })}
         </svg>
+        
         {/* Legend */}
         <div className="absolute right-4 top-4 flex flex-col gap-2 bg-white rounded-xl p-3 border border-gray-100 shadow-lg">
           {sections.map((name, idx) => (
