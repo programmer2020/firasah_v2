@@ -716,17 +716,17 @@ const TeacherDashboard = () => {
     <ProtectedLayout>
       <div className="mx-auto max-w-[1500px]">
         {/* Welcome Section */}
-        <section className="mb-1 pt-2 -mt-4">
-          <h2 className="font-headline mb-1 text-5xl font-bold tracking-[-0.08em] text-[var(--dashboard-primary)]">
+        <section className="mb-0 pt-2 -mt-4">
+          <h2 className="font-headline mb-0 text-5xl font-bold tracking-[-0.08em] text-[var(--dashboard-primary)]">
             Welcome back, {user?.name || 'User'}
           </h2>
-          <p className="max-w-2xl text-[#62746d] text-sm">
+          <p className="max-w-2xl text-[#62746d] text-sm -mb-2">
             Your dashboard is ready with the latest insights from your lessons this week.
           </p>
         </section>
 
         {/* Stats Section */}
-        <section className="mb-1 grid grid-cols-1 gap-0 md:grid-cols-4">
+        <section className="mb-1 -mt-2 grid grid-cols-1 gap-0 md:grid-cols-4">
           {/* Lectures Analyzed */}
           <div className="dashboard-panel dashboard-ghost-top px-8 py-8">
             <p className="font-dashboard-mono mb-4 text-[10px] uppercase tracking-[0.28em] text-[#7e8f89]">Lectures Analyzed</p>
