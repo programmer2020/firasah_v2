@@ -30,7 +30,7 @@ const ProtectedLayout = ({ children }) => {
         <div className="relative z-10">
           <Header onOpenSidebar={() => setSidebarOpen(true)} />
 
-          <main className="px-4 pb-10 pt-8 sm:px-6 lg:px-10">
+          <main className="px-4 pb-10 pt-[30px] sm:px-6 lg:px-10">
             {children}
           </main>
         </div>
