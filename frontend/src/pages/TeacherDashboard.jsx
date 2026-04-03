@@ -716,11 +716,11 @@ const TeacherDashboard = () => {
     <ProtectedLayout>
       <div className="mx-auto max-w-[1500px]">
         {/* Welcome Section */}
-        <section className="mb-12">
-          <h2 className="font-headline mb-2 text-5xl font-bold tracking-[-0.08em] text-[var(--dashboard-primary)]">
+        <section className="mb-3 pt-2">
+          <h2 className="font-headline mb-1 text-5xl font-bold tracking-[-0.08em] text-[var(--dashboard-primary)]">
             Welcome back, {user?.name || 'User'}
           </h2>
-          <p className="max-w-2xl text-[#62746d]">
+          <p className="max-w-2xl text-[#62746d] text-sm">
             Your dashboard is ready with the latest insights from your lessons this week.
           </p>
         </section>
@@ -780,7 +780,7 @@ const TeacherDashboard = () => {
       </div>
 
       {/* Header with Filters */}
-      <div className="mb-2 space-y-4">
+      <div className="space-y-4 mb-2">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-headline text-3xl font-bold tracking-tight text-gray-900">
