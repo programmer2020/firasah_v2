@@ -959,21 +959,21 @@ const TeacherDashboard = () => {
       <section className="mb-8 space-y-6">
         {/* Domains Score vs Weeks */}
         <div className="rounded-3xl border border-gray-200 bg-white p-8">
-          <div className="mb-8 flex items-center justify-between">
+          <div className="mb-6 flex items-center justify-between">
             <div>
               <h2 className="font-headline text-xl font-bold text-gray-900">Domains Score vs Weeks</h2>
               <p className="mt-2 text-sm text-gray-600">8-week performance progression across all domains</p>
             </div>
             <span className="text-2xl">📊</span>
           </div>
-          <div className="space-y-4 overflow-x-auto pb-2">
+          <div className="space-y-2 overflow-x-auto pb-1">
             {/* Week Labels Header */}
             <div className="flex items-stretch">
               <div className="w-40 flex-shrink-0 pr-3"></div>
-              <div className="flex flex-1 gap-2">
+              <div className="flex flex-1 gap-1.5">
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((week) => (
                   <div key={`week-${week}`} className="flex-1 flex items-center justify-center">
-                    <span className="text-sm font-bold text-gray-700 bg-gray-100 w-full py-3 flex items-center justify-center rounded-lg">W{week}</span>
+                    <span className="text-sm font-bold text-gray-700 bg-gray-100 w-full py-2 flex items-center justify-center rounded-lg">W{week}</span>
                   </div>
                 ))}
               </div>
@@ -981,15 +981,15 @@ const TeacherDashboard = () => {
             {/* Divider */}
             <div className="border-b border-gray-200"></div>
             {domains.map((domain, idx) => (
-              <div key={idx} className="flex items-stretch hover:bg-gray-50 rounded-lg transition-colors px-2 py-1 gap-2">
+              <div key={idx} className="flex items-stretch hover:bg-gray-50 rounded-lg transition-colors px-2 py-0.5 gap-1.5">
                 <div className="w-40 flex-shrink-0 pr-1 flex items-center">
                   <p className="text-sm font-semibold text-gray-900 line-clamp-2">{domain.name}</p>
                 </div>
-                <div className="flex flex-1 gap-2">
+                <div className="flex flex-1 gap-1.5">
                   {domain.weeks.map((value, weekIdx) => (
                     <div
                       key={weekIdx}
-                      className={`flex-1 rounded-xl transition-all hover:scale-105 cursor-pointer flex items-center justify-center text-sm font-bold py-4 ${getHeatmapColor(
+                      className={`flex-1 rounded-xl transition-all hover:scale-105 cursor-pointer flex items-center justify-center text-sm font-bold py-3 ${getHeatmapColor(
                         value,
                         value < 50,
                       )} ${getOpacityClass(value)}`}
