@@ -22,10 +22,6 @@ export default function Landing() {
             <span className="label">Intelligent Pedagogy</span>
             <h1>Every classroom.<br />Every lesson.<br />Every <em>insight.</em></h1>
             <p>Firasah is your AI-powered academic supervisor — one that attends every class, analyzes every lesson, and gives every teacher the feedback they deserve. No scheduling. No bias. No missed sessions.</p>
-            <div className="hero-ctas">
-              <a href="#cta" className="btn btn-p">See Firasah in Action →</a>
-              <a href="#how" className="btn btn-g">View Methodology</a>
-            </div>
           </div>
           <div>
             <div className="hero-card">
@@ -83,19 +79,33 @@ export default function Landing() {
           </div>
           <div className="steps">
             <div className="step">
+              <svg className="step-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="8" y="20" width="48" height="36" rx="2" stroke="#004634" strokeWidth="2"/>
+                <path d="M32 8v20M24 16l8-8l8 8" stroke="#004634" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="20" cy="32" r="2" fill="#004634"/>
+              </svg>
               <div className="step-n">01</div>
               <h3>Upload the recording</h3>
-              <p>Drag and drop any classroom recording — audio or video. MP3, MP4, WAV, and more. Maximum 2GB. No special equipment required.</p>
             </div>
             <div className="step">
+              <svg className="step-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="32" cy="32" r="24" stroke="#004634" strokeWidth="2"/>
+                <path d="M32 16v32M16 32h32" stroke="#004634" strokeWidth="2" strokeLinecap="round"/>
+                <circle cx="45" cy="20" r="3" fill="#004634"/>
+              </svg>
               <div className="step-n">02</div>
               <h3>Firasah analyzes the lesson</h3>
-              <p>Our AI transcribes the session and scores teaching quality across 19 indicators — aligned with the Saudi Ministry of Education's evaluation standards.</p>
             </div>
             <div className="step">
+              <svg className="step-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="8" y="12" width="48" height="40" rx="2" stroke="#004634" strokeWidth="2"/>
+                <line x1="12" y1="24" x2="52" y2="24" stroke="#004634" strokeWidth="2"/>
+                <rect x="12" y="28" width="10" height="8" rx="1" fill="#004634" opacity="0.3"/>
+                <rect x="27" y="28" width="10" height="8" rx="1" fill="#004634" opacity="0.6"/>
+                <rect x="42" y="28" width="10" height="8" rx="1" fill="#004634"/>
+              </svg>
               <div className="step-n">03</div>
               <h3>Your dashboard fills with insight</h3>
-              <p>Evidence moments, KPI scores, behavioral patterns, and highlights — all ready within minutes. No manual tagging. No configuration needed.</p>
             </div>
           </div>
         </div>
