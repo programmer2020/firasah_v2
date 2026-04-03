@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import SectionOverallScoreChart from './SectionOverallScoreChart';
 import ProtectedLayout from '../components/ProtectedLayout';
+import { useAuth } from '../context/AuthContext';
 import './TeacherDashboard.css';
 
 const TeacherDashboard = () => {
@@ -712,6 +713,71 @@ const TeacherDashboard = () => {
 
   return (
     <ProtectedLayout>
+      <div className="mx-auto max-w-[1500px]">
+        {/* Welcome Section */}
+        <section className="mb-12">
+          <h2 className="font-headline mb-2 text-5xl font-bold tracking-[-0.08em] text-[var(--dashboard-primary)]">
+            Welcome back, {user?.name || 'User'}
+          </h2>
+          <p className="max-w-2xl text-[#62746d]">
+            Your dashboard is ready with the latest insights from your lessons this week.
+          </p>
+        </section>
+
+        {/* Stats Section */}
+        <section className="mb-12 grid grid-cols-1 gap-0 md:grid-cols-4">
+          {/* Lectures Analyzed */}
+          <div className="dashboard-panel dashboard-ghost-top px-8 py-8">
+            <p className="font-dashboard-mono mb-4 text-[10px] uppercase tracking-[0.28em] text-[#7e8f89]">Lectures Analyzed</p>
+            <div className="flex items-baseline gap-2">
+              <span className="font-headline text-[3.5rem] font-bold leading-none tracking-[-0.05em] text-[var(--dashboard-primary)]">
+                {loading ? '-' : lectureStats.currentMonth}
+              </span>
+              <span className="text-sm text-[#51555c]">{loading ? '-' : lectureStats.trend}</span>
+            </div>
+          </div>
+
+          {/* Average KPI Score */}
+          <div className="dashboard-panel-soft dashboard-ghost-top px-8 py-8">
+            <p className="font-dashboard-mono mb-4 text-[10px] uppercase tracking-[0.28em] text-[#7e8f89]">This academic term</p>
+            <div className="flex items-baseline gap-2">
+              <span className="font-headline text-[3.5rem] font-bold leading-none tracking-[-0.05em] text-[var(--dashboard-primary)]">
+                82
+              </span>
+              <span className="font-headline text-2xl text-[rgba(0,96,73,0.6)]">%</span>
+            </div>
+          </div>
+
+          {/* Top Strength */}
+          <div className="dashboard-panel dashboard-ghost-top px-8 py-8">
+            <p className="font-dashboard-mono mb-4 text-[10px] uppercase tracking-[0.28em] text-[#7e8f89]">Top Strength</p>
+            <div className="flex flex-col">
+              <span className="font-headline mb-2 text-xl font-bold text-[#172b26]">Questioning</span>
+              <div className="flex items-baseline gap-1">
+                <span className="font-headline text-3xl font-bold leading-none tracking-[-0.05em] text-[var(--dashboard-primary)]">
+                  94
+                </span>
+                <span className="font-dashboard-mono text-xs text-[#7f938a]">/100</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Area to Improve */}
+          <div className="dashboard-panel-soft dashboard-ghost-top px-8 py-8">
+            <p className="font-dashboard-mono mb-4 text-[10px] uppercase tracking-[0.28em] text-[#7e8f89]">Area to Improve</p>
+            <div className="flex flex-col">
+              <span className="font-headline mb-2 text-xl font-bold text-[#172b26]">Wait Time</span>
+              <div className="flex items-baseline gap-1">
+                <span className="font-headline text-3xl font-bold leading-none tracking-[-0.05em] text-[var(--dashboard-primary)]">
+                  8
+                </span>
+                <span className="font-dashboard-mono text-xs text-[#7f938a]">s avg</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
       {/* Header with Filters */}
       <div className="mb-8 space-y-4">
         <div className="flex items-center justify-between">
