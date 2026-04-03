@@ -777,10 +777,9 @@ const TeacherDashboard = () => {
             </div>
           </div>
         </section>
-      </div>
 
-      {/* Header with Filters */}
-      <div className="space-y-0 mb-2 mt-0">
+        {/* Header with Filters */}
+        <div className="space-y-0 mb-2">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-headline text-3xl font-bold tracking-tight text-gray-900">
@@ -923,6 +922,7 @@ const TeacherDashboard = () => {
             </div>
           )}
         </div>
+      </div>
       </div>
 
       {/* KPI Overview Cards */}
