@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import './TeacherDashboard.css';
 
 const TeacherDashboard = () => {
+  const { user } = useAuth();
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [lectureStats, setLectureStats] = useState({
     currentMonth: 0,
