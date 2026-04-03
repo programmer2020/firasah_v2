@@ -5,7 +5,6 @@ import { DatabaseProvider } from './context/DatabaseContext';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
 import Schools from './pages/Schools';
 import Teachers from './pages/Teachers';
 import Classes from './pages/Classes';
@@ -65,7 +64,7 @@ function AppRoutes() {
       <Route path="/theme-test" element={<ThemeTest />} />
 
       {/* Protected Routes */}
-      <Route path="/dashboard" element={<ProtectedRoute element={<Dashboard />} />} />
+      <Route path="/dashboard" element={<ProtectedRoute element={<TeacherDashboard />} />} />
       <Route path="/schools" element={<ProtectedRoute element={<Schools />} />} />
       <Route path="/teachers" element={<ProtectedRoute element={<Teachers />} />} />
       <Route path="/classes" element={<ProtectedRoute element={<Classes />} />} />
@@ -77,7 +76,6 @@ function AppRoutes() {
       <Route path="/schedule" element={<ProtectedRoute element={<Schedule />} />} />
       <Route path="/evaluations" element={<ProtectedRoute element={<EvaluationDashboard />} />} />
       <Route path="/worker-jobs" element={<ProtectedRoute element={<WorkerJobs />} />} />
-      <Route path="/teacher-dashboard" element={<ProtectedRoute element={<TeacherDashboard />} />} />
 
       {/* 404 Route */}
       <Route path="*" element={<Navigate to="/" replace />} />

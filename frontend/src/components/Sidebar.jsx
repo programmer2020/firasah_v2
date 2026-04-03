@@ -67,14 +67,13 @@ const getInitials = (name) => {
     .toUpperCase();
 };
 
-export const Sidebar = ({ isOpen, onClose }) => {
+export const Sidebar = ({ isOpen, onClose, onCollapseChange }) => {
   const location = useLocation();
   const { user } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(true);
 
   const menuItems = [
     { label: 'Dashboard', href: '/dashboard', icon: IconDashboard },
-    { label: 'Teacher Analytics', href: '/teacher-dashboard', icon: IconAnalytics },
     { label: 'Lectures', href: '/audio-upload', icon: IconSchool },
     { label: 'Failed Fragments', href: '/failed-fragments', icon: IconClips },
     { label: 'Class Schedule', href: '/schedule', icon: IconTexture },
@@ -89,10 +88,12 @@ export const Sidebar = ({ isOpen, onClose }) => {
 
   const handleMouseEnter = () => {
     setIsCollapsed(false);
+    if (onCollapseChange) onCollapseChange(false);
   };
 
   const handleMouseLeave = () => {
     setIsCollapsed(true);
+    if (onCollapseChange) onCollapseChange(true);
   };
 
   return (
@@ -110,7 +111,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         className={`emerald-sidebar fixed left-0 top-0 z-50 flex h-screen flex-col py-8 text-white transition-all duration-300 ${
-          isCollapsed ? 'w-20' : 'w-64'
+          isCollapsed ? 'w-20 collapsed' : 'w-64'
         } ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0`}
@@ -146,14 +147,16 @@ export const Sidebar = ({ isOpen, onClose }) => {
                 key={item.label}
                 to={item.href}
                 onClick={onClose}
-                className={`relative z-10 flex items-center px-4 py-3 transition-all duration-200 ${
+                className={`relative z-10 flex items-center px-4 py-3 rounded-md transition-all duration-200 ${
                   isCollapsed ? 'justify-center' : ''
                 } ${
-                  active ? 'font-bold text-white' : 'text-white/70 hover:bg-[#0F7B5F]/50 hover:text-white'
+                  active 
+                    ? 'active font-bold text-white' 
+                    : 'text-white/70 hover:text-white'
                 }`}
                 title={isCollapsed ? item.label : ''}
               >
-                <IconComponent className={`text-xl transition-all duration-300 ${isCollapsed ? 'h-10 w-10' : 'h-5 w-5'} ${isCollapsed ? '' : 'mr-3'}`} />
+                <IconComponent className={`transition-all duration-300 ${isCollapsed ? 'h-5 w-5' : 'h-5 w-5'} ${isCollapsed ? '' : 'mr-3'}`} />
                 <span className={`text-sm tracking-tight transition-opacity duration-300 ${isCollapsed ? 'hidden' : 'block'}`}>{item.label}</span>
               </Link>
             );
