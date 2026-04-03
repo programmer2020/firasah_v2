@@ -926,13 +926,13 @@ const TeacherDashboard = () => {
       </div>
 
       {/* KPI Overview Cards */}
-      <section className="mb-0 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <section className="mb-0 -mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat, idx) => (
           <div
             key={idx}
-            className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-transform hover:shadow-md"
+            className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition-transform hover:shadow-md"
           >
-            <div className="mb-4 flex items-start justify-between">
+            <div className="mb-2 flex items-start justify-between">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-100 text-xl">
                 {stat.icon}
               </div>
@@ -950,13 +950,13 @@ const TeacherDashboard = () => {
             <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500">
               {stat.label}
             </h3>
-            <p className="mt-2 text-3xl font-bold text-gray-900">{stat.value}</p>
+            <p className="mt-1 text-3xl font-bold text-gray-900">{stat.value}</p>
           </div>
         ))}
       </section>
 
       {/* Heatmaps */}
-      <section className="mb-0 space-y-2">
+      <section className="mb-0 -mt-1 space-y-2">
         {/* Domains Score vs Weeks */}
         <div className="rounded-3xl border border-gray-200 bg-white p-8">
           <div className="mb-3 flex items-center justify-between">
