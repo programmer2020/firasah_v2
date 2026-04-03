@@ -1044,39 +1044,51 @@ const TeacherDashboard = () => {
       </section>
 
       {/* Charts Section */}
-      <section className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <section className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Teacher Overall Score */}
-        <div className="rounded-3xl border border-gray-200 bg-white p-6">
-          <div className="mb-6">
-            <h3 className="font-headline text-lg font-bold text-gray-900">Teacher Overall Score</h3>
-            <p className="text-xs text-gray-600">8-Week Progress Trend</p>
+        <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm hover:shadow-md transition-shadow">
+          <div className="mb-8">
+            <h3 className="font-headline text-xl font-bold text-gray-900">Teacher Overall Score</h3>
+            <p className="text-sm text-gray-500 mt-1">8-Week Progress Trend</p>
           </div>
-          <div className="relative h-48 w-full">
-            <svg className="h-full w-full" viewBox="0 0 400 150" preserveAspectRatio="xMidYMid meet">
+          <div className="relative h-56 w-full">
+            <svg className="h-full w-full" viewBox="0 0 400 180" preserveAspectRatio="xMidYMid meet">
               <defs>
                 <linearGradient id="grad1" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="#06B6D4" stopOpacity="0.2" />
-                  <stop offset="100%" stopColor="#06B6D4" stopOpacity="0" />
+                  <stop offset="0%" stopColor="#006d4a" stopOpacity="0.15" />
+                  <stop offset="100%" stopColor="#006d4a" stopOpacity="0" />
                 </linearGradient>
+                <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.1"/>
+                </filter>
               </defs>
+              {/* Grid lines */}
+              <line x1="0" y1="140" x2="400" y2="140" stroke="#f0f0f0" strokeWidth="1" />
+              <line x1="0" y1="100" x2="400" y2="100" stroke="#f0f0f0" strokeWidth="1" />
+              <line x1="0" y1="60" x2="400" y2="60" stroke="#f0f0f0" strokeWidth="1" />
+              {/* Filled area under curve */}
               <path
-                d="M0,120 Q50,80 100,90 T200,40 T300,60 T400,20"
-                fill="none"
-                stroke="#00687a"
-                strokeWidth="3"
-                strokeLinecap="round"
-              />
-              <path
-                d="M0,120 Q50,80 100,90 T200,40 T300,60 T400,20 L400,150 L0,150 Z"
+                d="M0,140 Q50,90 100,85 T200,50 T300,75 T400,35 L400,180 L0,180 Z"
                 fill="url(#grad1)"
               />
-              <circle cx="100" cy="90" r="4" fill="#00687a" />
-              <circle cx="200" cy="40" r="4" fill="#00687a" />
-              <circle cx="300" cy="60" r="4" fill="#00687a" />
-              <circle cx="400" cy="20" r="4" fill="#00687a" />
+              {/* Main curve */}
+              <path
+                d="M0,140 Q50,90 100,85 T200,50 T300,75 T400,35"
+                fill="none"
+                stroke="#006d4a"
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                filter="url(#shadow)"
+              />
+              {/* Data points */}
+              <circle cx="100" cy="85" r="5" fill="#006d4a" stroke="white" strokeWidth="2" />
+              <circle cx="200" cy="50" r="5" fill="#006d4a" stroke="white" strokeWidth="2" />
+              <circle cx="300" cy="75" r="5" fill="#006d4a" stroke="white" strokeWidth="2" />
+              <circle cx="400" cy="35" r="5" fill="#006d4a" stroke="white" strokeWidth="2" />
             </svg>
           </div>
-          <div className="mt-4 flex justify-between text-xs font-bold uppercase tracking-widest text-gray-500">
+          <div className="mt-6 flex justify-between text-xs font-bold uppercase tracking-wider text-gray-600 px-1">
             <span>Week 1</span>
             <span>Week 4</span>
             <span>Week 8</span>

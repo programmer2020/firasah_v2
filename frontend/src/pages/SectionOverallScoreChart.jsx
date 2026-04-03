@@ -9,7 +9,7 @@ function getColor(idx) {
 }
 
 const weeks = [1, 2, 3, 4, 5, 6, 7, 8];
-const svgW = 400, svgH = 150, chartPad = 30, chartH = svgH - 2 * chartPad, chartW = svgW - 2 * chartPad;
+const svgW = 400, svgH = 180, chartPad = 40, chartH = svgH - 2 * chartPad, chartW = svgW - 2 * chartPad;
 
 export default function SectionOverallScoreChart() {
   const [sections, setSections] = useState([]);
@@ -52,13 +52,23 @@ export default function SectionOverallScoreChart() {
   const y = (val) => chartPad + chartH - ((val - minY) / (maxY - minY)) * chartH;
 
   return (
-    <div className="rounded-3xl border border-gray-200 bg-white p-6">
-      <div className="mb-6">
-        <h3 className="font-headline text-lg font-bold text-gray-900">Section Overall Score</h3>
-        <p className="text-xs text-gray-600">Comparative Batch Data</p>
+    <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm hover:shadow-md transition-shadow">
+      <div className="mb-8">
+        <h3 className="font-headline text-xl font-bold text-gray-900">Section Overall Score</h3>
+        <p className="text-sm text-gray-500 mt-1">Comparative Batch Data</p>
       </div>
-      <div className="relative h-48 w-full">
+      <div className="relative h-56 w-full">
         <svg className="h-full w-full" viewBox={`0 0 ${svgW} ${svgH}`} preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <filter id="chart-shadow" x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow dx="0" dy="1" stdDeviation="2" floodOpacity="0.08"/>
+            </filter>
+          </defs>
+          {/* Grid lines */}
+          <line x1={chartPad} y1={chartPad + chartH * 0.75} x2={svgW - chartPad} y2={chartPad + chartH * 0.75} stroke="#f0f0f0" strokeWidth="1" />
+          <line x1={chartPad} y1={chartPad + chartH * 0.5} x2={svgW - chartPad} y2={chartPad + chartH * 0.5} stroke="#f0f0f0" strokeWidth="1" />
+          <line x1={chartPad} y1={chartPad + chartH * 0.25} x2={svgW - chartPad} y2={chartPad + chartH * 0.25} stroke="#f0f0f0" strokeWidth="1" />
+          
           {sectionData.map((scores, sIdx) => {
             // Build line path
             let d = '';
@@ -67,33 +77,34 @@ export default function SectionOverallScoreChart() {
               d += i === 0 ? `M${cx},${cy}` : ` L${cx},${cy}`;
             });
             return (
-              <g key={sIdx}>
+              <g key={sIdx} filter="url(#chart-shadow)">
                 <path
                   d={d}
                   fill="none"
                   stroke={getColor(sIdx)}
-                  strokeWidth={3}
+                  strokeWidth="3.5"
                   strokeLinecap="round"
-                  opacity={0.9}
+                  strokeLinejoin="round"
+                  opacity="0.95"
                 />
                 {scores.map((val, i) => (
-                  <circle key={i} cx={x(i)} cy={y(val)} r={3.5} fill={getColor(sIdx)} />
+                  <circle key={i} cx={x(i)} cy={y(val)} r="4" fill={getColor(sIdx)} stroke="white" strokeWidth="1.5" />
                 ))}
               </g>
             );
           })}
         </svg>
         {/* Legend */}
-        <div className="absolute right-2 top-2 flex flex-col gap-1 bg-white/80 rounded p-2 border border-gray-100 shadow-sm">
+        <div className="absolute right-4 top-4 flex flex-col gap-2 bg-white rounded-xl p-3 border border-gray-100 shadow-lg">
           {sections.map((name, idx) => (
-            <span key={name} className="flex items-center gap-2 text-xs font-bold" style={{color: getColor(idx)}}>
-              <span style={{background: getColor(idx), width: 12, height: 4, borderRadius: 2, display: 'inline-block'}}></span>
+            <span key={name} className="flex items-center gap-2 text-xs font-semibold" style={{color: getColor(idx)}}>
+              <span style={{background: getColor(idx), width: 10, height: 3, borderRadius: 1.5, display: 'inline-block'}}></span>
               Section {name}
             </span>
           ))}
         </div>
       </div>
-      <div className="mt-4 flex justify-between text-xs font-bold uppercase tracking-widest text-gray-500">
+      <div className="mt-6 flex justify-between text-xs font-bold uppercase tracking-wider text-gray-600 px-1">
         <span>Week 1</span>
         <span>Week 4</span>
         <span>Week 8</span>
