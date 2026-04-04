@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as d3 from 'd3';
-import AreaChart from './AreaChart';
+import WatermarkChart from './WatermarkChart';
 import MixedChart from './MixedChart';
 import ProtectedLayout from '../components/ProtectedLayout';
 import { useAuth } from '../context/AuthContext';
@@ -1050,8 +1050,8 @@ const TeacherDashboard = () => {
         {/* Teacher Performance Metrics - ECharts Mixed Bar & Line Chart */}
         <MixedChart />
 
-        {/* Section Overall Score - D3 Area Chart */}
-        <AreaChart />
+        {/* Progress Tracking - ECharts Watermark Chart */}
+        <WatermarkChart />
       </section>
 
       {/* Evidence Samples Table */}
