@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import * as d3 from 'd3';
 import SectionOverallScoreChart from './SectionOverallScoreChart';
+import DonutChart from './DonutChart';
 import ProtectedLayout from '../components/ProtectedLayout';
 import { useAuth } from '../context/AuthContext';
 import './TeacherDashboard.css';
@@ -1045,63 +1047,8 @@ const TeacherDashboard = () => {
 
       {/* Charts Section */}
       <section className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Teacher Overall Score - Donut Chart */}
-        <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm hover:shadow-md transition-shadow">
-          <div className="mb-8">
-            <h3 className="font-headline text-xl font-bold text-gray-900">Teacher Overall Score</h3>
-            <p className="text-sm text-gray-500 mt-1">Performance Distribution</p>
-          </div>
-          <div className="flex items-center justify-center">
-            <div className="relative w-56 h-56">
-              <svg className="w-full h-full" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet">
-                <defs>
-                  <filter id="donut-shadow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.1"/>
-                  </filter>
-                </defs>
-                {/* Donut segments */}
-                <circle cx="100" cy="100" r="70" fill="none" stroke="#006d4a" strokeWidth="18" strokeDasharray="110 440" strokeDashoffset="0" filter="url(#donut-shadow)" opacity="0.95"/>
-                <circle cx="100" cy="100" r="70" fill="none" stroke="#22c55e" strokeWidth="18" strokeDasharray="77 440" strokeDashoffset="-110" filter="url(#donut-shadow)" opacity="0.85"/>
-                <circle cx="100" cy="100" r="70" fill="none" stroke="#84cc16" strokeWidth="18" strokeDasharray="66 440" strokeDashoffset="-187" filter="url(#donut-shadow)" opacity="0.75"/>
-                <circle cx="100" cy="100" r="70" fill="none" stroke="#fbbf24" strokeWidth="18" strokeDasharray="110 440" strokeDashoffset="-253" filter="url(#donut-shadow)" opacity="0.85"/>
-                <circle cx="100" cy="100" r="70" fill="none" stroke="#f97316" strokeWidth="18" strokeDasharray="77 440" strokeDashoffset="-363" filter="url(#donut-shadow)" opacity="0.80"/>
-                
-                {/* Center text */}
-                <text x="100" y="95" textAnchor="middle" className="font-headline font-bold" fontSize="24" fill="#172b26">92</text>
-                <text x="100" y="115" textAnchor="middle" fontSize="12" fill="#7e8f89" fontWeight="600">%</text>
-              </svg>
-              {/* Center circle (white) */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="bg-white rounded-full w-32 h-32 flex flex-col items-center justify-center shadow-sm">
-                  <div className="text-3xl font-bold text-[#006d4a]">92</div>
-                  <div className="text-xs text-gray-500 font-semibold">Overall</div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="mt-8 grid grid-cols-5 gap-2 text-center">
-            <div className="px-2">
-              <div className="w-3 h-3 rounded-full mx-auto mb-2" style={{backgroundColor: '#006d4a'}}></div>
-              <div className="text-xs font-semibold text-gray-700">25%</div>
-            </div>
-            <div className="px-2">
-              <div className="w-3 h-3 rounded-full mx-auto mb-2" style={{backgroundColor: '#22c55e'}}></div>
-              <div className="text-xs font-semibold text-gray-700">18%</div>
-            </div>
-            <div className="px-2">
-              <div className="w-3 h-3 rounded-full mx-auto mb-2" style={{backgroundColor: '#84cc16'}}></div>
-              <div className="text-xs font-semibold text-gray-700">15%</div>
-            </div>
-            <div className="px-2">
-              <div className="w-3 h-3 rounded-full mx-auto mb-2" style={{backgroundColor: '#fbbf24'}}></div>
-              <div className="text-xs font-semibold text-gray-700">25%</div>
-            </div>
-            <div className="px-2">
-              <div className="w-3 h-3 rounded-full mx-auto mb-2" style={{backgroundColor: '#f97316'}}></div>
-              <div className="text-xs font-semibold text-gray-700">17%</div>
-            </div>
-          </div>
-        </div>
+        {/* Teacher Overall Score - D3 Donut Chart */}
+        <DonutChart />
 
         {/* Section Overall Score - Multi-line Chart */}
         <SectionOverallScoreChart />
