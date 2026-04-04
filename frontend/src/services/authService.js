@@ -4,7 +4,7 @@ export const authService = {
   // Register new user
   register: async (userData) => {
     try {
-      const response = await api.post('/auth/register', userData);
+      const response = await api.post('/api/auth/register', userData);
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
@@ -14,7 +14,7 @@ export const authService = {
   // Login user
   login: async (credentials) => {
     try {
-      const response = await api.post('/auth/login', credentials);
+      const response = await api.post('/api/auth/login', credentials);
       const token = response.data.data?.token || response.data.token;
       if (token) {
         localStorage.setItem('authToken', token);
@@ -28,7 +28,7 @@ export const authService = {
   // Get current user profile
   getProfile: async () => {
     try {
-      const response = await api.get('/auth/profile');
+      const response = await api.get('/api/auth/profile');
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
@@ -38,7 +38,7 @@ export const authService = {
   // Update user profile
   updateProfile: async (userData) => {
     try {
-      const response = await api.put('/auth/profile', userData);
+      const response = await api.put('/api/auth/profile', userData);
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
@@ -48,7 +48,7 @@ export const authService = {
   // Change password
   changePassword: async (passwordData) => {
     try {
-      const response = await api.post('/auth/change-password', passwordData);
+      const response = await api.post('/api/auth/change-password', passwordData);
       return response.data;
     } catch (error) {
       throw error.response?.data || error;

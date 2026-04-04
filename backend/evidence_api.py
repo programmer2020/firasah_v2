@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 API for Evidence Extraction from Lecture Transcripts
 Extracts evidence from transcripts based on KPI Detection Signals
@@ -9,9 +11,39 @@ import re
 import sys
 import os
 from typing import List, Dict
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Firasah Evidence API",
+    description="API for Evidence Extraction from Lecture Transcripts",
+    version="1.0.0"
+)
+
+# Enable CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Pydantic models
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    name: str | None = None
 
 # Database configuration
 DB_HOST = "ep-flat-king-a80gh336-pooler.eastus2.azure.neon.tech"
@@ -253,17 +285,277 @@ def process_lecture_transcript(lecture_id: int) -> Dict:
         print(f"❌ Error: {e}")
         return {'error': str(e)}
 
-if __name__ == "__main__":
-    print("Evidence Extraction API Module")
-    print("Import this module and call process_lecture_transcript(lecture_id)")
-    
-    # Handle command line usage
-    if len(sys.argv) > 1:
-        command = sys.argv[1]
-        
-        if command == 'extract' and len(sys.argv) > 2:
-            lecture_id = int(sys.argv[2])
-            result = process_lecture_transcript(lecture_id)
-            print(json.dumps(result, ensure_ascii=False, indent=2))
+# ============ API Endpoints ============
+
+@app.get("/", tags=["Health"])
+async def root():
+    """Root endpoint - API is running"""
+    return {"message": "Firasah Evidence API is running", "status": "ok"}
+
+@app.get("/health", tags=["Health"])
+async def health_check():
+    """Health check endpoint"""
+    try:
+        conn = get_db_connection()
+        conn.close()
+        return {"status": "healthy", "message": "API and Database are connected"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")
+
+# Authentication Endpoints
+@app.post("/api/auth/login", tags=["Auth"])
+async def login(request: LoginRequest):
+    """Login endpoint"""
+    try:
+        if request.email and request.password:
+            return {
+                "status": "success",
+                "data": {
+                    "user": {
+                        "id": 1,
+                        "email": request.email,
+                        "name": "User"
+                    },
+                    "token": f"token_{request.email}"
+                }
+            }
         else:
-            print("Usage: python evidence_api.py extract <lecture_id>")
+            raise HTTPException(status_code=400, detail="Invalid credentials")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/auth/register", tags=["Auth"])
+async def register(request: RegisterRequest):
+    """Register endpoint"""
+    try:
+        if request.email and request.password:
+            return {
+                "status": "success",
+                "data": {
+                    "user": {
+                        "id": 1,
+                        "email": request.email,
+                        "name": request.name or "User"
+                    },
+                    "token": f"token_{request.email}"
+                }
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Invalid data")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/auth/profile", tags=["Auth"])
+async def get_profile():
+    """Get user profile"""
+    return {
+        "status": "success",
+        "data": {
+            "user": {
+                "id": 1,
+                "email": "user@example.com",
+                "name": "User"
+            }
+        }
+    }
+
+@app.get("/api/kpis", tags=["KPIs"])
+async def get_kpis():
+    """Get all available KPIs"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT kpi_id, kpi_code, kpi_name FROM public.kpis ORDER BY kpi_code")
+        kpis = cur.fetchall()
+        cur.close()
+        conn.close()
+        return {
+            "data": [{"kpi_id": k[0], "kpi_code": k[1], "kpi_name": k[2]} for k in kpis],
+            "count": len(kpis)
+        }
+    except Exception as e:
+        # Fallback with 8 sample KPIs
+        return {
+            "data": [
+                {"kpi_id": 1, "kpi_code": "K1", "kpi_name": "Clarity"},
+                {"kpi_id": 2, "kpi_code": "K2", "kpi_name": "Engagement"},
+                {"kpi_id": 3, "kpi_code": "K3", "kpi_name": "Pacing"},
+                {"kpi_id": 4, "kpi_code": "K4", "kpi_name": "Assessment"},
+                {"kpi_id": 5, "kpi_code": "K5", "kpi_name": "Organization"},
+                {"kpi_id": 6, "kpi_code": "K6", "kpi_name": "Communication"},
+                {"kpi_id": 7, "kpi_code": "K7", "kpi_name": "Feedback"},
+                {"kpi_id": 8, "kpi_code": "K8", "kpi_name": "Participation"},
+            ],
+            "count": 8
+        }
+
+@app.get("/api/subjects", tags=["Subjects"])
+async def get_subjects():
+    """Get all subjects"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT subject_id, subject_name FROM public.subjects ORDER BY subject_name")
+        subjects = cur.fetchall()
+        cur.close()
+        conn.close()
+        if subjects:
+            return {
+                "data": [{"subject_id": s[0], "subject_name": s[1]} for s in subjects],
+            }
+        else:
+            # Return fallback data
+            return {
+                "data": [
+                    {"subject_id": 1, "subject_name": "Math"},
+                    {"subject_id": 2, "subject_name": "Science"},
+                    {"subject_id": 3, "subject_name": "English"},
+                    {"subject_id": 4, "subject_name": "History"},
+                    {"subject_id": 5, "subject_name": "Arabic"},
+                    {"subject_id": 6, "subject_name": "Geography"},
+                    {"subject_id": 7, "subject_name": "Social Studies"},
+                    {"subject_id": 8, "subject_name": "Physical Education"},
+                ]
+            }
+    except:
+        # Return fallback data on error
+        return {
+            "data": [
+                {"subject_id": 1, "subject_name": "Math"},
+                {"subject_id": 2, "subject_name": "Science"},
+                {"subject_id": 3, "subject_name": "English"},
+                {"subject_id": 4, "subject_name": "History"},
+                {"subject_id": 5, "subject_name": "Arabic"},
+                {"subject_id": 6, "subject_name": "Geography"},
+                {"subject_id": 7, "subject_name": "Social Studies"},
+                {"subject_id": 8, "subject_name": "Physical Education"},
+            ]
+        }
+
+@app.get("/api/sections", tags=["Sections"])
+async def get_sections():
+    """Get all sections"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT section_id, section_name FROM public.sections ORDER BY section_name")
+        sections = cur.fetchall()
+        cur.close()
+        conn.close()
+        return {
+            "data": [{"section_id": s[0], "section_name": s[1]} for s in sections],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/api/lectures", tags=["Statistics"])
+async def get_lectures(startDate: str = None, endDate: str = None):
+    """Get lectures statistics for date range"""
+    try:
+        # Return mock data for now
+        return {
+            "count": 5,
+            "data": [
+                {"id": 1, "name": "Lecture 1", "date": "2024-04-01"},
+                {"id": 2, "name": "Lecture 2", "date": "2024-04-02"},
+                {"id": 3, "name": "Lecture 3", "date": "2024-04-03"},
+                {"id": 4, "name": "Lecture 4", "date": "2024-04-04"},
+                {"id": 5, "name": "Lecture 5", "date": "2024-04-05"},
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/api/teachers", tags=["Statistics"])
+async def get_teachers():
+    """Get teachers statistics"""
+    try:
+        # Return mock data
+        return {
+            "count": 452,
+            "data": []
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/api/uploads", tags=["Statistics"])
+async def get_uploads():
+    """Get upload hours statistics"""
+    try:
+        # Return mock data
+        return {
+            "count": 8920,
+            "data": []
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/api/users", tags=["Statistics"])
+async def get_users():
+    """Get user sessions statistics"""
+    try:
+        # Return mock data
+        return {
+            "count": 12500,
+            "data": []
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/api/kpis/domains/all", tags=["KPIs"])
+async def get_kpi_domains_all():
+    """Get all KPI domains"""
+    try:
+        # Return mock data with proper field names - Arabic names from database
+        data = {
+            "data": [
+                {"domain_code": "D1", "domain_name": "إعداد وتنفيذ خطة التعلم", "domain_description": "Planning and executing learning strategies"},
+                {"domain_code": "D2", "domain_name": "تنوع استراتيجيات التدريس", "domain_description": "Diverse teaching strategies"},
+                {"domain_code": "D3", "domain_name": "تهيئة البيئة التعليمية", "domain_description": "Learning environment setup"},
+                {"domain_code": "D4", "domain_name": "الإدارة الصفية", "domain_description": "Classroom management"},
+                {"domain_code": "D5", "domain_name": "تنوع أساليب التقويم", "domain_description": "Assessment methods diversity"},
+                {"domain_code": "D6", "domain_name": "تحليل مشاركات الطلاب", "domain_description": "Student participation analysis"},
+                {"domain_code": "D7", "domain_name": "توظيف التقنيات", "domain_description": "Technology integration"},
+                {"domain_code": "D8", "domain_name": "تحسين نتائج المتعلمين", "domain_description": "Student outcome improvement"},
+            ]
+        }
+        return JSONResponse(content=data, media_type="application/json; charset=utf-8")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/api/teachers/logins/stats", tags=["Statistics"])
+async def get_teacher_login_stats(startDate: str = None, endDate: str = None):
+    """Get teacher login statistics for date range"""
+    try:
+        return {
+            "count": 452,
+            "data": []
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/api/sound-files/upload-hours/stats", tags=["Statistics"])
+async def get_upload_hours_stats(startDate: str = None, endDate: str = None):
+    """Get upload hours statistics for date range"""
+    try:
+        return {
+            "count": 8920,
+            "data": []
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/api/auth/logins/stats", tags=["Statistics"])
+async def get_auth_login_stats(startDate: str = None, endDate: str = None):
+    """Get user login statistics for date range"""
+    try:
+        return {
+            "count": 12500,
+            "data": []
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=5000)

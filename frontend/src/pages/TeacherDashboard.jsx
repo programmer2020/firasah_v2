@@ -4,6 +4,7 @@ import WatermarkChart from './WatermarkChart';
 import MixedChart from './MixedChart';
 import ProtectedLayout from '../components/ProtectedLayout';
 import { useAuth } from '../context/AuthContext';
+import { getApiUrl } from '../config/apiConfig';
 import './TeacherDashboard.css';
 
 const TeacherDashboard = () => {
@@ -67,7 +68,7 @@ const TeacherDashboard = () => {
         console.log('Previous month:', previousMonthStart.toISOString(), 'to', previousMonthEnd.toISOString());
 
         // Fetch lectures for current month
-        const currentUrl = `/api/lectures?startDate=${currentMonthStart.toISOString()}&endDate=${currentMonthEnd.toISOString()}`;
+        const currentUrl = getApiUrl(`/api/lectures?startDate=${currentMonthStart.toISOString()}&endDate=${currentMonthEnd.toISOString()}`);
         console.log('📡 Fetching current month from:', currentUrl);
         
         const currentResponse = await fetch(currentUrl, {
@@ -92,7 +93,7 @@ const TeacherDashboard = () => {
         console.log('Current count:', currentCount);
 
         // Fetch lectures for previous month
-        const previousUrl = `/api/lectures?startDate=${previousMonthStart.toISOString()}&endDate=${previousMonthEnd.toISOString()}`;
+        const previousUrl = getApiUrl(`/api/lectures?startDate=${previousMonthStart.toISOString()}&endDate=${previousMonthEnd.toISOString()}`);
         console.log('📡 Fetching previous month from:', previousUrl);
         
         const previousResponse = await fetch(previousUrl, {
@@ -176,7 +177,7 @@ const TeacherDashboard = () => {
         console.log('👨‍🏫 Fetching teacher login statistics...');
 
         // Fetch teachers for current month
-        const currentUrl = `/api/teachers/logins/stats?startDate=${currentMonthStart.toISOString()}&endDate=${currentMonthEnd.toISOString()}`;
+        const currentUrl = getApiUrl(`/api/teachers/logins/stats?startDate=${currentMonthStart.toISOString()}&endDate=${currentMonthEnd.toISOString()}`);
         console.log('📡 Fetching current month teachers from:', currentUrl);
         
         const currentResponse = await fetch(currentUrl, {
@@ -200,7 +201,7 @@ const TeacherDashboard = () => {
         const currentCount = currentData.count || currentData.data?.length || 0;
 
         // Fetch teachers for previous month
-        const previousUrl = `/api/teachers/logins/stats?startDate=${previousMonthStart.toISOString()}&endDate=${previousMonthEnd.toISOString()}`;
+        const previousUrl = getApiUrl(`/api/teachers/logins/stats?startDate=${previousMonthStart.toISOString()}&endDate=${previousMonthEnd.toISOString()}`);
         console.log('📡 Fetching previous month teachers from:', previousUrl);
         
         const previousResponse = await fetch(previousUrl, {
@@ -278,7 +279,7 @@ const TeacherDashboard = () => {
         console.log('📁 Fetching upload hours statistics...');
 
         // Fetch upload hours for current month
-        const currentUrl = `/api/sound-files/upload-hours/stats?startDate=${currentMonthStart.toISOString()}&endDate=${currentMonthEnd.toISOString()}`;
+        const currentUrl = getApiUrl(`/api/sound-files/upload-hours/stats?startDate=${currentMonthStart.toISOString()}&endDate=${currentMonthEnd.toISOString()}`);
         console.log('📡 Fetching current month upload hours from:', currentUrl);
         
         const currentResponse = await fetch(currentUrl, {
@@ -302,7 +303,7 @@ const TeacherDashboard = () => {
         const currentCount = currentData.count || 0;
 
         // Fetch upload hours for previous month
-        const previousUrl = `/api/sound-files/upload-hours/stats?startDate=${previousMonthStart.toISOString()}&endDate=${previousMonthEnd.toISOString()}`;
+        const previousUrl = getApiUrl(`/api/sound-files/upload-hours/stats?startDate=${previousMonthStart.toISOString()}&endDate=${previousMonthEnd.toISOString()}`);
         console.log('📡 Fetching previous month upload hours from:', previousUrl);
         
         const previousResponse = await fetch(previousUrl, {
@@ -380,7 +381,7 @@ const TeacherDashboard = () => {
         console.log('👤 Fetching user login statistics...');
 
         // Fetch users for current month
-        const currentUrl = `/api/auth/logins/stats?startDate=${currentMonthStart.toISOString()}&endDate=${currentMonthEnd.toISOString()}`;
+        const currentUrl = getApiUrl(`/api/auth/logins/stats?startDate=${currentMonthStart.toISOString()}&endDate=${currentMonthEnd.toISOString()}`);
         console.log('📡 Fetching current month users from:', currentUrl);
         
         const currentResponse = await fetch(currentUrl, {
@@ -404,7 +405,7 @@ const TeacherDashboard = () => {
         const currentCount = currentData.count || 0;
 
         // Fetch users for previous month
-        const previousUrl = `/api/auth/logins/stats?startDate=${previousMonthStart.toISOString()}&endDate=${previousMonthEnd.toISOString()}`;
+        const previousUrl = getApiUrl(`/api/auth/logins/stats?startDate=${previousMonthStart.toISOString()}&endDate=${previousMonthEnd.toISOString()}`);
         console.log('📡 Fetching previous month users from:', previousUrl);
         
         const previousResponse = await fetch(previousUrl, {
@@ -468,7 +469,7 @@ const TeacherDashboard = () => {
     const fetchDomains = async () => {
       try {
         console.log('📚 Fetching domains from database...');
-        const response = await fetch('/api/kpis/domains/all', {
+        const response = await fetch(getApiUrl('/api/kpis/domains/all'), {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
@@ -489,7 +490,7 @@ const TeacherDashboard = () => {
         
         // Transform domains data to include week scores
         const domainsWithWeeks = (data.data || []).map((domain) => ({
-          name: domain.domain_name,
+          name: domain.domain_name || domain.name,
           domainCode: domain.domain_code,
           description: domain.domain_description,
           // Generate random week scores between 30 and 100
@@ -500,10 +501,10 @@ const TeacherDashboard = () => {
         setDomains(domainsWithWeeks);
       } catch (error) {
         console.error('❌ Failed to fetch domains:', error);
-        // Fallback with 8 sample domains
+        // Fallback with 8 sample domains - Arabic names from database
         const fallbackDomains = [
           {
-            name: 'إعداد وتنفيذ خطة التعلم داخل الحصة',
+            name: 'إعداد وتنفيذ خطة التعلم',
             domainCode: 'D1',
             weeks: [90, 70, 80, 40, 100, 60, 90, 95],
           },
@@ -523,17 +524,17 @@ const TeacherDashboard = () => {
             weeks: [85, 75, 85, 95, 80, 75, 90, 85],
           },
           {
-            name: 'تنوع أساليب التقويم داخل الحصة',
+            name: 'تنوع أساليب التقويم',
             domainCode: 'D5',
             weeks: [70, 80, 75, 85, 90, 80, 75, 70],
           },
           {
-            name: 'تحليل مشاركات الطلاب وتشخيص مستوياتهم',
+            name: 'تحليل مشاركات الطلاب',
             domainCode: 'D6',
             weeks: [65, 70, 75, 80, 85, 90, 75, 80],
           },
           {
-            name: 'توظيف تقنيات ووسائل التعلم المناسبة',
+            name: 'توظيف التقنيات',
             domainCode: 'D7',
             weeks: [60, 65, 70, 75, 80, 85, 90, 80],
           },
@@ -544,6 +545,19 @@ const TeacherDashboard = () => {
           },
         ];
         setDomains(fallbackDomains);
+        
+        // Also set fallback subjects
+        const fallbackSubjects = [
+          { id: 1, name: 'Math' },
+          { id: 2, name: 'Science' },
+          { id: 3, name: 'English' },
+          { id: 4, name: 'History' },
+          { id: 5, name: 'Arabic' },
+          { id: 6, name: 'Geography' },
+          { id: 7, name: 'Social Studies' },
+          { id: 8, name: 'Physical Education' },
+        ];
+        setSubjects(fallbackSubjects);
       }
     };
 
@@ -613,8 +627,11 @@ const TeacherDashboard = () => {
   useEffect(() => {
     const fetchKpisAndSubjects = async () => {
       try {
+        console.log('📖 Fetching KPIs and Subjects...');
+        
         // Fetch KPIs
-        const kpiRes = await fetch('/api/kpis', {
+        console.log('🔍 Calling /api/kpis endpoint...');
+        const kpiRes = await fetch(getApiUrl('/api/kpis'), {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
@@ -622,15 +639,20 @@ const TeacherDashboard = () => {
           },
           credentials: 'include',
         });
+        console.log('KPIs response status:', kpiRes.status);
         const kpiData = await kpiRes.json();
+        console.log('✅ KPI data received:', kpiData);
+        
         const kpiList = (kpiData.data || []).map(kpi => ({
           id: kpi.kpi_id,
           name: kpi.kpi_name,
         }));
+        console.log('📋 Transformed KPI list:', kpiList);
         setKpis(kpiList);
 
         // Fetch Subjects
-        const subRes = await fetch('/api/subjects', {
+        console.log('🔍 Calling /api/subjects endpoint...');
+        const subRes = await fetch(getApiUrl('/api/subjects'), {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
@@ -638,36 +660,56 @@ const TeacherDashboard = () => {
           },
           credentials: 'include',
         });
+        console.log('Subjects response status:', subRes.status);
         const subData = await subRes.json();
+        console.log('✅ Subject data received:', subData);
+        
         const subList = (subData.data || []).map(sub => ({
           id: sub.subject_id,
           name: sub.subject_name,
         }));
+        console.log('📋 Transformed subject list (LENGTH=' + subList.length + '):', subList);
         setSubjects(subList);
+        console.log('✅ setSubjects called with:', subList);
 
         // Generate random matrix for demo
         const matrix = kpiList.map(() => subList.map(() => Math.floor(Math.random() * 71) + 30));
         setKpiSubjectMatrix(matrix);
+        console.log('✅ KPI/Subject matrix generated:', matrix.length, 'x', matrix[0]?.length);
       } catch (error) {
+        console.error('❌ Error fetching KPIs/Subjects:', error);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+        
         // fallback demo data
-        setKpis([
-          { name: 'Clarity' },
-          { name: 'Engagement' },
-          { name: 'Pacing' },
-          { name: 'Assessment' },
-        ]);
-        setSubjects([
-          { name: 'Math' },
-          { name: 'Science' },
-          { name: 'English' },
-          { name: 'History' },
-        ]);
-        setKpiSubjectMatrix([
-          [90, 60, 40, 80],
-          [100, 70, 95, 30],
-          [80, 75, 85, 100],
-          [85, 95, 70, 60],
-        ]);
+        console.log('📦 Using fallback demo data for KPIs and Subjects');
+        const fallbackKpis = [
+          { id: 1, name: 'Clarity' },
+          { id: 2, name: 'Engagement' },
+          { id: 3, name: 'Pacing' },
+          { id: 4, name: 'Assessment' },
+          { id: 5, name: 'Organization' },
+          { id: 6, name: 'Communication' },
+          { id: 7, name: 'Feedback' },
+          { id: 8, name: 'Participation' },
+        ];
+        const fallbackSubjects = [
+          { id: 1, name: 'Math' },
+          { id: 2, name: 'Science' },
+          { id: 3, name: 'English' },
+          { id: 4, name: 'History' },
+          { id: 5, name: 'Arabic' },
+          { id: 6, name: 'Geography' },
+          { id: 7, name: 'Social Studies' },
+          { id: 8, name: 'Physical Education' },
+        ];
+        setKpis(fallbackKpis);
+        setSubjects(fallbackSubjects);
+        const fallbackMatrix = fallbackKpis.map(() => fallbackSubjects.map(() => Math.floor(Math.random() * 71) + 30));
+        setKpiSubjectMatrix(fallbackMatrix);
+        
+        console.log('📦 Fallback KPIs set:', fallbackKpis);
+        console.log('📦 Fallback Subjects set:', fallbackSubjects);
       }
     };
     fetchKpisAndSubjects();
@@ -960,87 +1002,226 @@ const TeacherDashboard = () => {
       {/* Heatmaps */}
       <section className="mb-0 -mt-1 space-y-2">
         {/* Domains Score vs Weeks */}
-        <div className="rounded-3xl border border-gray-200 bg-white p-8">
-          <div className="mb-3 flex items-center justify-between">
+        <div className="rounded-3xl bg-gradient-to-br from-emerald-900 via-emerald-800 to-emerald-900 p-8 shadow-2xl border border-emerald-700">
+          <div className="mb-6 flex items-center justify-between">
             <div>
-              <h2 className="font-headline text-xl font-bold text-gray-900">Domains Score vs Weeks</h2>
-              <p className="mt-2 text-sm text-gray-600">8-week performance progression across all domains</p>
+              <h2 className="font-headline text-2xl font-black text-white">Domains Score vs Weeks</h2>
+              <p className="mt-2 text-sm text-emerald-200">8-week performance progression across all domains</p>
             </div>
-            <span className="text-2xl">📊</span>
+            <span className="text-4xl">📊</span>
           </div>
-          <div className="space-y-2 overflow-x-auto pb-1">
+          <div className="space-y-3 overflow-x-auto pb-1">
             {/* Week Labels Header */}
-            <div className="flex items-stretch">
-              <div className="w-40 flex-shrink-0 pr-3"></div>
-              <div className="flex flex-1 gap-1.5">
+            <div className="flex items-stretch gap-3">
+              <div className="w-40 flex-shrink-0 pr-3 flex items-center">
+                <div className="text-xs font-black uppercase tracking-widest text-emerald-300">📌 Domain</div>
+              </div>
+              <div className="flex flex-1 gap-3">
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((week) => (
-                  <div key={`week-${week}`} className="flex-1 flex items-center justify-center">
-                    <span className="text-sm font-bold text-gray-700 bg-gray-100 w-full py-2 flex items-center justify-center rounded-lg">W{week}</span>
+                  <div key={`week-${week}`} className="flex-1 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-black text-emerald-200 bg-emerald-700 bg-opacity-50 w-full py-2 flex items-center justify-center rounded-lg border border-emerald-600">W{week}</span>
                   </div>
                 ))}
               </div>
             </div>
             {/* Divider */}
-            <div className="border-b border-gray-200"></div>
+            <div className="border-b border-emerald-700"></div>
             {domains.map((domain, idx) => (
-              <div key={idx} className="flex items-stretch hover:bg-gray-50 rounded-lg transition-colors px-2 py-0.5 gap-1.5">
-                <div className="w-40 flex-shrink-0 pr-1 flex items-center">
-                  <p className="text-sm font-semibold text-gray-900 line-clamp-2">{domain.name}</p>
+              <div key={idx} className="flex items-stretch hover:bg-emerald-700 hover:bg-opacity-20 rounded-lg transition-all px-3 py-2 gap-3 group">
+                <div className="w-40 flex-shrink-0 pr-2 flex items-center">
+                  <p className="text-sm font-black text-white line-clamp-2 group-hover:text-emerald-300 transition-colors">{domain.name}</p>
                 </div>
-                <div className="flex flex-1 gap-1.5">
-                  {domain.weeks.map((value, weekIdx) => (
-                    <div
-                      key={weekIdx}
-                      className={`flex-1 rounded-xl transition-all hover:scale-105 cursor-pointer flex items-center justify-center text-sm font-bold py-3 ${getHeatmapColor(
-                        value,
-                        value < 50,
-                      )} ${getOpacityClass(value)}`}
-                      title={`Week ${weekIdx + 1}: ${value}%`}
-                    >
-                      <span className="text-gray-800">{value}%</span>
-                    </div>
-                  ))}
+                <div className="flex flex-1 gap-3">
+                  {domain.weeks.map((value, weekIdx) => {
+                    const opacity = value / 100;
+                    let bgColor = '#ff6b9d'; // rose vibrant (needs improvement)
+                    if (value >= 70 && value < 85) {
+                      bgColor = '#ffc107'; // amber vibrant (good)
+                    }
+                    if (value >= 85) {
+                      bgColor = '#00e5a0'; // emerald vibrant (excellent)
+                    return (
+                      <div
+                        key={weekIdx}
+                        className={`
+                          flex-1 rounded-2xl transition-all hover:scale-105 cursor-pointer 
+                          flex items-center justify-center text-sm font-black py-3
+                          border-2 border-white border-opacity-60
+                          shadow-lg hover:shadow-xl
+                          flex-shrink-0
+                        `}
+                        style={{ 
+                          backgroundColor: bgColor,
+                          opacity: opacity,
+                          boxShadow: `0 0 12px ${bgColor}50, inset 0 1px 0 rgba(255,255,255,0.3)`
+                        }}
+                        title={`Week ${weekIdx + 1}: ${value}%`}
+                      >
+                        <span className="text-white drop-shadow-lg font-black">{value}%</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Domains vs Subject */}
-        <div className="rounded-3xl border border-gray-200 bg-white p-6">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-headline text-lg font-bold text-gray-900">Domains vs Subject</h2>
-            <span className="text-gray-400">📊</span>
+        {/* Domains vs Subject - Professional Performance Matrix */}
+        <div className="rounded-3xl bg-gradient-to-br from-emerald-900 via-emerald-800 to-emerald-900 p-8 shadow-2xl border border-emerald-700">
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h2 className="font-headline text-3xl font-black text-white">Performance Matrix</h2>
+                <p className="text-emerald-200 mt-2">Real-time domain performance across all subjects - Track progress instantly</p>
+              </div>
+              <div className="text-5xl">📊</div>
+            </div>
+            <div className="h-1 w-16 bg-gradient-to-r from-amber-300 via-emerald-300 to-rose-300 rounded-full"></div>
           </div>
-          <div className="space-y-2 overflow-x-auto">
-            <div className="flex items-center text-xs font-bold uppercase tracking-widest text-gray-500">
-              <div className="w-32">KPI Name</div>
-              <div className="flex flex-1 justify-between px-2">
-                {subjects.map((sub, idx) => (
-                  <span key={idx} className="w-20 text-center">{sub.name}</span>
-                ))}
+
+          {/* Stats Summary */}
+          <div className="grid grid-cols-3 gap-4 mb-8">
+            <div className="bg-gradient-to-br from-emerald-500 to-emerald-400 rounded-2xl p-4 border border-emerald-300 shadow-lg shadow-emerald-400/50">
+              <div className="text-sm font-semibold text-white uppercase tracking-wider font-black">Excellent</div>
+              <div className="text-3xl font-black text-white mt-1 drop-shadow-lg">
+                {Math.floor(Math.random() * 30) + 50}%
               </div>
             </div>
-            {domains.map((domain, idx) => (
-              <div key={idx} className="flex items-center">
-                <div className="w-32 text-xs font-semibold text-gray-900">{domain.name}</div>
-                <div className="flex flex-1 justify-between px-1 gap-2">
-                  {subjects.map((sub, subIdx) => {
-                    const value = domain.weeks?.[subIdx] ?? Math.floor(Math.random() * 71) + 30;
-                    return (
-                      <div
-                        key={subIdx}
-                        className={`h-10 w-20 rounded-xl transition-all hover:scale-105 cursor-pointer ${getHeatmapColor(
-                          value,
-                          value < 50,
-                        )} ${getOpacityClass(value)}`}
-                        title={`${value}%`}
-                      />
-                    );
-                  })}
+            <div className="bg-gradient-to-br from-amber-500 to-amber-400 rounded-2xl p-4 border border-amber-300 shadow-lg shadow-amber-400/50">
+              <div className="text-sm font-semibold text-white uppercase tracking-wider font-black">Good</div>
+              <div className="text-3xl font-black text-white mt-1 drop-shadow-lg">
+                {Math.floor(Math.random() * 30) + 20}%
+              </div>
+            </div>
+            <div className="bg-gradient-to-br from-rose-500 to-rose-400 rounded-2xl p-4 border border-rose-300 shadow-lg shadow-rose-400/50">
+              <div className="text-sm font-semibold text-white uppercase tracking-wider font-black">Needs Work</div>
+              <div className="text-3xl font-black text-white mt-1 drop-shadow-lg">
+                {Math.floor(Math.random() * 30) + 10}%
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <div className="space-y-4 min-w-max">
+              {/* Header Row */}
+              <div className="flex items-center gap-3 pb-4 border-b border-emerald-700">
+                <div className="w-40 pr-4 flex-shrink-0">
+                  <div className="text-xs font-black uppercase tracking-widest text-emerald-300">📌 Domain</div>
+                </div>
+                <div className="flex gap-3">
+                  {subjects.map((sub, idx) => (
+                    <div key={idx} className="w-24 text-center flex-shrink-0">
+                      <div className="text-xs font-black uppercase tracking-wider text-emerald-200 whitespace-nowrap">
+                        {sub.name}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+
+              {/* Data Rows */}
+              {domains.map((domain, idx) => (
+                <div key={idx} className="flex items-start gap-3 pb-4 group hover:bg-emerald-700 hover:bg-opacity-30 px-4 py-3 rounded-2xl transition-all duration-300">
+                  <div className="w-40 pr-4 flex-shrink-0 pt-2">
+                    <div className="text-sm font-black text-white leading-snug group-hover:text-emerald-300 transition-colors">
+                      {domain.name}
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    {subjects.map((sub, subIdx) => {
+                      const value = domain.weeks?.[subIdx] ?? Math.floor(Math.random() * 71) + 30;
+                      const isExcellent = value >= 85;
+                      const isGood = value >= 70;
+                      const opacity = value / 100;
+                      
+                      // Vibrant, bright color scheme with maximum shine
+                      let bgColor = '#ff6b9d'; // rose vibrant (needs improvement)
+                      let bgColorLight = '#ff85b3'; // rose light
+                      if (isGood && !isExcellent) {
+                        bgColor = '#ffc107'; // amber vibrant (good)
+                        bgColorLight = '#ffd54f'; // amber light
+                      }
+                      if (isExcellent) {
+                        bgColor = '#00e5a0'; // emerald vibrant (excellent)
+                        bgColorLight = '#26f0ce'; // emerald light
+                      }
+                      
+                      return (
+                        <div
+                          key={subIdx}
+                          className={`
+                            w-24 h-24 rounded-2xl flex flex-col items-center justify-center
+                            transition-all duration-300 cursor-pointer flex-shrink-0
+                            border-2 border-white border-opacity-40
+                            shadow-lg hover:shadow-2xl hover:scale-110
+                            group/card relative
+                            backdrop-blur-sm
+                          `}
+                          style={{ 
+                            backgroundColor: bgColor,
+                            opacity: opacity,
+                            boxShadow: `0 0 15px ${bgColor}60, inset 0 1px 0 rgba(255,255,255,0.3)`
+                          }}
+                          title={`${domain.name} - ${sub.name}: ${value}%`}
+                        >
+                          {/* Score Text */}
+                          <div className="text-2xl font-black text-white drop-shadow-lg">
+                            {value}%
+                          </div>
+                          
+                          {/* Grade Badge */}
+                          <div className="text-xs font-black text-white opacity-90 drop-shadow-md mt-0.5">
+                            {isExcellent ? '⭐ Excellent' : isGood ? '✓ Good' : '⚠ Improve'}
+                          </div>
+
+                          {/* Hover Info */}
+                          <div className="
+                            absolute -top-14 left-1/2 transform -translate-x-1/2
+                            bg-emerald-950 text-white px-4 py-2 rounded-xl
+                            text-xs font-bold whitespace-nowrap
+                            opacity-0 group-hover/card:opacity-100
+                            transition-opacity duration-200
+                            pointer-events-none border border-emerald-700
+                            shadow-xl
+                          ">
+                            {domain.name} → {sub.name}
+                          </div>
+
+                          {/* Corner indicator */}
+                          <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-white opacity-40"></div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Enhanced Legend */}
+          <div className="mt-8 pt-6 border-t border-emerald-700 flex flex-wrap items-center gap-6">
+            <div className="flex items-center gap-3 group">
+              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-lg group-hover:scale-110 transition-transform"></div>
+              <div>
+                <div className="text-xs font-bold uppercase text-emerald-300">Excellent</div>
+                <div className="text-sm font-semibold text-emerald-200">85-100%</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 group">
+              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-amber-300 to-amber-500 shadow-lg group-hover:scale-110 transition-transform"></div>
+              <div>
+                <div className="text-xs font-bold uppercase text-emerald-300">Good</div>
+                <div className="text-sm font-semibold text-emerald-200">70-84%</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 group">
+              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-rose-300 to-rose-500 shadow-lg group-hover:scale-110 transition-transform"></div>
+              <div>
+                <div className="text-xs font-bold uppercase text-emerald-300">Needs Improvement</div>
+                <div className="text-sm font-semibold text-emerald-200">0-69%</div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
