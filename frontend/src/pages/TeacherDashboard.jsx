@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as d3 from 'd3';
-import SectionOverallScoreChart from './SectionOverallScoreChart';
+import AreaChart from './AreaChart';
 import DonutChart from './DonutChart';
 import ProtectedLayout from '../components/ProtectedLayout';
 import { useAuth } from '../context/AuthContext';
@@ -1050,8 +1050,8 @@ const TeacherDashboard = () => {
         {/* Teacher Overall Score - D3 Donut Chart */}
         <DonutChart />
 
-        {/* Section Overall Score - Multi-line Chart */}
-        <SectionOverallScoreChart />
+        {/* Section Overall Score - D3 Area Chart */}
+        <AreaChart />
       </section>
 
       {/* Evidence Samples Table */}
