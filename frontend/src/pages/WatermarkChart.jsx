@@ -23,20 +23,7 @@ const WatermarkChart = () => {
         }
       ],
       graphic: {
-        elements: [
-          {
-            type: 'text',
-            left: 'center',
-            top: 'center',
-            style: {
-              text: 'DRAFT',
-              fontSize: 100,
-              fontWeight: 'bold',
-              fill: 'rgba(200, 200, 200, 0.15)',
-              textAlign: 'center'
-            }
-          }
-        ]
+        elements: []
       },
       tooltip: {
         trigger: 'axis',
