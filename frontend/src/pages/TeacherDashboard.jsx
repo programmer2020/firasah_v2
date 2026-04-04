@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import * as d3 from 'd3';
 import AreaChart from './AreaChart';
-import DonutChart from './DonutChart';
+import MixedChart from './MixedChart';
 import ProtectedLayout from '../components/ProtectedLayout';
 import { useAuth } from '../context/AuthContext';
 import './TeacherDashboard.css';
@@ -1047,8 +1047,8 @@ const TeacherDashboard = () => {
 
       {/* Charts Section */}
       <section className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Teacher Overall Score - D3 Donut Chart */}
-        <DonutChart />
+        {/* Teacher Performance Metrics - ECharts Mixed Bar & Line Chart */}
+        <MixedChart />
 
         {/* Section Overall Score - D3 Area Chart */}
         <AreaChart />
