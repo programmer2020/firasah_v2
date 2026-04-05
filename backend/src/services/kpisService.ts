@@ -136,10 +136,10 @@ export const getKPIsByCreator = async (createdBy: string) => {
 export const getAllKPIDomains = async () => {
   try {
     const query = `
-      SELECT 
+      SELECT
         domain_id,
-        domain_code,
         domain_name,
+        domain_name_en,
         domain_description,
         sort_order,
         created_at,

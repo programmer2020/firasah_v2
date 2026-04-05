@@ -24,14 +24,14 @@ html {
 }
 
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
   background: var(--s);
   color: var(--ink);
   line-height: 1.6;
 }
 
 h1, h2, h3, h4 {
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
 }
 
 .wrap {
@@ -57,7 +57,7 @@ h1, h2, h3, h4 {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
   font-weight: 600;
   font-size: 14px;
   border: none;
@@ -116,7 +116,7 @@ nav.landing-nav {
 }
 
 .logo {
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
   font-weight: 800;
   font-size: 17px;
   color: var(--e);
@@ -271,7 +271,7 @@ section.bg-dark::before {
 }
 
 .hero-m-val {
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
   font-size: 38px;
   font-weight: 800;
   color: var(--e);
@@ -303,7 +303,7 @@ section.bg-dark::before {
 }
 
 .hero-stat-v {
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
   font-size: 22px;
   font-weight: 800;
   color: var(--e);
@@ -363,7 +363,7 @@ section.bg-dark::before {
 }
 
 .stat-v {
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
   font-size: 46px;
   font-weight: 800;
   color: var(--e);
@@ -404,7 +404,7 @@ section.bg-dark::before {
 }
 
 .step-n {
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
   font-size: 52px;
   font-weight: 800;
   color: var(--elt);
@@ -449,7 +449,7 @@ section.bg-dark::before {
 }
 
 .proof-v {
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
   font-size: clamp(52px, 6vw, 80px);
   font-weight: 800;
   letter-spacing: -0.04em;
@@ -583,14 +583,21 @@ section.bg-dark::before {
 }
 
 .aud-ic {
-  width: 46px;
-  height: 46px;
-  background: var(--elt);
+  width: 72px;
+  height: 72px;
+  background: linear-gradient(135deg, #e8f5f0 0%, #d0ede4 100%);
+  border-radius: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 18px;
-  font-size: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 24px rgba(0, 96, 73, 0.15);
+  transition: box-shadow 0.3s, transform 0.3s;
+}
+
+.aud-c:hover .aud-ic {
+  box-shadow: 0 12px 32px rgba(0, 96, 73, 0.25);
+  transform: translateY(-3px);
 }
 
 .aud-c h3 {
@@ -647,7 +654,7 @@ section.bg-dark::before {
 }
 
 .logo-box span {
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
   font-size: 9px;
   font-weight: 800;
   color: var(--e);
@@ -716,7 +723,7 @@ footer {
 }
 
 .ft-logo {
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
   font-weight: 800;
   font-size: 16px;
   color: #fff;

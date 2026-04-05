@@ -1,5 +1,9 @@
 import { Link } from 'react-router-dom';
 import './Landing.css';
+import miskLogo from '../assets/Misk.png';
+import codeLogo from '../assets/CodeLogo.png';
+import ntdpLogo from '../assets/ntdp-logo.png';
+import saudiCenterLogo from '../assets/saudi-center.png';
 
 export default function Landing() {
   return (
@@ -216,17 +220,76 @@ export default function Landing() {
           </div>
           <div className="aud-grid">
             <div className="aud-c">
-              <div className="aud-ic">🏫</div>
+              <div className="aud-ic">
+                <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id="grad1a" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+                      <stop offset="0%" stopColor="#006049"/>
+                      <stop offset="100%" stopColor="#00c98d"/>
+                    </linearGradient>
+                  </defs>
+                  {/* Building / School icon */}
+                  <rect x="8" y="20" width="40" height="28" rx="3" fill="url(#grad1a)" opacity="0.15"/>
+                  <rect x="8" y="20" width="40" height="28" rx="3" stroke="url(#grad1a)" strokeWidth="2.2"/>
+                  <path d="M28 8 L50 20 H6 L28 8Z" fill="url(#grad1a)"/>
+                  <rect x="20" y="33" width="7" height="15" rx="1.5" fill="url(#grad1a)"/>
+                  <rect x="29" y="33" width="7" height="15" rx="1.5" fill="url(#grad1a)"/>
+                  <rect x="13" y="26" width="6" height="5" rx="1" fill="url(#grad1a)" opacity="0.7"/>
+                  <rect x="37" y="26" width="6" height="5" rx="1" fill="url(#grad1a)" opacity="0.7"/>
+                  <circle cx="44" cy="14" r="5" fill="#00c98d" opacity="0.25"/>
+                  <circle cx="44" cy="14" r="2.5" fill="#00c98d"/>
+                </svg>
+              </div>
               <h3>School Owners & Principals</h3>
               <p>Visibility across your school, not just the classroom you visited. Firasah gives you a real-time view of teaching quality across every class — without adding to anyone's schedule.</p>
             </div>
             <div className="aud-c">
-              <div className="aud-ic">📊</div>
+              <div className="aud-ic">
+                <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id="grad2a" x1="0" y1="56" x2="56" y2="0" gradientUnits="userSpaceOnUse">
+                      <stop offset="0%" stopColor="#006049"/>
+                      <stop offset="100%" stopColor="#34d399"/>
+                    </linearGradient>
+                  </defs>
+                  {/* Analytics bars */}
+                  <rect x="6" y="38" width="10" height="14" rx="2.5" fill="url(#grad2a)" opacity="0.4"/>
+                  <rect x="6" y="38" width="10" height="14" rx="2.5" stroke="url(#grad2a)" strokeWidth="1.5"/>
+                  <rect x="19" y="26" width="10" height="26" rx="2.5" fill="url(#grad2a)" opacity="0.6"/>
+                  <rect x="19" y="26" width="10" height="26" rx="2.5" stroke="url(#grad2a)" strokeWidth="1.5"/>
+                  <rect x="32" y="16" width="10" height="36" rx="2.5" fill="url(#grad2a)" opacity="0.8"/>
+                  <rect x="32" y="16" width="10" height="36" rx="2.5" stroke="url(#grad2a)" strokeWidth="1.5"/>
+                  <rect x="45" y="6" width="10" height="46" rx="2.5" fill="url(#grad2a)"/>
+                  {/* Trend line */}
+                  <polyline points="11,37 24,25 37,15 50,5" stroke="#00c98d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.6"/>
+                  <circle cx="50" cy="5" r="3" fill="#00c98d"/>
+                </svg>
+              </div>
               <h3>Ministry & Supervisors</h3>
               <p>Scale teaching development without scaling your team. Monitor patterns across your entire portfolio of schools. Firasah surfaces what matters so supervisors can focus their time where it counts.</p>
             </div>
             <div className="aud-c">
-              <div className="aud-ic">🎓</div>
+              <div className="aud-ic">
+                <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id="grad3a" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+                      <stop offset="0%" stopColor="#004c3a"/>
+                      <stop offset="100%" stopColor="#10b981"/>
+                    </linearGradient>
+                  </defs>
+                  {/* Graduation cap */}
+                  <ellipse cx="28" cy="24" rx="20" ry="7" fill="url(#grad3a)" opacity="0.15"/>
+                  <ellipse cx="28" cy="24" rx="20" ry="7" stroke="url(#grad3a)" strokeWidth="2"/>
+                  <polygon points="28,14 48,24 28,30 8,24" fill="url(#grad3a)"/>
+                  <path d="M40 27 L40 40 Q28 47 16 40 L16 27" stroke="url(#grad3a)" strokeWidth="2.2" strokeLinecap="round" fill="none"/>
+                  <path d="M20 29 Q28 45 36 29" fill="url(#grad3a)" opacity="0.25"/>
+                  <line x1="48" y1="24" x2="48" y2="38" stroke="url(#grad3a)" strokeWidth="2.2" strokeLinecap="round"/>
+                  <circle cx="48" cy="40" r="3.5" fill="#10b981"/>
+                  {/* Star sparkle */}
+                  <circle cx="10" cy="10" r="2" fill="#10b981" opacity="0.5"/>
+                  <circle cx="46" cy="8" r="1.5" fill="#10b981" opacity="0.4"/>
+                </svg>
+              </div>
               <h3>Teachers</h3>
               <p>See your teaching the way a trusted colleague would. Private, specific, and encouraging — Firasah gives teachers the kind of feedback that usually only comes from the best professional development programs.</p>
             </div>
@@ -245,20 +308,28 @@ export default function Landing() {
               <div className="logo-box"><span>وزارة<br />التعليم</span></div>
               <div className="logo-name">Ministry of Education</div>
             </div>
-            <div className="logo-w">
-              <div className="logo-box"><span>NTDP</span></div>
+            <div className="logo-w" style={{ opacity: 1, pointerEvents: 'none' }}>
+              <div className="logo-box" style={{ width: '160px', height: '88px', padding: 0, overflow: 'hidden', borderRadius: '8px', background: '#ffffff' }}>
+                <img src={ntdpLogo} alt="NTDP" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+              </div>
               <div className="logo-name">National Transformation Program</div>
             </div>
-            <div className="logo-w">
-              <div className="logo-box"><span>Digital<br />Entrepreneurship</span></div>
+            <div className="logo-w" style={{ opacity: 1, pointerEvents: 'none' }}>
+              <div className="logo-box" style={{ width: '160px', height: '88px', padding: 0, overflow: 'hidden', borderRadius: '8px', background: '#ffffff' }}>
+                <img src={codeLogo} alt="Center of Digital Entrepreneurship" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+              </div>
               <div className="logo-name">Center of Digital Entrepreneurship</div>
             </div>
-            <div className="logo-w">
-              <div className="logo-box"><span>MiSK</span></div>
+            <div className="logo-w" style={{ opacity: 1, pointerEvents: 'none' }}>
+              <div className="logo-box" style={{ width: '160px', height: '88px', padding: 0, overflow: 'hidden', borderRadius: '8px', background: '#ffffff' }}>
+                <img src={miskLogo} alt="MiSK Foundation" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+              </div>
               <div className="logo-name">MiSK Foundation</div>
             </div>
-            <div className="logo-w">
-              <div className="logo-box"><span>Saudi<br />Business<br />Center</span></div>
+            <div className="logo-w" style={{ opacity: 1, pointerEvents: 'none' }}>
+              <div className="logo-box" style={{ width: '160px', height: '88px', padding: 0, overflow: 'hidden', borderRadius: '8px', background: '#ffffff' }}>
+                <img src={saudiCenterLogo} alt="Saudi Business Center" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+              </div>
               <div className="logo-name">Saudi Business Center</div>
             </div>
           </div>

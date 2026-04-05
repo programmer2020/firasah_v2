@@ -371,11 +371,23 @@ const getAllKPIsForEvaluation = async () => {
  * Sends speech to OpenAI for KPI evaluation
  * Stores evidence records for KPIs that are found
  */
+// Helper: add seconds to a HH:MM:SS time string
+const addSecondsToTime = (timeStr: string, seconds: number): string => {
+  const [h, m, s] = timeStr.split(':').map(Number);
+  const total = h * 3600 + m * 60 + s + Math.round(seconds);
+  const newH = Math.floor(total / 3600) % 24;
+  const newM = Math.floor((total % 3600) / 60);
+  const newS = total % 60;
+  return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}:${String(newS).padStart(2, '0')}`;
+};
+
 export const evaluateSpeechAgainstKPIs = async (
   speechText: string,
   lectureId: number,
   startTime?: string,
-  endTime?: string
+  endTime?: string,
+  fragmentStartSeconds?: number,
+  fragmentEndSeconds?: number
 ): Promise<EvaluationResult[]> => {
   try {
     console.log(`[Evaluation] Starting evaluation for lecture_id=${lectureId}, text_length=${speechText.length}`);
@@ -430,6 +442,28 @@ export const evaluateSpeechAgainstKPIs = async (
           console.warn(`[Evaluation] Could not fetch file upload time:`, err);
         }
       }
+    }
+
+    // If fragment seconds provided, calculate exact evidence time within the lecture
+    if (slotStartTime && fragmentStartSeconds != null && fragmentEndSeconds != null) {
+      slotStartTime = addSecondsToTime(slotStartTime, fragmentStartSeconds);
+      slotEndTime = slotEndTime ? addSecondsToTime(slotEndTime.split(':').length === 3 ? slotEndTime : slotStartTime, fragmentEndSeconds - fragmentStartSeconds) : null;
+      // Recalculate end based on original slot start + fragmentEndSeconds
+      try {
+        const baseQuery = `
+          SELECT ts.start_time
+          FROM lecture l
+          LEFT JOIN section_time_slots ts ON l.time_slot_id = ts.time_slot_id
+          WHERE l.lecture_id = $1
+          LIMIT 1
+        `;
+        const baseRecord = await getOne(baseQuery, [lectureId]);
+        if (baseRecord?.start_time) {
+          slotStartTime = addSecondsToTime(baseRecord.start_time, fragmentStartSeconds);
+          slotEndTime   = addSecondsToTime(baseRecord.start_time, fragmentEndSeconds);
+        }
+      } catch (_) {}
+      console.log(`[Evaluation] Fragment time: ${slotStartTime} - ${slotEndTime} (fragment seconds: ${fragmentStartSeconds}s - ${fragmentEndSeconds}s)`);
     }
 
     // Get all KPIs for reference

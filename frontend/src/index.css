@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@100..900&family=Space+Grotesk:wght@300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@100..900&family=Space+Grotesk:wght@300;400;500;600;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -32,7 +32,7 @@ body,
 }
 
 body {
-  font-family: "Inter", Outfit, sans-serif;
+  font-family: "Plus Jakarta Sans", "Inter", sans-serif;
   background-color: var(--dashboard-bg);
   color: var(--dashboard-copy);
   -webkit-font-smoothing: antialiased;
@@ -51,7 +51,7 @@ button:not(:disabled),
 
 @layer utilities {
   .font-headline {
-    font-family: "Space Grotesk", Outfit, sans-serif;
+    font-family: "Plus Jakarta Sans", "Inter", sans-serif;
   }
 
   .font-dashboard-mono {
@@ -75,7 +75,7 @@ button:not(:disabled),
   }
 
   .dashboard-metric-number {
-    font-family: "Space Grotesk", Outfit, sans-serif;
+    font-family: "Plus Jakarta Sans", "Inter", sans-serif;
     font-size: clamp(2.8rem, 6vw, 4.6rem);
     line-height: 0.88;
     letter-spacing: -0.08em;

@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS kpi_domains (
     domain_id SERIAL PRIMARY KEY,
     domain_code VARCHAR(20) NOT NULL UNIQUE,
     domain_name VARCHAR(255) NOT NULL,
+    domain_name_en VARCHAR(255),
     domain_description TEXT,
     sort_order INT NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -16,23 +17,31 @@ CREATE TABLE IF NOT EXISTS kpi_domains (
 );
 
 -- Insert Teaching Domains
-INSERT INTO kpi_domains (domain_code, domain_name, domain_description, sort_order) 
-VALUES 
-    ('D1', 'إعداد وتنفيذ خطة التعلم داخل الحصة', 
+INSERT INTO kpi_domains (domain_code, domain_name, domain_name_en, domain_description, sort_order)
+VALUES
+    ('D1', 'إعداد وتنفيذ خطة التعلم داخل الحصة',
+     'Domain 1: In-Class Lesson Planning & Execution',
      'Planning and implementing learning strategies within the classroom session', 1),
-    ('D2', 'تنوع استراتيجيات التدريس', 
+    ('D2', 'تنوع استراتيجيات التدريس',
+     'Domain 2: Diversity of Teaching Strategies',
      'Diversity of teaching strategies and methods', 2),
-    ('D3', 'تهيئة البيئة التعليمية', 
+    ('D3', 'تهيئة البيئة التعليمية',
+     'Domain 3: Learning Environment',
      'Preparing and organizing the educational environment', 3),
-    ('D4', 'الإدارة الصفية', 
+    ('D4', 'الإدارة الصفية',
+     'Domain 4: Classroom Management',
      'Classroom management and organization', 4),
-    ('D5', 'تنوع أساليب التقويم داخل الحصة', 
+    ('D5', 'تنوع أساليب التقويم داخل الحصة',
+     'Domain 5: Diversity of In-Class Assessment',
      'Diversity of assessment methods within the session', 5),
-    ('D6', 'تحليل مشاركات الطلاب وتشخيص مستوياتهم', 
+    ('D6', 'تحليل مشاركات الطلاب وتشخيص مستوياتهم',
+     'Domain 6: Analysing Student Responses & Diagnosing Learning Levels',
      'Analyzing student participation and diagnosing their levels', 6),
-    ('D7', 'توظيف تقنيات ووسائل التعلم المناسبة', 
+    ('D7', 'توظيف تقنيات ووسائل التعلم المناسبة',
+     'Domain 7: Use of Technology & Learning Resources',
      'Utilizing appropriate learning technologies and tools', 7),
-    ('D8', 'تحسين نتائج المتعلمين', 
+    ('D8', 'تحسين نتائج المتعلمين',
+     'Domain 8: Improving Learner Outcomes',
      'Improving learner outcomes and achievement', 8)
 ON CONFLICT (domain_code) DO NOTHING;
 ON CONFLICT (domain_code) DO NOTHING;

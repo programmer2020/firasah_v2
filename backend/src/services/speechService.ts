@@ -493,7 +493,11 @@ export const saveFragment = async (
           console.log(`[Evaluation] 🔄 Starting automatic KPI evaluation for fragment_id=${fid}...`);
           const evaluations = await evaluateSpeechAgainstKPIs(
             transcript,
-            lecture.lecture_id
+            lecture.lecture_id,
+            undefined,
+            undefined,
+            startTime,
+            endTime
           );
           console.log(`[Evaluation] ✅ Completed: Evaluated against all KPIs, found ${evaluations.length} evidence records`);
         } catch (evalErr) {

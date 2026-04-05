@@ -490,7 +490,7 @@ const TeacherDashboard = () => {
         
         // Transform domains data to include week scores
         const domainsWithWeeks = (data.data || []).map((domain) => ({
-          name: domain.domain_name || domain.name,
+          name: domain.domain_name_en || domain.domain_name || domain.name,
           domainCode: domain.domain_code,
           description: domain.domain_description,
           // Generate random week scores between 30 and 100
@@ -503,46 +503,14 @@ const TeacherDashboard = () => {
         console.error('❌ Failed to fetch domains:', error);
         // Fallback with 8 sample domains - Arabic names from database
         const fallbackDomains = [
-          {
-            name: 'إعداد وتنفيذ خطة التعلم',
-            domainCode: 'D1',
-            weeks: [90, 70, 80, 40, 100, 60, 90, 95],
-          },
-          {
-            name: 'تنوع استراتيجيات التدريس',
-            domainCode: 'D2',
-            weeks: [40, 50, 80, 60, 70, 80, 90, 100],
-          },
-          {
-            name: 'تهيئة البيئة التعليمية',
-            domainCode: 'D3',
-            weeks: [80, 90, 100, 90, 80, 30, 70, 80],
-          },
-          {
-            name: 'الإدارة الصفية',
-            domainCode: 'D4',
-            weeks: [85, 75, 85, 95, 80, 75, 90, 85],
-          },
-          {
-            name: 'تنوع أساليب التقويم',
-            domainCode: 'D5',
-            weeks: [70, 80, 75, 85, 90, 80, 75, 70],
-          },
-          {
-            name: 'تحليل مشاركات الطلاب',
-            domainCode: 'D6',
-            weeks: [65, 70, 75, 80, 85, 90, 75, 80],
-          },
-          {
-            name: 'توظيف التقنيات',
-            domainCode: 'D7',
-            weeks: [60, 65, 70, 75, 80, 85, 90, 80],
-          },
-          {
-            name: 'تحسين نتائج المتعلمين',
-            domainCode: 'D8',
-            weeks: [75, 80, 85, 90, 80, 75, 70, 85],
-          },
+          { name: 'Domain 1: In-Class Lesson Planning & Execution', domainCode: 'D1', weeks: [90, 70, 80, 40, 100, 60, 90, 95] },
+          { name: 'Domain 2: Diversity of Teaching Strategies', domainCode: 'D2', weeks: [40, 50, 80, 60, 70, 80, 90, 100] },
+          { name: 'Domain 3: Learning Environment', domainCode: 'D3', weeks: [80, 90, 100, 90, 80, 30, 70, 80] },
+          { name: 'Domain 4: Classroom Management', domainCode: 'D4', weeks: [85, 75, 85, 95, 80, 75, 90, 85] },
+          { name: 'Domain 5: Diversity of In-Class Assessment', domainCode: 'D5', weeks: [70, 80, 75, 85, 90, 80, 75, 70] },
+          { name: 'Domain 6: Analysing Student Responses & Diagnosing Learning Levels', domainCode: 'D6', weeks: [65, 70, 75, 80, 85, 90, 75, 80] },
+          { name: 'Domain 7: Use of Technology & Learning Resources', domainCode: 'D7', weeks: [60, 65, 70, 75, 80, 85, 90, 80] },
+          { name: 'Domain 8: Improving Learner Outcomes', domainCode: 'D8', weeks: [75, 80, 85, 90, 80, 75, 70, 85] },
         ];
         setDomains(fallbackDomains);
         
@@ -834,27 +802,27 @@ const TeacherDashboard = () => {
         </div>
 
       {/* Filter Bar */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl p-4 shadow-sm" style={{ background: 'linear-gradient(180deg, #006d4a 0%, #005239 100%)', border: '1px solid rgba(255,255,255,0.1)' }}>
           {/* Filter Header */}
           <div className="flex items-center justify-between mb-4">
             <button
               onClick={() => setShowFilterPanel(!showFilterPanel)}
-              className="inline-flex items-center gap-2 rounded-full bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 transition-colors"
+              className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-400 transition-colors"
             >
               <span>🔍</span> Filters
             </button>
             {!showFilterPanel && (
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700">
+                <span className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white">
                   Subject: {filters.subject}
                 </span>
-                <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700">
+                <span className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white">
                   {filters.week}
                 </span>
-                <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700">
+                <span className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white">
                   {filters.grade}
                 </span>
-                <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700">
+                <span className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white">
                   {filters.kpi}
                 </span>
               </div>
@@ -863,11 +831,11 @@ const TeacherDashboard = () => {
 
           {/* Expandable Filter Panel */}
           {showFilterPanel && (
-            <div className="filter-panel space-y-4 mb-4 pt-4 border-t border-gray-200">
+            <div className="filter-panel space-y-4 mb-4 pt-4 border-t border-white/20">
               {/* Subject Filter */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-white mb-2">
                     Subject
                   </label>
                   <select
@@ -884,7 +852,7 @@ const TeacherDashboard = () => {
 
                 {/* Week Filter */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-white mb-2">
                     Week
                   </label>
                   <select
@@ -905,7 +873,7 @@ const TeacherDashboard = () => {
 
                 {/* Grade Filter */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-white mb-2">
                     Grade
                   </label>
                   <select
@@ -923,7 +891,7 @@ const TeacherDashboard = () => {
 
                 {/* KPI Filter */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-white mb-2">
                     KPI Status
                   </label>
                   <select
@@ -940,16 +908,16 @@ const TeacherDashboard = () => {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+              <div className="flex justify-end gap-3 pt-4 border-t border-white/20">
                 <button
                   onClick={handleResetFilters}
-                  className="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="px-4 py-2 text-sm font-semibold text-white border border-white/40 rounded-lg hover:bg-white/10 transition-colors"
                 >
                   Reset
                 </button>
                 <button
                   onClick={handleApplyFilters}
-                  className="px-4 py-2 text-sm font-semibold text-white bg-cyan-600 rounded-lg hover:bg-cyan-700 transition-colors"
+                  className="px-4 py-2 text-sm font-semibold text-white bg-emerald-500 rounded-lg hover:bg-emerald-400 transition-colors"
                 >
                   Apply
                 </button>
@@ -959,8 +927,8 @@ const TeacherDashboard = () => {
 
           {/* Fixed Performance Overview Text */}
           {!showFilterPanel && (
-            <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-              <span className="text-xs font-bold uppercase tracking-widest text-gray-500">
+            <div className="flex justify-between items-center pt-2 border-t border-white/10">
+              <span className="text-xs font-bold uppercase tracking-widest text-emerald-200">
                 Performance Overview
               </span>
             </div>
@@ -974,7 +942,8 @@ const TeacherDashboard = () => {
         {stats.map((stat, idx) => (
           <div
             key={idx}
-            className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition-transform hover:shadow-md"
+            className="rounded-2xl p-4 shadow-sm transition-transform hover:shadow-md"
+            style={{ background: 'linear-gradient(180deg, #006d4a 0%, #005239 100%)', border: '1px solid rgba(255,255,255,0.1)' }}
           >
             <div className="mb-2 flex items-start justify-between">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-100 text-xl">
@@ -991,10 +960,10 @@ const TeacherDashboard = () => {
                 {stat.trend}
               </span>
             </div>
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-emerald-200">
               {stat.label}
             </h3>
-            <p className="mt-1 text-3xl font-bold text-gray-900">{stat.value}</p>
+            <p className="mt-1 text-3xl font-bold text-white">{stat.value}</p>
           </div>
         ))}
       </section>
@@ -1033,31 +1002,37 @@ const TeacherDashboard = () => {
                 </div>
                 <div className="flex flex-1 gap-3">
                   {domain.weeks.map((value, weekIdx) => {
-                    const opacity = value / 100;
-                    let bgColor = '#ff6b9d'; // rose vibrant (needs improvement)
-                    if (value >= 70 && value < 85) {
-                      bgColor = '#ffc107'; // amber vibrant (good)
+                    let gradient, glowColor, textColor = '#fff';
+                    if (value >= 90) {
+                      gradient = 'linear-gradient(135deg, #059669 0%, #10b981 100%)';
+                      glowColor = '#059669';
+                    } else if (value >= 75) {
+                      gradient = 'linear-gradient(135deg, #10b981 0%, #34d399 100%)';
+                      glowColor = '#10b981';
+                    } else if (value >= 60) {
+                      gradient = 'linear-gradient(135deg, #d97706 0%, #fbbf24 100%)';
+                      glowColor = '#d97706';
+                    } else if (value >= 40) {
+                      gradient = 'linear-gradient(135deg, #dc2626 0%, #f87171 100%)';
+                      glowColor = '#dc2626';
+                    } else {
+                      gradient = 'linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%)';
+                      glowColor = '#7f1d1d';
                     }
-                    if (value >= 85) {
-                      bgColor = '#00e5a0'; // emerald vibrant (excellent)
                     return (
                       <div
                         key={weekIdx}
-                        className={`
-                          flex-1 rounded-2xl transition-all hover:scale-105 cursor-pointer 
-                          flex items-center justify-center text-sm font-black py-3
-                          border-2 border-white border-opacity-60
-                          shadow-lg hover:shadow-xl
-                          flex-shrink-0
-                        `}
-                        style={{ 
-                          backgroundColor: bgColor,
-                          opacity: opacity,
-                          boxShadow: `0 0 12px ${bgColor}50, inset 0 1px 0 rgba(255,255,255,0.3)`
+                        className="flex-1 rounded-2xl transition-all hover:scale-110 cursor-pointer flex items-center justify-center text-sm font-black py-3 flex-shrink-0"
+                        style={{
+                          background: gradient,
+                          opacity: value / 100,
+                          boxShadow: `0 4px 14px ${glowColor}60, inset 0 1px 0 rgba(255,255,255,0.25)`,
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          color: textColor,
                         }}
                         title={`Week ${weekIdx + 1}: ${value}%`}
                       >
-                        <span className="text-white drop-shadow-lg font-black">{value}%</span>
+                        <span className="drop-shadow font-black">{value}%</span>
                       </div>
                     );
                   })}
