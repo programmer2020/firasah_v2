@@ -4,6 +4,7 @@ import miskLogo from '../assets/Misk.png';
 import codeLogo from '../assets/CodeLogo.png';
 import ntdpLogo from '../assets/ntdp-logo.png';
 import saudiCenterLogo from '../assets/saudi-center.png';
+import ministryLogo from '../assets/MinsitryLerining.svg';
 
 export default function Landing() {
   return (
@@ -304,8 +305,10 @@ export default function Landing() {
             <span className="label">Affiliations & Ecosystem Support</span>
           </div>
           <div className="logos">
-            <div className="logo-w">
-              <div className="logo-box"><span>وزارة<br />التعليم</span></div>
+            <div className="logo-w" style={{ opacity: 1, pointerEvents: 'none' }}>
+              <div className="logo-box" style={{ width: '160px', height: '88px', padding: 0, overflow: 'hidden', borderRadius: '8px', background: '#ffffff' }}>
+                <img src={ministryLogo} alt="Ministry of Education" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+              </div>
               <div className="logo-name">Ministry of Education</div>
             </div>
             <div className="logo-w" style={{ opacity: 1, pointerEvents: 'none' }}>

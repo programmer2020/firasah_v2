@@ -11,6 +11,7 @@ interface SoundFile {
   filepath: string;
   createdBy: string;
   note?: string;
+  classId?: number;
 }
 
 const syncSoundFilesIdSequence = async () => {
@@ -74,6 +75,7 @@ export const createSoundFile = async (data: SoundFile) => {
       filepath: data.filepath,
       createdBy: data.createdBy,
       note: data.note || null,
+      ...(data.classId != null ? { class_id: data.classId } : {}),
     });
 
     // Keep SERIAL sequence aligned with imported/migrated data before insert.

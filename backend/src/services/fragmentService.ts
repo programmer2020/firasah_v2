@@ -15,8 +15,6 @@ interface Fragment {
   file_id: number;
   lecture_id?: number;
   fragment_order: number;
-  start_seconds: number;
-  end_seconds: number;
   duration: number;
   fragment_path?: string;
   transcript?: string;
@@ -76,8 +74,6 @@ export const splitAudioIntoFragments = async (
 
             fragments.push({
               fragment_order: i,
-              start_seconds: startSeconds,
-              end_seconds: endSeconds,
               duration: duration,
               fragment_path: fragmentPath,
             } as Fragment);
@@ -116,8 +112,6 @@ export const createFragmentRecords = async (
         file_id: fileId,
         lecture_id: lectureId,
         fragment_order: fragment.fragment_order,
-        start_seconds: fragment.start_seconds,
-        end_seconds: fragment.end_seconds,
         duration: fragment.duration,
         fragment_path: fragment.fragment_path,
         transcript: fragment.transcript || null,
@@ -231,8 +225,6 @@ export const getFragmentStatistics = async (fileId: number) => {
     SELECT 
       COUNT(*) as total_fragments,
       SUM(duration) as total_duration,
-      MIN(start_seconds) as first_fragment_start,
-      MAX(end_seconds) as last_fragment_end,
       ROUND(AVG(duration), 2) as avg_fragment_duration
     FROM fragments
     WHERE file_id = $1

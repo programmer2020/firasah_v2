@@ -555,32 +555,113 @@ const TeacherDashboard = () => {
 
   console.log('🔄 TeacherDashboard rendering with lectureStats:', lectureStats);
 
+  const LecturesIcon = () => (
+    <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="lectures-grad" x1="0" y1="0" x2="26" y2="26" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#34d399"/>
+          <stop offset="100%" stopColor="#059669"/>
+        </linearGradient>
+      </defs>
+      {/* Open book */}
+      <path d="M13 5.5C10.5 3.8 7 3.5 4 4.5V20c3-.8 6.5-.5 9 1.2V5.5z" fill="url(#lectures-grad)" opacity="0.9"/>
+      <path d="M13 5.5C15.5 3.8 19 3.5 22 4.5V20c-3-.8-6.5-.5-9 1.2V5.5z" fill="url(#lectures-grad)" opacity="0.6"/>
+      <line x1="13" y1="5.5" x2="13" y2="21.2" stroke="white" strokeWidth="1.2" strokeLinecap="round"/>
+      {/* Lines on left page */}
+      <line x1="6.5" y1="9" x2="11" y2="8.2" stroke="white" strokeWidth="1" strokeLinecap="round" opacity="0.7"/>
+      <line x1="6.5" y1="12" x2="11" y2="11.2" stroke="white" strokeWidth="1" strokeLinecap="round" opacity="0.7"/>
+      <line x1="6.5" y1="15" x2="11" y2="14.2" stroke="white" strokeWidth="1" strokeLinecap="round" opacity="0.7"/>
+      {/* Lines on right page */}
+      <line x1="15" y1="8.2" x2="19.5" y2="9" stroke="white" strokeWidth="1" strokeLinecap="round" opacity="0.5"/>
+      <line x1="15" y1="11.2" x2="19.5" y2="12" stroke="white" strokeWidth="1" strokeLinecap="round" opacity="0.5"/>
+      <line x1="15" y1="14.2" x2="19.5" y2="15" stroke="white" strokeWidth="1" strokeLinecap="round" opacity="0.5"/>
+    </svg>
+  );
+
+  const TeachersIcon = () => (
+    <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="teachers-grad" x1="0" y1="0" x2="26" y2="26" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#818cf8"/>
+          <stop offset="100%" stopColor="#6366f1"/>
+        </linearGradient>
+      </defs>
+      {/* Back person (left) */}
+      <circle cx="9" cy="9.5" r="3" fill="url(#teachers-grad)" opacity="0.55"/>
+      <path d="M3 22c0-4 2.7-6 6-6s6 2 6 6" stroke="url(#teachers-grad)" strokeWidth="1.8" strokeLinecap="round" fill="none" opacity="0.45"/>
+      {/* Front person (right) */}
+      <circle cx="17" cy="9.5" r="3.3" fill="url(#teachers-grad)" opacity="0.9"/>
+      <path d="M10.5 22c0-4 3-6.5 6.5-6.5s6.5 2.5 6.5 6.5" stroke="url(#teachers-grad)" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.85"/>
+    </svg>
+  );
+
+  const UploadHoursIcon = () => (
+    <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="upload-grad" x1="0" y1="0" x2="26" y2="26" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#38bdf8"/>
+          <stop offset="100%" stopColor="#0ea5e9"/>
+        </linearGradient>
+      </defs>
+      {/* Cloud shape */}
+      <path d="M19.5 14.5a4 4 0 00-3.2-6.5 5.5 5.5 0 00-10.8 1.5A3.5 3.5 0 006 17h13.5z" fill="url(#upload-grad)" opacity="0.85"/>
+      {/* Upload arrow */}
+      <line x1="13" y1="21" x2="13" y2="13" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
+      <polyline points="10,15.5 13,12.5 16,15.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+      {/* Clock ring hint */}
+      <circle cx="20" cy="20" r="4.5" fill="#0ea5e9" opacity="0.9"/>
+      <line x1="20" y1="17.5" x2="20" y2="20" stroke="white" strokeWidth="1.2" strokeLinecap="round"/>
+      <line x1="20" y1="20" x2="22" y2="20" stroke="white" strokeWidth="1.2" strokeLinecap="round"/>
+    </svg>
+  );
+
+  const UserSessionsIcon = () => (
+    <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="sessions-grad" x1="0" y1="0" x2="26" y2="26" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#fb923c"/>
+          <stop offset="100%" stopColor="#ea580c"/>
+        </linearGradient>
+      </defs>
+      {/* User head */}
+      <circle cx="13" cy="9" r="4" fill="url(#sessions-grad)" opacity="0.9"/>
+      {/* User body */}
+      <path d="M5 23c0-5 3.6-8 8-8s8 3 8 8" fill="url(#sessions-grad)" opacity="0.7"/>
+      {/* Activity pulse line */}
+      <polyline points="3,19 6.5,19 8,16.5 10,21.5 11.5,17 13,19 15,19" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.9"/>
+    </svg>
+  );
+
   const stats = [
     {
       label: 'Lectures',
       value: loading ? '-' : lectureStats.currentMonth.toLocaleString(),
-      icon: '📚',
+      icon: <LecturesIcon />,
+      iconBg: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
       trend: loading ? '-' : lectureStats.trend,
       trendUp: lectureStats.trendUp,
     },
     {
       label: 'Teachers',
       value: loading ? '-' : teacherStats.currentMonth.toLocaleString(),
-      icon: '👥',
+      icon: <TeachersIcon />,
+      iconBg: 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
       trend: loading ? '-' : teacherStats.trend,
       trendUp: teacherStats.trendUp,
     },
     {
       label: 'Upload Hours',
       value: loading ? '-' : uploadStats.currentMonth.toLocaleString(),
-      icon: '☁️',
+      icon: <UploadHoursIcon />,
+      iconBg: 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)',
       trend: loading ? '-' : uploadStats.trend,
       trendUp: uploadStats.trendUp,
     },
     {
       label: 'User Sessions',
       value: loading ? '-' : userStats.currentMonth.toLocaleString(),
-      icon: '👤',
+      icon: <UserSessionsIcon />,
+      iconBg: 'linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%)',
       trend: loading ? '-' : userStats.trend,
       trendUp: userStats.trendUp,
     },
@@ -729,10 +810,10 @@ const TeacherDashboard = () => {
       <div className="mx-auto max-w-[1500px]">
         {/* Welcome Section */}
         <section className="mb-0 pt-2 -mt-4">
-          <h2 className="font-headline mb-0 text-5xl font-bold tracking-[-0.08em] text-[var(--dashboard-primary)]">
+          <h2 className="font-headline mb-0 text-5xl font-bold text-[var(--dashboard-primary)]">
             Welcome back, {user?.name || 'User'}
           </h2>
-          <p className="max-w-2xl text-[#62746d] text-sm -mb-2">
+          <p className="max-w-2xl text-sm -mb-2" style={{color: '#006d4a'}}>
             Your dashboard is ready with the latest insights from your lessons this week.
           </p>
         </section>
@@ -794,10 +875,10 @@ const TeacherDashboard = () => {
         <div className="space-y-0 mb-2">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-headline text-3xl font-bold tracking-tight text-gray-900">
+            <h1 className="font-headline text-3xl font-bold tracking-tight" style={{color: '#005239'}}>
               Teacher Performance Dashboard
             </h1>
-            <p className="mt-2 text-sm text-gray-600">Real-time analytics and evidence-based insights</p>
+            <p className="mt-2 text-sm" style={{color: '#006d4a'}}>Real-time analytics and evidence-based insights</p>
           </div>
         </div>
 
@@ -938,7 +1019,7 @@ const TeacherDashboard = () => {
       </div>
 
       {/* KPI Overview Cards */}
-      <section className="mb-0 -mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4">
+      <section className="mb-0 -mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4" style={{marginBottom: '-8px'}}>
         {stats.map((stat, idx) => (
           <div
             key={idx}
@@ -946,17 +1027,25 @@ const TeacherDashboard = () => {
             style={{ background: 'linear-gradient(180deg, #006d4a 0%, #005239 100%)', border: '1px solid rgba(255,255,255,0.1)' }}
           >
             <div className="mb-2 flex items-start justify-between">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-100 text-xl">
+              <div
+                className="flex h-11 w-11 items-center justify-center rounded-2xl shadow-sm"
+                style={{ background: stat.iconBg }}
+              >
                 {stat.icon}
               </div>
               <span
-                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold ${
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
                   stat.trendUp
                     ? 'bg-emerald-100 text-emerald-700'
                     : 'bg-red-100 text-red-700'
                 }`}
               >
-                <span className="mr-1">{stat.trendUp ? '📈' : '📉'}</span>
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  {stat.trendUp
+                    ? <polyline points="1,8 5,2 9,8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                    : <polyline points="1,2 5,8 9,2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                  }
+                </svg>
                 {stat.trend}
               </span>
             </div>
@@ -969,7 +1058,7 @@ const TeacherDashboard = () => {
       </section>
 
       {/* Heatmaps */}
-      <section className="mb-0 -mt-1 space-y-2">
+      <section className="mb-0 mt-2 space-y-2">
         {/* Domains Score vs Weeks */}
         <div className="rounded-3xl bg-gradient-to-br from-emerald-900 via-emerald-800 to-emerald-900 p-8 shadow-2xl border border-emerald-700">
           <div className="mb-6 flex items-center justify-between">
@@ -977,13 +1066,45 @@ const TeacherDashboard = () => {
               <h2 className="font-headline text-2xl font-black text-white">Domains Score vs Weeks</h2>
               <p className="mt-2 text-sm text-emerald-200">8-week performance progression across all domains</p>
             </div>
-            <span className="text-4xl">📊</span>
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl shadow-lg" style={{background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 100%)', border: '1px solid rgba(255,255,255,0.15)'}}>
+              <svg width="30" height="30" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="dsw-bar1" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#34d399"/>
+                    <stop offset="100%" stopColor="#059669"/>
+                  </linearGradient>
+                  <linearGradient id="dsw-bar2" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#fbbf24"/>
+                    <stop offset="100%" stopColor="#d97706"/>
+                  </linearGradient>
+                  <linearGradient id="dsw-bar3" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#818cf8"/>
+                    <stop offset="100%" stopColor="#6366f1"/>
+                  </linearGradient>
+                  <linearGradient id="dsw-bar4" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#fb923c"/>
+                    <stop offset="100%" stopColor="#ea580c"/>
+                  </linearGradient>
+                </defs>
+                {/* Bar chart */}
+                <rect x="2" y="16" width="5" height="11" rx="1.5" fill="url(#dsw-bar1)"/>
+                <rect x="9" y="10" width="5" height="17" rx="1.5" fill="url(#dsw-bar2)"/>
+                <rect x="16" y="13" width="5" height="14" rx="1.5" fill="url(#dsw-bar3)"/>
+                <rect x="23" y="6" width="5" height="21" rx="1.5" fill="url(#dsw-bar4)"/>
+                {/* Trend line */}
+                <polyline points="4.5,15 11.5,9 18.5,11 25.5,5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.7"/>
+                <circle cx="4.5" cy="15" r="1.5" fill="white" opacity="0.9"/>
+                <circle cx="11.5" cy="9" r="1.5" fill="white" opacity="0.9"/>
+                <circle cx="18.5" cy="11" r="1.5" fill="white" opacity="0.9"/>
+                <circle cx="25.5" cy="5" r="1.5" fill="white" opacity="0.9"/>
+              </svg>
+            </div>
           </div>
           <div className="space-y-3 overflow-x-auto pb-1">
             {/* Week Labels Header */}
             <div className="flex items-stretch gap-3">
               <div className="w-40 flex-shrink-0 pr-3 flex items-center">
-                <div className="text-xs font-black uppercase tracking-widest text-emerald-300">📌 Domain</div>
+                <div className="text-xs font-black uppercase tracking-widest text-emerald-300">Domain</div>
               </div>
               <div className="flex flex-1 gap-3">
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((week) => (
@@ -1047,10 +1168,41 @@ const TeacherDashboard = () => {
           <div className="mb-8">
             <div className="flex items-center justify-between mb-2">
               <div>
-                <h2 className="font-headline text-3xl font-black text-white">Performance Matrix</h2>
+                <h2 className="font-headline text-3xl font-black text-white">Domain vs Subject</h2>
                 <p className="text-emerald-200 mt-2">Real-time domain performance across all subjects - Track progress instantly</p>
               </div>
-              <div className="text-5xl">📊</div>
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl shadow-lg" style={{background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 100%)', border: '1px solid rgba(255,255,255,0.15)'}}>
+                <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id="pm-grad1" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor="#34d399"/>
+                      <stop offset="100%" stopColor="#059669"/>
+                    </linearGradient>
+                    <linearGradient id="pm-grad2" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor="#fbbf24"/>
+                      <stop offset="100%" stopColor="#f59e0b"/>
+                    </linearGradient>
+                    <linearGradient id="pm-grad3" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor="#f87171"/>
+                      <stop offset="100%" stopColor="#ef4444"/>
+                    </linearGradient>
+                    <linearGradient id="pm-grad4" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor="#818cf8"/>
+                      <stop offset="100%" stopColor="#6366f1"/>
+                    </linearGradient>
+                  </defs>
+                  {/* Grid matrix dots */}
+                  <rect x="3" y="3" width="8" height="8" rx="2" fill="url(#pm-grad1)" opacity="0.95"/>
+                  <rect x="13" y="3" width="8" height="8" rx="2" fill="url(#pm-grad1)" opacity="0.6"/>
+                  <rect x="23" y="3" width="8" height="8" rx="2" fill="url(#pm-grad2)" opacity="0.8"/>
+                  <rect x="3" y="13" width="8" height="8" rx="2" fill="url(#pm-grad2)" opacity="0.7"/>
+                  <rect x="13" y="13" width="8" height="8" rx="2" fill="url(#pm-grad1)" opacity="0.95"/>
+                  <rect x="23" y="13" width="8" height="8" rx="2" fill="url(#pm-grad3)" opacity="0.85"/>
+                  <rect x="3" y="23" width="8" height="8" rx="2" fill="url(#pm-grad3)" opacity="0.6"/>
+                  <rect x="13" y="23" width="8" height="8" rx="2" fill="url(#pm-grad4)" opacity="0.8"/>
+                  <rect x="23" y="23" width="8" height="8" rx="2" fill="url(#pm-grad1)" opacity="0.9"/>
+                </svg>
+              </div>
             </div>
             <div className="h-1 w-16 bg-gradient-to-r from-amber-300 via-emerald-300 to-rose-300 rounded-full"></div>
           </div>
@@ -1202,7 +1354,7 @@ const TeacherDashboard = () => {
       </section>
 
       {/* Charts Section */}
-      <section className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <section className="mb-2 grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Teacher Performance Metrics - ECharts Mixed Bar & Line Chart */}
         <MixedChart />
 
@@ -1212,28 +1364,28 @@ const TeacherDashboard = () => {
 
       {/* Evidence Samples Table */}
       <section>
-        <div className="mb-6">
-          <h2 className="font-headline text-xl font-bold text-gray-900">High-Confidence KPI Samples</h2>
-          <p className="text-sm text-gray-600">Top 10 AI-verified performance highlights</p>
+        <div className="mb-3">
+          <h2 className="font-headline text-xl font-bold" style={{color: '#005239'}}>High-Confidence KPI Samples</h2>
+          <p className="text-sm" style={{color: '#006d4a'}}>Top 10 AI-verified performance highlights</p>
         </div>
         <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-gray-200 bg-gray-50">
+              <thead style={{ background: 'linear-gradient(135deg, #006d4a 0%, #005239 100%)' }}>
                 <tr>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-gray-600">
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-emerald-100">
                     Rank
                   </th>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-gray-600">
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-emerald-100">
                     KPI Name
                   </th>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-gray-600">
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-emerald-100">
                     Teacher
                   </th>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-gray-600">
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-emerald-100">
                     Score
                   </th>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-gray-600">
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-emerald-100">
                     Evidence
                   </th>
                 </tr>

@@ -8,7 +8,7 @@ export default {
     extend: {
       fontFamily: {
         outfit: ["Outfit", "sans-serif"],
-        headline: ["Space Grotesk", "Outfit", "sans-serif"],
+        headline: ["Outfit", "sans-serif"],
         body: ["Inter", "Outfit", "sans-serif"],
         mono: ["JetBrains Mono", "monospace"],
       },

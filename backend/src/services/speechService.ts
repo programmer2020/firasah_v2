@@ -14,6 +14,7 @@ import ffprobeStatic from 'ffprobe-static';
 import { insert, getOne, getMany, update, executeQuery } from '../helpers/database.js';
 import { updateProgress } from './progressService.js';
 import { evaluateSpeechAgainstKPIs } from './evaluationsService.js';
+import { logUpload } from './uploadLogService.js';
 
 // Set ffmpeg and ffprobe binary paths
 if (ffmpegStatic) {
@@ -399,6 +400,9 @@ export const saveFragment = async (
         ? Number(duration)
         : Math.max(0, Number(endTime) - Number(startTime));
 
+    // lecture_order: each 2700s (45 min) = one lecture period, capped at 7
+    const lectureOrder = Math.min(7, Math.max(1, Math.ceil((Number(startTime) || 0) / 2700) || 1));
+
     let lectureId: number | null = null;
     try {
       const lec = await getOne(
@@ -412,7 +416,7 @@ export const saveFragment = async (
       /* optional link to lecture row */
     }
 
-    // Explicit INSERT so canonical columns (fragment_order, start_seconds, end_seconds) are always set.
+    // Explicit INSERT so canonical columns (fragment_order) are always set.
     // Generic insert() + JS object key ordering caused some deployments to leave them NULL.
     const ins = await executeQuery(
       `
@@ -424,10 +428,8 @@ export const saveFragment = async (
         duration,
         start_time,
         end_time,
-        slot_order,
         fragment_order,
-        start_seconds,
-        end_seconds,
+        lecture_order,
         fragment_path,
         last_transcription_attempt_at,
         created_at,
@@ -435,7 +437,7 @@ export const saveFragment = async (
       ) VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
-        $11, $12, $13, $14, $15
+        $11, $12, $13, $14
       )
       RETURNING *
       `,
@@ -448,9 +450,7 @@ export const saveFragment = async (
         startTime,
         endTime,
         slotOrder,
-        slotOrder,
-        startTime,
-        endTime,
+        lectureOrder,
         fragmentPath,
         new Date(),
         new Date(),
@@ -460,19 +460,18 @@ export const saveFragment = async (
 
     const result = ins.rows[0];
 
-    // Belt-and-suspenders: ensure mirrored columns match (covers triggers / old partial rows)
+    // Belt-and-suspenders: ensure fragment_order and lecture_order are always set
     const fid = result.fragment_id ?? result.id;
     if (fid != null) {
       await executeQuery(
         `
         UPDATE fragments SET
           fragment_order = $2,
-          start_seconds = $3,
-          end_seconds = $4,
+          lecture_order  = $3,
           updated_at = NOW()
         WHERE fragment_id = $1
         `,
-        [fid, slotOrder, startTime, endTime]
+        [fid, slotOrder, lectureOrder]
       );
     }
 
@@ -522,15 +521,14 @@ export const saveSpeech = async (
   slotOrder: number = 0
 ) => {
   try {
-    console.log(`[Speech] Saving lecture record: file_id=${fileId}, time_slot_id=${timeSlotId}, slot_order=${slotOrder}, transcript_len=${transcript.length}`);
-    
+    console.log(`[Speech] Saving lecture record: file_id=${fileId}, time_slot_id=${timeSlotId}, transcript_len=${transcript.length}`);
+
     const result = await insert('lecture', {
       file_id: fileId,
       transcript,
       language,
       duration,
       time_slot_id: timeSlotId,
-      slot_order: slotOrder,
       created_at: new Date(),
       updated_at: new Date(),
     });
@@ -571,7 +569,7 @@ export const getSpeechByFileId = async (fileId: number) => {
     FROM lecture s
     LEFT JOIN section_time_slots ts ON s.time_slot_id = ts.time_slot_id
     WHERE s.file_id = $1
-    ORDER BY s.slot_order ASC
+    ORDER BY s.lecture_id ASC
   `;
   return await getMany(query, [fileId]);
 };
@@ -585,7 +583,7 @@ export const getAllSpeech = async () => {
     FROM lecture s
     JOIN sound_files sf ON s.file_id = sf.file_id
     LEFT JOIN section_time_slots ts ON s.time_slot_id = ts.time_slot_id
-    ORDER BY s.file_id DESC, s.slot_order ASC
+    ORDER BY s.file_id DESC, s.lecture_id ASC
   `;
   return await getMany(query);
 };
@@ -597,7 +595,6 @@ export const getAllSpeech = async () => {
  * @param filePath   Path to the uploaded audio file
  * @param classId    Class ID (unused now, kept for API compat)
  * @param dayOfWeek  Day of week (unused now, kept for API compat)
- * @param slotDate   Specific date (unused now, kept for API compat)
  * @param shouldDenoise Whether to apply audio denoising (default: true)
  * @returns Array of created fragment records
  */
@@ -608,7 +605,6 @@ export const transcribeAndSave = async (
   filePath: string,
   classId?: number,
   dayOfWeek?: string,
-  slotDate?: string,
   shouldDenoise: boolean = true
 ) => {
   const absolutePath = path.isAbsolute(filePath)
@@ -618,58 +614,109 @@ export const transcribeAndSave = async (
   // Step 1: Denoise the audio (if user chose to)
   let denoisedPath = absolutePath;
   let denoisedCleanup = false;
-  
+
   if (shouldDenoise) {
     console.log(`[Speech] Denoising audio before transcription (file_id=${fileId})...`);
     updateProgress(fileId, { status: 'denoising', message: 'جاري تنقية الصوت من الضوضاء...', percent: 10 });
+    await logUpload(fileId, 'denoising_started', 'info', 'Audio denoising started');
     denoisedPath = await denoiseAudio(absolutePath, fileId);
     denoisedCleanup = denoisedPath !== absolutePath;
+    await logUpload(fileId, 'denoising_completed', 'success', 'Audio denoising completed',
+      { denoised: denoisedCleanup });
   } else {
     console.log(`[Speech] Skipping denoise - user chose to process as-is (file_id=${fileId})...`);
     updateProgress(fileId, { status: 'analyzing', message: 'جاري تحليل الملف...', percent: 15 });
+    await logUpload(fileId, 'denoising_skipped', 'info', 'Denoising skipped by user choice');
   }
 
   try {
   // Get total audio duration
   const totalDuration = await getAudioDuration(denoisedPath);
   console.log(`[Speech] Total audio duration: ${totalDuration}s`);
+  await logUpload(fileId, 'duration_analyzed', 'info',
+    `Audio duration: ${totalDuration.toFixed(1)}s`,
+    { duration_seconds: totalDuration }
+  );
 
   // Create lecture row upfront so fragments can reference it
   let lectureId: number | null = null;
   try {
+    // Fetch time_slot_id from sound_files + section_time_slots
+    let timeSlotId: number | null = null;
+    try {
+      const sfRow = await getOne('SELECT class_id FROM sound_files WHERE file_id = $1', [fileId]);
+      if (sfRow?.class_id) {
+        const tsRow = await getOne(
+          'SELECT time_slot_id FROM section_time_slots WHERE class_id = $1 ORDER BY start_time ASC LIMIT 1',
+          [sfRow.class_id]
+        );
+        if (tsRow) {
+          timeSlotId = Number(tsRow.time_slot_id);
+        }
+      }
+    } catch { /* non-blocking */ }
+
     const lectureRow = await insert('lecture', {
       file_id: fileId,
       transcript: '',
       language: 'ar',
       duration: totalDuration,
+      time_slot_id: timeSlotId,
       created_at: new Date(),
       updated_at: new Date(),
     });
     lectureId = lectureRow.lecture_id ?? lectureRow.id ?? null;
-    console.log(`[Speech] ✅ Lecture row created upfront: lecture_id=${lectureId}`);
+    console.log(`[Speech] ✅ Lecture row created upfront: lecture_id=${lectureId}, time_slot_id=${timeSlotId}`);
+    await logUpload(fileId, 'lecture_created', 'success',
+      `Lecture record created (lecture_id=${lectureId})`,
+      { lecture_id: lectureId, time_slot_id: timeSlotId }
+    );
   } catch (lecErr) {
     console.warn(`[Speech] ⚠️ Could not create lecture row upfront:`, lecErr);
+    await logUpload(fileId, 'lecture_create_failed', 'warning',
+      `Could not create lecture row: ${(lecErr as Error).message}`);
   }
 
   // Calculate 15-minute fragments
   const totalFragments = Math.ceil(totalDuration / FRAGMENT_DURATION_SEC);
   console.log(`[Speech] Splitting into ${totalFragments} fragment(s) of ${FRAGMENT_DURATION_SEC / 60} minutes each`);
   updateProgress(fileId, { status: 'analyzing', message: `جاري تقسيم الملف إلى ${totalFragments} مقطع...`, percent: 20, totalSlots: totalFragments });
+  await logUpload(fileId, 'fragment_splitting_started', 'info',
+    `Splitting into ${totalFragments} fragment(s) of 15 min each`,
+    { total_fragments: totalFragments, duration_seconds: totalDuration }
+  );
 
   // If file is shorter than 15 min, transcribe as single fragment
   if (totalDuration <= FRAGMENT_DURATION_SEC) {
     console.log(`[Speech] File is short (${totalDuration}s) — transcribing as single fragment`);
     updateProgress(fileId, { status: 'transcribing', message: 'جاري تحويل الصوت إلى نص...', percent: 30 });
+    await logUpload(fileId, 'fragment_transcribing', 'info', 'Transcribing single fragment (file < 15 min)');
     const result = await transcribeAudio(denoisedPath, fileId);
+    await logUpload(fileId, 'fragment_transcribed', 'success',
+      `Fragment transcribed: ${result.text.length} chars, language=${result.language}`,
+      { chars: result.text.length, language: result.language, fragment: 1, total: 1 }
+    );
     updateProgress(fileId, { status: 'saving', message: 'جاري حفظ النص...', percent: 90 });
     const fragment = await saveFragment(fileId, result.text, result.language, totalDuration, 0, totalDuration, 1, denoisedPath);
+    await logUpload(fileId, 'fragment_saved', 'success',
+      `Fragment saved to database (fragment_id=${fragment.fragment_id ?? fragment.id})`,
+      { fragment_id: fragment.fragment_id ?? fragment.id, order: 1 }
+    );
 
     // Update lecture with transcript
     if (lectureId) {
       await executeQuery('UPDATE lecture SET transcript = $1, language = $2, updated_at = NOW() WHERE lecture_id = $3', [result.text, result.language, lectureId]);
+      await logUpload(fileId, 'lecture_updated', 'success',
+        `Lecture transcript updated (lecture_id=${lectureId})`,
+        { lecture_id: lectureId, transcript_length: result.text.length }
+      );
     }
 
     updateProgress(fileId, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
+    await logUpload(fileId, 'pipeline_completed', 'success',
+      `Pipeline completed: 1/1 fragment processed`,
+      { fragments_ok: 1, fragments_total: 1 }
+    );
     return [fragment];
   }
 
@@ -710,15 +757,19 @@ export const transcribeAndSave = async (
         totalSlots: totalFragments,
       });
       console.log(`[Speech] 🔀 Splitting fragment ${slotOrder}...`);
-      
+
       await splitAudioSegment(denoisedPath, segmentFile, startSec, effectiveDuration);
-      
+
       if (!fs.existsSync(segmentFile)) {
         throw new Error(`Fragment file not created: ${segmentFile}`);
       }
-      
+
       const segmentSize = (fs.statSync(segmentFile).size / 1024).toFixed(1);
       console.log(`[Speech] ✂️ Fragment split: ${path.basename(segmentFile)} (size: ${segmentSize}KB)`);
+      await logUpload(fileId, 'fragment_split', 'info',
+        `Fragment ${slotOrder}/${totalFragments} split (${segmentSize} KB, ${startSec.toFixed(0)}s–${endSec.toFixed(0)}s)`,
+        { fragment: slotOrder, total: totalFragments, size_kb: parseFloat(segmentSize), start_sec: startSec, end_sec: endSec }
+      );
 
       // Transcribe segment
       updateProgress(fileId, {
@@ -728,10 +779,14 @@ export const transcribeAndSave = async (
         currentSlot: slotOrder,
         totalSlots: totalFragments,
       });
-      
+
       console.log(`[Speech] 🗣️ Transcribing fragment ${slotOrder}...`);
       const result = await transcribeAudio(segmentFile, fileId, { current: slotOrder, total: totalFragments });
       console.log(`[Speech] ✅ Fragment ${slotOrder} transcribed: ${result.text.length} chars`);
+      await logUpload(fileId, 'fragment_transcribed', 'success',
+        `Fragment ${slotOrder}/${totalFragments} transcribed: ${result.text.length} chars`,
+        { fragment: slotOrder, total: totalFragments, chars: result.text.length, language: result.language }
+      );
 
       // Save to DB
       updateProgress(fileId, {
@@ -741,7 +796,7 @@ export const transcribeAndSave = async (
         currentSlot: slotOrder,
         totalSlots: totalFragments,
       });
-      
+
       const fragment = await saveFragment(
         fileId,
         result.text,
@@ -754,9 +809,17 @@ export const transcribeAndSave = async (
       );
 
       console.log(`[Speech] ✅ Fragment ${slotOrder} saved: id=${fragment.id}`);
+      await logUpload(fileId, 'fragment_saved', 'success',
+        `Fragment ${slotOrder}/${totalFragments} saved to database`,
+        { fragment: slotOrder, total: totalFragments, fragment_id: fragment.fragment_id ?? fragment.id }
+      );
       results.push(fragment);
     } catch (err) {
       console.error(`[Speech] ❌ Error processing fragment ${slotOrder}:`, err);
+      await logUpload(fileId, 'fragment_failed', 'error',
+        `Fragment ${slotOrder}/${totalFragments} failed: ${(err as Error).message}`,
+        { fragment: slotOrder, total: totalFragments, error: (err as Error).message }
+      );
       // Save a placeholder
       try {
         const fragment = await saveFragment(
@@ -770,6 +833,10 @@ export const transcribeAndSave = async (
           segmentFile
         );
         console.log(`[Speech] ⚠️ Fragment ${slotOrder} saved as pending: id=${fragment.id}`);
+        await logUpload(fileId, 'fragment_saved_pending', 'warning',
+          `Fragment ${slotOrder}/${totalFragments} saved as [transcription_pending]`,
+          { fragment: slotOrder, fragment_id: fragment.fragment_id ?? fragment.id }
+        );
         results.push(fragment);
       } catch (saveErr) {
         console.error(`[Speech] ❌ Failed to save placeholder for fragment ${slotOrder}:`, saveErr);
@@ -799,13 +866,22 @@ export const transcribeAndSave = async (
         [fullTranscript, lectureId]
       );
       console.log(`[Speech] ✅ Lecture transcript updated: lecture_id=${lectureId}, length=${fullTranscript.length}`);
+      await logUpload(fileId, 'lecture_updated', 'success',
+        `Lecture transcript assembled from ${allFragments.length} fragments`,
+        { lecture_id: lectureId, transcript_length: fullTranscript.length, fragments: allFragments.length }
+      );
     } catch (err) {
       console.error(`[Speech] ⚠️ Failed to update lecture transcript:`, err);
     }
   }
 
+  const failedCount = totalFragments - results.filter((r: any) => r.transcript !== '[transcription_pending]').length;
   console.log(`[Speech] ✅ Completed: ${results.length}/${totalFragments} fragments transcribed for file_id=${fileId}`);
   updateProgress(fileId, { status: 'completed', message: `تم الانتهاء! تم معالجة ${results.length} من ${totalFragments} مقطع.`, percent: 100 });
+  await logUpload(fileId, 'pipeline_completed', failedCount > 0 ? 'warning' : 'success',
+    `Pipeline completed: ${results.length - failedCount}/${totalFragments} fragments OK, ${failedCount} pending`,
+    { fragments_ok: results.length - failedCount, fragments_pending: failedCount, fragments_total: totalFragments }
+  );
   return results;
   } finally {
     // Clean up denoised file
@@ -846,7 +922,7 @@ export const retranscribePendingFragments = async (
     const pending = await getMany(
       `SELECT * FROM fragments
        WHERE file_id = $1 AND transcript = $2
-       ORDER BY COALESCE(slot_order, fragment_order, 0) ASC`,
+       ORDER BY COALESCE(fragment_order, 0) ASC`,
       [fileId, PENDING_TRANSCRIPT]
     );
 
@@ -860,8 +936,8 @@ export const retranscribePendingFragments = async (
 
     for (const row of pending) {
       const pk = row.fragment_id ?? row.id;
-      const startSec = Number(row.start_seconds ?? row.start_time ?? 0);
-      let endSec = Number(row.end_seconds ?? row.end_time ?? startSec);
+      const startSec = Number(row.start_time ?? 0);
+      let endSec = Number(row.end_time ?? startSec);
       if (!Number.isFinite(endSec) || endSec <= startSec) {
         const dur = Number(row.duration ?? 0);
         endSec = startSec + (Number.isFinite(dur) && dur > 0 ? dur : 0);
@@ -887,9 +963,7 @@ export const retranscribePendingFragments = async (
             transcript: result.text,
             language: result.language,
             updated_at: new Date(),
-            fragment_order: row.slot_order ?? row.fragment_order ?? 0,
-            start_seconds: startSec,
-            end_seconds: endSec,
+            fragment_order: row.fragment_order ?? 0,
           },
           whereCol,
           [pk]

@@ -62,7 +62,7 @@ export const AudioUpload = () => {
   useEffect(() => {
     const fetchClasses = async () => {
       try {
-        const response = await api.get('/schedule/classes');
+        const response = await api.get('/api/schedule/classes');
         setClasses(Array.isArray(response.data) ? response.data : response.data.data || []);
       } catch (err) {
         console.error('Failed to fetch classes:', err);
@@ -77,7 +77,7 @@ export const AudioUpload = () => {
   const fetchUploadedFiles = async () => {
     setLoadingFiles(true);
     try {
-      const response = await api.get('/sound-files');
+      const response = await api.get('/api/sound-files');
       const files = Array.isArray(response.data) ? response.data : response.data.data || [];
       setUploadedFiles(files);
     } catch (err) {
@@ -90,11 +90,11 @@ export const AudioUpload = () => {
   // Start polling for pipeline progress
   const startPipelineProgress = (fileId) => {
     setProcessing(true);
-    setPipelineProgress({ status: 'uploading', message: 'تم التحميل. جاري بدء المعالجة...', percent: 5 });
+    setPipelineProgress({ status: 'uploading', message: 'File uploaded. Starting processing pipeline...', percent: 5 });
 
     const pollInterval = setInterval(async () => {
       try {
-        const res = await api.get(`/sound-files/${fileId}/progress`);
+        const res = await api.get(`/api/sound-files/${fileId}/progress`);
         const data = res.data?.data;
         if (data) {
           setPipelineProgress(data);
@@ -102,9 +102,9 @@ export const AudioUpload = () => {
           if (data.status === 'completed' || data.status === 'failed' || data.status === 'partial') {
             clearInterval(pollInterval);
             if (data.status === 'completed') {
-              setSuccess(data.message || 'تم الانتهاء بنجاح!');
+              setSuccess(data.message || 'Processing completed successfully!');
             } else if (data.status === 'partial') {
-              setError(data.message || 'بعض الأجزاء لم يتم تحويلها إلى نص. يمكنك إعادة المحاولة يدويًا من صفحة المقاطع الفاشلة.');
+              setError(data.message || 'Some fragments could not be transcribed. You can retry them manually from the Failed Fragments page.');
             }
             setTimeout(() => {
               setProcessing(false);
@@ -139,7 +139,7 @@ export const AudioUpload = () => {
     const ext = file.name.split('.').pop()?.toLowerCase();
     const isAllowedType = ALLOWED_TYPES.includes(file.type) || ext === 'txt';
     if (!isAllowedType) {
-      setError(`نوع الملف غير مدعوم. الأنواع المدعومة: MP3, WAV, OGG, MP4, WebM, MOV, AVI, MKV, TXT`);
+      setError(`Unsupported file type. Supported formats: MP3, WAV, OGG, MP4, WebM, MOV, AVI, MKV, TXT`);
       setSelectedFile(null);
       return;
     }
@@ -149,7 +149,7 @@ export const AudioUpload = () => {
       const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
       const maxMB = MAX_FILE_SIZE / (1024 * 1024);
       setError(
-        `حجم الملف (${sizeMB} MB) يتجاوز الحد الأقصى المسموح به (${maxMB} MB)`
+        `File size (${sizeMB} MB) exceeds the maximum allowed size (${maxMB} MB)`
       );
       setSelectedFile(null);
       return;
@@ -173,11 +173,11 @@ export const AudioUpload = () => {
   const handleModalUpload = async () => {
     if (!selectedFile) return;
     if (!selectedClassId) {
-      setError('يرجى اختيار الفصل');
+      setError('Please select a class');
       return;
     }
     if (!selectedDate) {
-      setError('يرجى اختيار التاريخ');
+      setError('Please select a date');
       return;
     }
 
@@ -202,7 +202,6 @@ export const AudioUpload = () => {
     const formData = new FormData();
     formData.append('file', selectedFile);
     formData.append('class_id', selectedClassId);
-    formData.append('slot_date', selectedDate);
     formData.append('should_denoise', denoise ? 'true' : 'false');
 
     // Derive day_of_week from the selected date
@@ -214,7 +213,7 @@ export const AudioUpload = () => {
       // Instance default is application/json; that makes axios stringify FormData → server gets no file.
       // Content-Type: false removes the default so the browser sets multipart/form-data with boundary.
       const token = localStorage.getItem('authToken');
-      const response = await api.post('/sound-files/upload', formData, {
+      const response = await api.post('/api/sound-files/upload', formData, {
         headers: {
           'Content-Type': false,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -227,7 +226,7 @@ export const AudioUpload = () => {
         },
       });
 
-      setSuccess(`تم تحميل الملف بنجاح: ${selectedFile.name}`);
+      setSuccess(`File uploaded successfully: ${selectedFile.name}`);
       setUploadedFile(response.data.data);
 
       // Refresh the uploaded files list
@@ -251,7 +250,7 @@ export const AudioUpload = () => {
     } catch (err) {
       setError(
         err.response?.data?.message ||
-          'فشل تحميل الملف. يرجى المحاولة مرة أخرى'
+          'File upload failed. Please try again.'
       );
       setUploadProgress(0);
     } finally {
@@ -269,12 +268,12 @@ export const AudioUpload = () => {
 
   const getStatusBadge = (status) => {
     const statusMap = {
-      'completed': { bg: 'bg-success-100 dark:bg-success-900/30', border: 'border-success-200 dark:border-success-700', text: 'text-success-700 dark:text-success-300', label: 'نجح', icon: '✓' },
-      'processing': { bg: 'bg-blue-100 dark:bg-blue-900/30', border: 'border-blue-200 dark:border-blue-700', text: 'text-blue-700 dark:text-blue-300', label: 'قيد المعالجة', icon: '⟳' },
-      'partial': { bg: 'bg-orange-100 dark:bg-orange-900/30', border: 'border-orange-200 dark:border-orange-700', text: 'text-orange-700 dark:text-orange-300', label: 'ناقص', icon: '!' },
-      'pending': { bg: 'bg-yellow-100 dark:bg-yellow-900/30', border: 'border-yellow-200 dark:border-yellow-700', text: 'text-yellow-700 dark:text-yellow-300', label: 'في الانتظار', icon: '⏳' },
-      'failed': { bg: 'bg-error-100 dark:bg-error-900/30', border: 'border-error-200 dark:border-error-700', text: 'text-error-700 dark:text-error-300', label: 'فشل', icon: '✗' },
-      'uploaded': { bg: 'bg-gray-100 dark:bg-gray-900/30', border: 'border-gray-200 dark:border-gray-700', text: 'text-gray-700 dark:text-gray-300', label: 'محمل', icon: '📁' },
+      'completed': { bg: 'bg-success-100 dark:bg-success-900/30', border: 'border-success-200 dark:border-success-700', text: 'text-success-700 dark:text-success-300', label: 'Completed', icon: '✓' },
+      'processing': { bg: 'bg-blue-100 dark:bg-blue-900/30', border: 'border-blue-200 dark:border-blue-700', text: 'text-blue-700 dark:text-blue-300', label: 'Processing', icon: '⟳' },
+      'partial': { bg: 'bg-orange-100 dark:bg-orange-900/30', border: 'border-orange-200 dark:border-orange-700', text: 'text-orange-700 dark:text-orange-300', label: 'Partial', icon: '!' },
+      'pending': { bg: 'bg-yellow-100 dark:bg-yellow-900/30', border: 'border-yellow-200 dark:border-yellow-700', text: 'text-yellow-700 dark:text-yellow-300', label: 'Pending', icon: '⏳' },
+      'failed': { bg: 'bg-error-100 dark:bg-error-900/30', border: 'border-error-200 dark:border-error-700', text: 'text-error-700 dark:text-error-300', label: 'Failed', icon: '✗' },
+      'uploaded': { bg: 'bg-gray-100 dark:bg-gray-900/30', border: 'border-gray-200 dark:border-gray-700', text: 'text-gray-700 dark:text-gray-300', label: 'Uploaded', icon: '📁' },
     };
     return statusMap[status] || statusMap['pending'];
   };
@@ -284,27 +283,27 @@ export const AudioUpload = () => {
       <div>
         {/* Page Title */}
         <div className="mb-8">
-          <h1 className="text-3xl font-outfit font-bold text-gray-900 dark:text-white mb-2">
-            تحميل الملفات الصوتية والمرئية
+          <h1 className="text-3xl font-outfit font-bold mb-2" style={{color: '#005239'}}>
+            Upload Audio &amp; Video Files
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            قم بتحميل الملفات الصوتية أو المرئية أو النصية بصيغ مختلفة (MP3, WAV, OGG, MP4, WebM, MOV, AVI, MKV, TXT)
+          <p style={{color: '#006d4a'}}>
+            Upload audio, video, or text files in various formats (MP3, WAV, OGG, MP4, WebM, MOV, AVI, MKV, TXT)
           </p>
         </div>
 
         {/* Upload Container */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-8 mb-6" style={{border: '1px solid #d1fae5'}}>
           {/* Error Message */}
           {error && (
-            <div className="mb-6 p-4 bg-error-50 dark:bg-error-900 border border-error-200 dark:border-error-700 rounded-lg text-error-700 dark:text-error-300">
-              <span className="font-semibold">خطأ:</span> {error}
+            <div className="mb-6 p-4 bg-error-50 dark:bg-error-900 border border-error-200 dark:border-error-700 rounded-xl text-error-700 dark:text-error-300">
+              <span className="font-semibold">Error:</span> {error}
             </div>
           )}
 
           {/* Success Message */}
           {success && (
-            <div className="mb-6 p-4 bg-success-50 dark:bg-success-900 border border-success-200 dark:border-success-700 rounded-lg text-success-700 dark:text-success-300">
-              <span className="font-semibold">نجح:</span> {success}
+            <div className="mb-6 p-4 rounded-xl text-white font-semibold" style={{background: 'linear-gradient(135deg, #006d4a 0%, #005239 100%)'}}>
+              ✓ {success}
             </div>
           )}
 
@@ -320,28 +319,25 @@ export const AudioUpload = () => {
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
               <div
-                className="border-2 border-dashed rounded-lg p-8 text-center transition-colors border-gray-300 dark:border-gray-600 hover:border-brand-400"
+                className="border-2 border-dashed rounded-2xl p-12 text-center transition-all"
+                style={{borderColor: '#a7f3d0', background: '#f0fdf4'}}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#006d4a'; e.currentTarget.style.background = '#ecfdf5'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#a7f3d0'; e.currentTarget.style.background = '#f0fdf4'; }}
               >
-                <div className="mb-4">
-                  <svg
-                    className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
-                    stroke="currentColor"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"
-                    />
-                  </svg>
+                <div className="mb-5 flex justify-center">
+                  <div className="flex h-20 w-20 items-center justify-center rounded-2xl shadow-md" style={{background: 'linear-gradient(135deg, #006d4a 0%, #005239 100%)'}}>
+                    <svg width="38" height="38" viewBox="0 0 38 38" fill="none">
+                      <path d="M19 8v16M12 15l7-7 7 7" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M6 28h26" stroke="white" strokeWidth="2.5" strokeLinecap="round" opacity="0.6"/>
+                      <path d="M10 33h18" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.4"/>
+                    </svg>
+                  </div>
                 </div>
-                <p className="text-gray-900 dark:text-white font-semibold mb-1">
-                  اضغط هنا أو اسحب الملف
+                <p className="font-bold text-lg mb-1" style={{color: '#005239'}}>
+                  Click to upload or drag &amp; drop
                 </p>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">
-                  الحد الأقصى لحجم الملف: 2 GB
+                <p className="text-sm" style={{color: '#006d4a'}}>
+                  MP3, WAV, OGG, MP4, WebM, MOV, AVI, MKV, TXT &nbsp;·&nbsp; Max 2 GB
                 </p>
               </div>
             </div>
@@ -349,19 +345,19 @@ export const AudioUpload = () => {
             {/* Progress Bar (shown during upload) */}
             {uploading && (
               <div className="mb-6">
-                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
+                <div className="rounded-xl p-4 border" style={{background: '#f0fdf4', borderColor: '#a7f3d0'}}>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                      جاري التحميل...
+                    <span className="text-sm font-medium" style={{color: '#005239'}}>
+                      Uploading file...
                     </span>
-                    <span className="text-sm font-semibold text-brand-600 dark:text-brand-400">
+                    <span className="text-sm font-bold" style={{color: '#006d4a'}}>
                       {uploadProgress}%
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                  <div className="w-full rounded-full h-2.5" style={{background: '#d1fae5'}}>
                     <div
-                      className="bg-brand-600 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${uploadProgress}%` }}
+                      className="h-2.5 rounded-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%`, background: 'linear-gradient(90deg, #006d4a, #34d399)' }}
                     ></div>
                   </div>
                 </div>
@@ -407,7 +403,7 @@ export const AudioUpload = () => {
                           : pipelineProgress.status === 'failed' ? 'text-error-700 dark:text-error-300'
                           : 'text-blue-700 dark:text-blue-300'
                       }`}>
-                        معالجة الملف
+                        Processing File
                       </span>
                     </div>
                     <span className={`text-sm font-bold ${
@@ -439,20 +435,20 @@ export const AudioUpload = () => {
                   </p>
 
                   {pipelineProgress.status === 'partial' && uploadedFile?.file_id && (
-                    <div className="mt-3 text-right" dir="rtl">
+                    <div className="mt-3">
                       <Link
                         to={`/failed-fragments?fileId=${uploadedFile.file_id}`}
                         className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-700"
                       >
-                        فتح صفحة المقاطع الفاشلة
+                        Open Failed Fragments Page
                       </Link>
                     </div>
                   )}
 
                   {/* Slot info */}
                   {pipelineProgress.currentSlot && pipelineProgress.totalSlots && pipelineProgress.status !== 'completed' && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right" dir="rtl">
-                      الحصة {pipelineProgress.currentSlot} من {pipelineProgress.totalSlots}
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Slot {pipelineProgress.currentSlot} of {pipelineProgress.totalSlots}
                     </p>
                   )}
                 </div>
@@ -468,30 +464,31 @@ export const AudioUpload = () => {
               className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 className="text-xl font-outfit font-bold text-gray-900 dark:text-white mb-4 text-right">
-                تحسين جودة الصوت
+              <h2 className="text-xl font-outfit font-bold mb-4" style={{color: '#005239'}}>
+                Audio Enhancement
               </h2>
 
-              <p className="text-gray-700 dark:text-gray-300 mb-6 text-right" dir="rtl">
-                هل تريد تحسين جودة الصوت من الضوضاء قبل التحويل إلى نص؟
+              <p className="text-gray-700 dark:text-gray-300 mb-6">
+                Would you like to apply noise reduction before transcription?
                 <br />
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  (التفعيل يحسّن جودة النتائج لكن قد يستغرق وقتاً أطول)
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  (Enabling this improves transcription quality but may take longer)
                 </span>
               </p>
 
-              <div className="flex gap-3" dir="rtl">
+              <div className="flex gap-3">
                 <button
                   onClick={() => handleDenoiseChoice(true)}
-                  className="flex-1 px-6 py-3 rounded-lg font-semibold bg-brand-600 text-white hover:bg-brand-700 transition-colors"
+                  className="flex-1 px-6 py-3 rounded-xl font-semibold text-white transition-colors"
+                  style={{background: 'linear-gradient(135deg, #006d4a 0%, #005239 100%)'}}
                 >
-                  نعم، حسّن الصوت
+                  Yes, Enhance Audio
                 </button>
                 <button
                   onClick={() => handleDenoiseChoice(false)}
-                  className="flex-1 px-6 py-3 rounded-lg font-semibold bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                  className="flex-1 px-6 py-3 rounded-xl font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-white hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                 >
-                  لا، كمل مباشرة
+                  No, Continue Directly
                 </button>
               </div>
             </div>
@@ -515,34 +512,39 @@ export const AudioUpload = () => {
                 </svg>
               </button>
 
-              <h2 className="text-xl font-outfit font-bold text-gray-900 dark:text-white mb-6 text-right">
-                تفاصيل التحميل
+              <h2 className="text-xl font-outfit font-bold mb-6" style={{color: '#005239'}}>
+                Upload Details
               </h2>
 
               {/* Selected File Info */}
               {selectedFile && (
-                <div className="mb-5 bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-700 rounded-lg p-4 flex items-center gap-3" dir="rtl">
-                  <svg className="h-8 w-8 text-brand-600 dark:text-brand-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
-                  </svg>
+                <div className="mb-5 rounded-xl p-4 flex items-center gap-3" style={{background: '#f0fdf4', border: '1px solid #a7f3d0'}}>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl shrink-0" style={{background: 'linear-gradient(135deg, #006d4a 0%, #005239 100%)'}}>
+                    <svg className="h-5 w-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
+                    </svg>
+                  </div>
                   <div className="min-w-0">
-                    <p className="text-gray-900 dark:text-white font-semibold truncate">{selectedFile.name}</p>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">{formatFileSize(selectedFile.size)}</p>
+                    <p className="font-semibold truncate" style={{color: '#005239'}}>{selectedFile.name}</p>
+                    <p className="text-gray-500 text-sm">{formatFileSize(selectedFile.size)}</p>
                   </div>
                 </div>
               )}
 
               {/* Class Selection */}
-              <div className="mb-5" dir="rtl">
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  الفصل الدراسي
+              <div className="mb-5">
+                <label className="block text-sm font-semibold mb-2" style={{color: '#005239'}}>
+                  Class
                 </label>
                 <select
                   value={selectedClassId}
                   onChange={(e) => setSelectedClassId(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-colors"
+                  className="w-full px-4 py-3 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none transition-colors"
+                  style={{border: '1.5px solid #a7f3d0'}}
+                  onFocus={e => e.target.style.borderColor = '#006d4a'}
+                  onBlur={e => e.target.style.borderColor = '#a7f3d0'}
                 >
-                  <option value="">-- اختر الفصل --</option>
+                  <option value="">-- Select a class --</option>
                   {classes.map((cls) => (
                     <option key={cls.class_id} value={cls.class_id}>
                       {cls.class_name}
@@ -552,36 +554,41 @@ export const AudioUpload = () => {
               </div>
 
               {/* Date Selection */}
-              <div className="mb-6" dir="rtl">
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  التاريخ
+              <div className="mb-6">
+                <label className="block text-sm font-semibold mb-2" style={{color: '#005239'}}>
+                  Date
                 </label>
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-colors"
+                  className="w-full px-4 py-3 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none transition-colors"
+                  style={{border: '1.5px solid #a7f3d0'}}
+                  onFocus={e => e.target.style.borderColor = '#006d4a'}
+                  onBlur={e => e.target.style.borderColor = '#a7f3d0'}
                 />
               </div>
 
               {/* Modal Actions */}
-              <div className="flex gap-3" dir="rtl">
+              <div className="flex gap-3">
                 <button
                   onClick={handleModalUpload}
                   disabled={!selectedClassId || !selectedDate}
-                  className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
-                    !selectedClassId || !selectedDate
-                      ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                      : 'bg-brand-600 text-white hover:bg-brand-700'
-                  }`}
+                  className="flex-1 px-6 py-3 rounded-xl font-semibold transition-all text-white"
+                  style={{
+                    background: (!selectedClassId || !selectedDate)
+                      ? '#d1d5db'
+                      : 'linear-gradient(135deg, #006d4a 0%, #005239 100%)',
+                    cursor: (!selectedClassId || !selectedDate) ? 'not-allowed' : 'pointer',
+                  }}
                 >
-                  تحميل الملف
+                  Upload File
                 </button>
                 <button
                   onClick={handleModalClose}
-                  className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                  className="px-6 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-white rounded-xl font-semibold hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                 >
-                  إلغاء
+                  Cancel
                 </button>
               </div>
             </div>
@@ -590,35 +597,35 @@ export const AudioUpload = () => {
 
         {/* Uploaded File Info */}
         {uploadedFile && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
-            <h2 className="text-xl font-outfit font-bold text-gray-900 dark:text-white mb-4">
-              تفاصيل الملف المحمل
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-6 mb-6" style={{border: '1px solid #d1fae5'}}>
+            <h2 className="text-xl font-outfit font-bold mb-4" style={{color: '#005239'}}>
+              Uploaded File Details
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p className="text-gray-600 dark:text-gray-400 text-sm">معرّف الملف</p>
-                <p className="text-gray-900 dark:text-white font-semibold">
+                <p className="text-sm mb-1" style={{color: '#006d4a'}}>File ID</p>
+                <p className="font-semibold text-gray-900 dark:text-white">
                   {uploadedFile.file_id || uploadedFile.id || '-'}
                 </p>
               </div>
               <div>
-                <p className="text-gray-600 dark:text-gray-400 text-sm">اسم الملف</p>
-                <p className="text-gray-900 dark:text-white font-semibold">
+                <p className="text-sm mb-1" style={{color: '#006d4a'}}>File Name</p>
+                <p className="font-semibold text-gray-900 dark:text-white">
                   {uploadedFile.filename || uploadedFile.fileName || '-'}
                 </p>
               </div>
               {uploadedFile.duration && (
                 <div>
-                  <p className="text-gray-600 dark:text-gray-400 text-sm">المدة الزمنية</p>
-                  <p className="text-gray-900 dark:text-white font-semibold">
-                    {uploadedFile.duration} ثانية
+                  <p className="text-sm mb-1" style={{color: '#006d4a'}}>Duration</p>
+                  <p className="font-semibold text-gray-900 dark:text-white">
+                    {uploadedFile.duration} seconds
                   </p>
                 </div>
               )}
               {uploadedFile.fileSize && (
                 <div>
-                  <p className="text-gray-600 dark:text-gray-400 text-sm">حجم الملف</p>
-                  <p className="text-gray-900 dark:text-white font-semibold">
+                  <p className="text-sm mb-1" style={{color: '#006d4a'}}>File Size</p>
+                  <p className="font-semibold text-gray-900 dark:text-white">
                     {formatFileSize(uploadedFile.fileSize)}
                   </p>
                 </div>
@@ -628,32 +635,42 @@ export const AudioUpload = () => {
         )}
 
         {/* Uploaded Files Table */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-outfit font-bold text-gray-900 dark:text-white mb-4">
-            الملفات المرفوعة
-          </h2>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden" style={{border: '1px solid #d1fae5'}}>
+          <div className="px-6 py-5" style={{background: 'linear-gradient(135deg, #006d4a 0%, #005239 100%)', borderBottom: '1px solid #005239'}}>
+            <h2 className="text-xl font-outfit font-bold text-white">
+              Uploaded Files
+            </h2>
+          </div>
 
           {loadingFiles ? (
-            <div className="flex justify-center items-center py-8">
-              <svg className="h-8 w-8 text-brand-600 dark:text-brand-400 animate-spin" fill="none" viewBox="0 0 24 24">
+            <div className="flex justify-center items-center py-12 gap-3">
+              <svg className="h-7 w-7 animate-spin" style={{color: '#006d4a'}} fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
               </svg>
-              <span className="text-gray-600 dark:text-gray-400 mr-2">جاري التحميل...</span>
+              <span style={{color: '#006d4a'}} className="font-medium">Loading files...</span>
             </div>
           ) : uploadedFiles.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-600 dark:text-gray-400">لا توجد ملفات مرفوعة حتى الآن</p>
+            <div className="text-center py-16">
+              <div className="flex justify-center mb-4">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl" style={{background: '#f0fdf4'}}>
+                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                    <path d="M10 26V8l16-4v18M10 26c0 1.657-1.79 3-4 3s-4-1.343-4-3 1.79-3 4-3 4 1.343 4 3zm16-4c0 1.657-1.79 3-4 3s-4-1.343-4-3 1.79-3 4-3 4 1.343 4 3z" stroke="#006d4a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                  </svg>
+                </div>
+              </div>
+              <p className="font-medium" style={{color: '#006d4a'}}>No files uploaded yet</p>
+              <p className="text-sm text-gray-400 mt-1">Upload a file above to get started</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-                    <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">اسم الملف</th>
-                    <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">تحميل بواسطة</th>
-                    <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">التاريخ</th>
-                    <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">الحالة</th>
+                <thead style={{background: 'linear-gradient(135deg, #006d4a 0%, #005239 100%)'}}>
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-widest text-emerald-100">File Name</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-widest text-emerald-100">Uploaded By</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-widest text-emerald-100">Date</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-widest text-emerald-100">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -661,13 +678,13 @@ export const AudioUpload = () => {
                     const status = file.status || 'uploaded';
                     const statusBadge = getStatusBadge(status);
                     return (
-                      <tr key={index} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                      <tr key={index} className="border-b border-gray-100 dark:border-gray-700 hover:bg-emerald-50/40 dark:hover:bg-gray-700/30 transition-colors">
                         <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
                           <div className="flex items-center gap-2">
-                            <svg className="h-4 w-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <svg className="h-4 w-4 shrink-0" style={{color: '#006d4a'}} fill="currentColor" viewBox="0 0 20 20">
                               <path d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
                             </svg>
-                            <span className="truncate font-medium" title={file.filename}>{file.filename || 'ملف بدون اسم'}</span>
+                            <span className="truncate font-medium" title={file.filename}>{file.filename || 'Unnamed file'}</span>
                           </div>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
@@ -675,7 +692,7 @@ export const AudioUpload = () => {
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                           {(file.createdAt || file.created_at)
-                            ? new Date(file.createdAt || file.created_at).toLocaleDateString('ar-SA')
+                            ? new Date(file.createdAt || file.created_at).toLocaleDateString('en-US')
                             : '-'}
                         </td>
                         <td className="px-6 py-4 text-sm">
@@ -683,7 +700,7 @@ export const AudioUpload = () => {
                             <Link
                               to={`/failed-fragments?fileId=${file.file_id}`}
                               className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition-colors hover:brightness-95 ${statusBadge.bg} ${statusBadge.border} ${statusBadge.text}`}
-                              title="عرض الأجزاء الناقصة وإعادة المحاولة"
+                              title="View incomplete fragments and retry"
                             >
                               <span>{statusBadge.icon}</span>
                               <span>{statusBadge.label}</span>

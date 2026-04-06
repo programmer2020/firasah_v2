@@ -23,9 +23,6 @@ interface FragmentWithOrder {
 
 const rebuildFileTranscriptFromFragments = async (fileId: number, preferredLanguage: string = 'ar') => {
   return await update('sound_files', {
-    transcript: null,
-    transcript_language: null,
-    transcript_updated_at: null,
     updated_at: new Date(),
   }, 'file_id = $1', [fileId]);
 };

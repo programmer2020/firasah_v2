@@ -21,6 +21,7 @@ import { transcribeAndSave, convertVideoToAudio, getSpeechByFileId, retranscribe
 import { getProgress, addSSEClient, updateProgress } from '../services/progressService.js';
 import { getEvaluationResults, generateEvaluationReport, testEvaluation, getEvaluationsWithFilters, exportEvaluationToJSON, generateComprehensiveReport } from '../services/evaluationsService.js';
 import { getOne, getMany, executeQuery, update } from '../helpers/database.js';
+import { logUpload, getLogsForFile, getRecentLogs, getUploadSummary, clearLogsForFile } from '../services/uploadLogService.js';
 
 // Configure multer for audio uploads
 const uploadDir = path.join(process.cwd(), 'uploads', 'audio');
@@ -122,7 +123,6 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
     const userId = resolveCreatedBy(req);
     const classId = (req.body as any).class_id ? Number((req.body as any).class_id) : undefined;
     const dayOfWeek = (req.body as any).day_of_week || undefined;
-    const slotDate = (req.body as any).slot_date || undefined;
     const shouldDenoise = (req.body as any).should_denoise === 'true' || (req.body as any).should_denoise === true;
 
     const fileExt = path.extname(req.file.originalname).toLowerCase();
@@ -130,12 +130,15 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
     const isVideo = VIDEO_TYPES.includes(req.file.mimetype);
     let audioPath = req.file.path;
 
+    const fileSizeKB = Math.round(req.file.size / 1024);
+    const fileType = isText ? 'text' : isVideo ? 'video' : 'audio';
+
     if (!isText && isVideo) {
       console.log(`[Upload] Video detected (${req.file.mimetype}), converting to audio...`);
       audioPath = await convertVideoToAudio(req.file.path);
       console.log(`[Upload] Audio extracted: ${audioPath}`);
     }
-    
+
     // Create relative path for storage
     const relativePath = path.relative(process.cwd(), req.file.path);
 
@@ -147,7 +150,26 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
       filepath: relativePath,
       createdBy: userId,
       note: (req.body as any).note || null,
+      classId,
     });
+
+    // Log: file received and record created
+    await logUpload(soundFile.file_id, 'upload_received', 'info',
+      `File received: "${decodedFilename}" (${fileSizeKB} KB, ${fileType})`,
+      { filename: decodedFilename, size_kb: fileSizeKB, mimetype: req.file.mimetype, file_type: fileType, class_id: classId ?? null, uploader: userId }
+    );
+
+    if (isVideo) {
+      await logUpload(soundFile.file_id, 'video_conversion_completed', 'success',
+        `Video converted to audio successfully`,
+        { original: req.file.originalname, audio_path: path.basename(audioPath) }
+      );
+    }
+
+    await logUpload(soundFile.file_id, 'sound_file_created', 'success',
+      `Sound file record created in database (file_id=${soundFile.file_id})`,
+      { file_id: soundFile.file_id, filepath: relativePath }
+    );
 
     if (isText) {
       // For text files, read content directly and save to fragments table
@@ -158,6 +180,11 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
       updateProgress(soundFile.file_id, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
       console.log(`[Upload] Text file saved to fragments table for file ${soundFile.file_id}`);
 
+      await logUpload(soundFile.file_id, 'pipeline_completed', 'success',
+        `Text file content saved to fragments`,
+        { chars: textContent.length }
+      );
+
       res.status(201).json({
         success: true,
         message: 'تم تحميل الملف النصي وحفظ المحتوى بنجاح',
@@ -167,20 +194,29 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
       // Initialize progress for audio pipeline
       updateProgress(soundFile.file_id, { status: 'uploading', message: 'تم التحميل. جاري بدء المعالجة...', percent: 5 });
 
-      // Transcribe audio in background (split by time slots if class_id & day provided)
-      transcribeAndSave(soundFile.file_id, audioPath, classId, dayOfWeek, slotDate, shouldDenoise)
+      await logUpload(soundFile.file_id, 'pipeline_started', 'info',
+        `Audio transcription pipeline started in background`,
+        { should_denoise: shouldDenoise, class_id: classId ?? null, day_of_week: dayOfWeek ?? null }
+      );
+
+      // Transcribe audio in background
+      transcribeAndSave(soundFile.file_id, audioPath, classId, dayOfWeek, shouldDenoise)
         .then((speeches) => {
           console.log(`[Upload] ✅ Transcription completed for file ${soundFile.file_id}: ${speeches.length} segment(s)`);
         })
         .catch((err) => {
           console.error(`[Upload] ❌ Transcription failed for file ${soundFile.file_id}:`, err);
           console.error(`[Upload] Error stack:`, err.stack);
-          updateProgress(soundFile.file_id, { 
-            status: 'failed', 
-            message: `❌ فشلت المعالجة: ${err.message}`, 
-            percent: 0, 
-            error: err.message 
+          updateProgress(soundFile.file_id, {
+            status: 'failed',
+            message: `❌ فشلت المعالجة: ${err.message}`,
+            percent: 0,
+            error: err.message
           });
+          logUpload(soundFile.file_id, 'pipeline_failed', 'error',
+            `Pipeline failed: ${err.message}`,
+            { error: err.message }
+          );
         });
 
       res.status(201).json({
@@ -215,7 +251,7 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
 router.get('/fragments/failed', async (req: Request, res: Response) => {
   try {
     const rows = await getMany(
-      `SELECT f.fragment_id, f.file_id, f.fragment_order, f.start_seconds, f.end_seconds,
+      `SELECT f.fragment_id, f.file_id, f.fragment_order,
               f.duration, f.transcription_status, f.retry_count, f.last_error,
               sf.filename
        FROM fragments f
@@ -261,8 +297,8 @@ router.post('/fragments/:fragmentId/retry-manual', authenticate, async (req: Aut
       return res.status(404).json({ success: false, message: 'Audio file not found on disk' });
     }
 
-    const startSec = Number(fragment.start_seconds ?? 0);
-    let endSec = Number(fragment.end_seconds ?? startSec);
+    const startSec = Number(fragment.start_time ?? 0);
+    let endSec = Number(fragment.end_time ?? startSec);
     if (endSec <= startSec) {
       const dur = Number(fragment.duration ?? 0);
       endSec = startSec + (dur > 0 ? dur : 0);
@@ -559,7 +595,7 @@ router.get('/:id/fragments', async (req: Request, res: Response) => {
     const fragments = await getMany(`
       SELECT * FROM fragments
       WHERE file_id = $1
-      ORDER BY slot_order ASC
+      ORDER BY fragment_order ASC
     `, [fileId]);
 
     res.status(200).json({
@@ -887,7 +923,6 @@ router.post('/:id/retranscribe', async (req: Request, res: Response) => {
 
     const classId = req.body.class_id ? Number(req.body.class_id) : undefined;
     const dayOfWeek = req.body.day_of_week || undefined;
-    const slotDate = req.body.slot_date || undefined;
 
     // Resolve file path
     let audioPath = path.isAbsolute(soundFile.filepath)
@@ -906,7 +941,7 @@ router.post('/:id/retranscribe', async (req: Request, res: Response) => {
     }
 
     // Transcribe in background
-    transcribeAndSave(fileId, audioPath, classId, dayOfWeek, slotDate)
+    transcribeAndSave(fileId, audioPath, classId, dayOfWeek)
       .then((speeches) => console.log(`Re-transcription completed for file ${fileId}: ${speeches.length} segment(s)`))
       .catch((err) => console.error(`Re-transcription failed for file ${fileId}:`, err));
 
@@ -1153,6 +1188,65 @@ router.get('/upload-hours/stats', async (req: Request, res: Response) => {
       message: 'Failed to fetch upload hours statistics',
       error: error.message,
     });
+  }
+});
+
+// ─── Upload Logs Endpoints ──────────────────────────────────────────────────
+
+/**
+ * GET /api/sound-files/upload-logs
+ * Recent upload log entries across all files (default last 200).
+ */
+router.get('/upload-logs', async (req: Request, res: Response) => {
+  try {
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 200;
+    const logs = await getRecentLogs(limit);
+    res.json({ success: true, data: logs });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/sound-files/upload-logs/summary
+ * Per-file summary: total events, last event, error/warning counts.
+ */
+router.get('/upload-logs/summary', async (req: Request, res: Response) => {
+  try {
+    const summary = await getUploadSummary();
+    res.json({ success: true, data: summary });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/sound-files/:fileId/upload-logs
+ * All log entries for a specific file, ordered chronologically.
+ */
+router.get('/:fileId/upload-logs', async (req: Request, res: Response) => {
+  try {
+    const fileId = parseInt(req.params.fileId as string);
+    if (isNaN(fileId)) return res.status(400).json({ success: false, message: 'Invalid file ID' });
+    const logs = await getLogsForFile(fileId);
+    res.json({ success: true, data: logs });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * DELETE /api/sound-files/:fileId/upload-logs
+ * Clear all log entries for a specific file.
+ */
+router.delete('/:fileId/upload-logs', authenticate, async (req: Request, res: Response) => {
+  try {
+    const fileId = parseInt(req.params.fileId as string);
+    if (isNaN(fileId)) return res.status(400).json({ success: false, message: 'Invalid file ID' });
+    const deleted = await clearLogsForFile(fileId);
+    res.json({ success: true, message: `Deleted ${deleted} log entries`, deleted });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
