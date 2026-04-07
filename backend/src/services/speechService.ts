@@ -390,7 +390,8 @@ export const saveFragment = async (
   startTime: number = 0,
   endTime: number = 0,
   slotOrder: number = 0,
-  fragmentPath: string | null = null
+  fragmentPath: string | null = null,
+  lectureIdOverride: number | null = null
 ) => {
   try {
     console.log(`[Fragment] Saving fragment: file_id=${fileId}, start=${startTime}s, end=${endTime}s, order=${slotOrder}, transcript_len=${transcript.length}`);
@@ -401,19 +402,22 @@ export const saveFragment = async (
         : Math.max(0, Number(endTime) - Number(startTime));
 
     // lecture_order: each 2700s (45 min) = one lecture period, capped at 7
-    const lectureOrder = Math.min(7, Math.max(1, Math.ceil((Number(startTime) || 0) / 2700) || 1));
+    // [0–2700] → 1, (2700–5400] → 2, (5400–8100] → 3, … up to 7
+    const lectureOrder = Math.min(7, Math.max(1, Math.floor((Number(startTime) || 0) / 2700) + 1));
 
-    let lectureId: number | null = null;
-    try {
-      const lec = await getOne(
-        'SELECT lecture_id FROM lecture WHERE file_id = $1 ORDER BY lecture_id DESC LIMIT 1',
-        [fileId]
-      );
-      if (lec?.lecture_id != null) {
-        lectureId = Number(lec.lecture_id);
+    let lectureId: number | null = lectureIdOverride;
+    if (lectureId == null) {
+      try {
+        const lec = await getOne(
+          'SELECT lecture_id FROM lecture WHERE file_id = $1 ORDER BY lecture_id DESC LIMIT 1',
+          [fileId]
+        );
+        if (lec?.lecture_id != null) {
+          lectureId = Number(lec.lecture_id);
+        }
+      } catch {
+        /* optional link to lecture row */
       }
-    } catch {
-      /* optional link to lecture row */
     }
 
     // Explicit INSERT so canonical columns (fragment_order) are always set.
@@ -437,7 +441,7 @@ export const saveFragment = async (
       ) VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
-        $11, $12, $13, $14
+        $11, $12, $13
       )
       RETURNING *
       `,
@@ -638,44 +642,52 @@ export const transcribeAndSave = async (
     { duration_seconds: totalDuration }
   );
 
-  // Create lecture row upfront so fragments can reference it
-  let lectureId: number | null = null;
-  try {
-    // Fetch time_slot_id from sound_files + section_time_slots
-    let timeSlotId: number | null = null;
-    try {
-      const sfRow = await getOne('SELECT class_id FROM sound_files WHERE file_id = $1', [fileId]);
-      if (sfRow?.class_id) {
-        const tsRow = await getOne(
-          'SELECT time_slot_id FROM section_time_slots WHERE class_id = $1 ORDER BY start_time ASC LIMIT 1',
-          [sfRow.class_id]
-        );
-        if (tsRow) {
-          timeSlotId = Number(tsRow.time_slot_id);
-        }
-      }
-    } catch { /* non-blocking */ }
+  // Create lecture rows upfront — one per 45-min (2700s) period, up to 7
+  const totalLectures = Math.min(7, Math.max(1, Math.ceil(totalDuration / 2700)));
+  const lectureMap = new Map<number, number>(); // lectureOrder → lecture_id
 
-    const lectureRow = await insert('lecture', {
-      file_id: fileId,
-      transcript: '',
-      language: 'ar',
-      duration: totalDuration,
-      time_slot_id: timeSlotId,
-      created_at: new Date(),
-      updated_at: new Date(),
-    });
-    lectureId = lectureRow.lecture_id ?? lectureRow.id ?? null;
-    console.log(`[Speech] ✅ Lecture row created upfront: lecture_id=${lectureId}, time_slot_id=${timeSlotId}`);
-    await logUpload(fileId, 'lecture_created', 'success',
-      `Lecture record created (lecture_id=${lectureId})`,
-      { lecture_id: lectureId, time_slot_id: timeSlotId }
-    );
-  } catch (lecErr) {
-    console.warn(`[Speech] ⚠️ Could not create lecture row upfront:`, lecErr);
-    await logUpload(fileId, 'lecture_create_failed', 'warning',
-      `Could not create lecture row: ${(lecErr as Error).message}`);
+  let timeSlotId: number | null = null;
+  try {
+    const sfRow = await getOne('SELECT class_id FROM sound_files WHERE file_id = $1', [fileId]);
+    if (sfRow?.class_id) {
+      const tsRow = await getOne(
+        'SELECT time_slot_id FROM section_time_slots WHERE class_id = $1 ORDER BY start_time ASC LIMIT 1',
+        [sfRow.class_id]
+      );
+      if (tsRow) {
+        timeSlotId = Number(tsRow.time_slot_id);
+      }
+    }
+  } catch { /* non-blocking */ }
+
+  for (let lo = 1; lo <= totalLectures; lo++) {
+    try {
+      const lectureDuration = lo < totalLectures
+        ? 2700
+        : Math.max(0, totalDuration - (lo - 1) * 2700);
+      const lectureRow = await insert('lecture', {
+        file_id: fileId,
+        transcript: '',
+        language: 'ar',
+        duration: lectureDuration,
+        time_slot_id: timeSlotId,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+      const lid = lectureRow.lecture_id ?? lectureRow.id ?? null;
+      if (lid != null) {
+        lectureMap.set(lo, Number(lid));
+      }
+      console.log(`[Speech] ✅ Lecture ${lo}/${totalLectures} created: lecture_id=${lid}`);
+    } catch (lecErr) {
+      console.warn(`[Speech] ⚠️ Could not create lecture row ${lo}:`, lecErr);
+    }
   }
+
+  await logUpload(fileId, 'lectures_created', 'success',
+    `Created ${lectureMap.size} lecture record(s) for ${totalLectures} period(s)`,
+    { total_lectures: totalLectures, lecture_ids: Array.from(lectureMap.values()) }
+  );
 
   // Calculate 15-minute fragments
   const totalFragments = Math.ceil(totalDuration / FRAGMENT_DURATION_SEC);
@@ -697,18 +709,19 @@ export const transcribeAndSave = async (
       { chars: result.text.length, language: result.language, fragment: 1, total: 1 }
     );
     updateProgress(fileId, { status: 'saving', message: 'جاري حفظ النص...', percent: 90 });
-    const fragment = await saveFragment(fileId, result.text, result.language, totalDuration, 0, totalDuration, 1, denoisedPath);
+    const singleLectureId = lectureMap.get(1) ?? null;
+    const fragment = await saveFragment(fileId, result.text, result.language, totalDuration, 0, totalDuration, 1, denoisedPath, singleLectureId);
     await logUpload(fileId, 'fragment_saved', 'success',
       `Fragment saved to database (fragment_id=${fragment.fragment_id ?? fragment.id})`,
       { fragment_id: fragment.fragment_id ?? fragment.id, order: 1 }
     );
 
     // Update lecture with transcript
-    if (lectureId) {
-      await executeQuery('UPDATE lecture SET transcript = $1, language = $2, updated_at = NOW() WHERE lecture_id = $3', [result.text, result.language, lectureId]);
+    if (singleLectureId) {
+      await executeQuery('UPDATE lecture SET transcript = $1, language = $2, updated_at = NOW() WHERE lecture_id = $3', [result.text, result.language, singleLectureId]);
       await logUpload(fileId, 'lecture_updated', 'success',
-        `Lecture transcript updated (lecture_id=${lectureId})`,
-        { lecture_id: lectureId, transcript_length: result.text.length }
+        `Lecture transcript updated (lecture_id=${singleLectureId})`,
+        { lecture_id: singleLectureId, transcript_length: result.text.length }
       );
     }
 
@@ -797,6 +810,10 @@ export const transcribeAndSave = async (
         totalSlots: totalFragments,
       });
 
+      // Determine which lecture this fragment belongs to
+      const fragLectureOrder = Math.min(7, Math.max(1, Math.floor(startSec / 2700) + 1));
+      const fragLectureId = lectureMap.get(fragLectureOrder) ?? null;
+
       const fragment = await saveFragment(
         fileId,
         result.text,
@@ -805,13 +822,14 @@ export const transcribeAndSave = async (
         startSec,
         endSec,
         slotOrder,
-        segmentFile
+        segmentFile,
+        fragLectureId
       );
 
-      console.log(`[Speech] ✅ Fragment ${slotOrder} saved: id=${fragment.id}`);
+      console.log(`[Speech] ✅ Fragment ${slotOrder} saved: id=${fragment.id}, lecture_order=${fragLectureOrder}, lecture_id=${fragLectureId}`);
       await logUpload(fileId, 'fragment_saved', 'success',
-        `Fragment ${slotOrder}/${totalFragments} saved to database`,
-        { fragment: slotOrder, total: totalFragments, fragment_id: fragment.fragment_id ?? fragment.id }
+        `Fragment ${slotOrder}/${totalFragments} saved to database (lecture_order=${fragLectureOrder})`,
+        { fragment: slotOrder, total: totalFragments, fragment_id: fragment.fragment_id ?? fragment.id, lecture_order: fragLectureOrder, lecture_id: fragLectureId }
       );
       results.push(fragment);
     } catch (err) {
@@ -822,6 +840,8 @@ export const transcribeAndSave = async (
       );
       // Save a placeholder
       try {
+        const fragLectureOrder = Math.min(7, Math.max(1, Math.floor(startSec / 2700) + 1));
+        const fragLectureId = lectureMap.get(fragLectureOrder) ?? null;
         const fragment = await saveFragment(
           fileId,
           '[transcription_pending]',
@@ -830,7 +850,8 @@ export const transcribeAndSave = async (
           startSec,
           endSec,
           slotOrder,
-          segmentFile
+          segmentFile,
+          fragLectureId
         );
         console.log(`[Speech] ⚠️ Fragment ${slotOrder} saved as pending: id=${fragment.id}`);
         await logUpload(fileId, 'fragment_saved_pending', 'warning',
@@ -853,25 +874,28 @@ export const transcribeAndSave = async (
     fs.rmdirSync(tempDir);
   } catch { /* ignore if not empty */ }
 
-  // Update lecture row with combined transcript from all fragments
-  if (lectureId) {
+  // Update each lecture row with combined transcript from its own fragments
+  for (const [lo, lid] of lectureMap.entries()) {
     try {
-      const allFragments = await getMany(
-        'SELECT transcript FROM fragments WHERE file_id = $1 ORDER BY COALESCE(fragment_order, 0) ASC',
-        [fileId]
+      const lectureFragments = await getMany(
+        'SELECT transcript FROM fragments WHERE file_id = $1 AND lecture_order = $2 ORDER BY COALESCE(fragment_order, 0) ASC',
+        [fileId, lo]
       );
-      const fullTranscript = allFragments.map((f: any) => f.transcript).filter((t: string) => t && t !== '[transcription_pending]').join(' ');
+      const fullTranscript = lectureFragments
+        .map((f: any) => f.transcript)
+        .filter((t: string) => t && t !== '[transcription_pending]')
+        .join(' ');
       await executeQuery(
         'UPDATE lecture SET transcript = $1, updated_at = NOW() WHERE lecture_id = $2',
-        [fullTranscript, lectureId]
+        [fullTranscript, lid]
       );
-      console.log(`[Speech] ✅ Lecture transcript updated: lecture_id=${lectureId}, length=${fullTranscript.length}`);
+      console.log(`[Speech] ✅ Lecture ${lo} transcript updated: lecture_id=${lid}, length=${fullTranscript.length}, fragments=${lectureFragments.length}`);
       await logUpload(fileId, 'lecture_updated', 'success',
-        `Lecture transcript assembled from ${allFragments.length} fragments`,
-        { lecture_id: lectureId, transcript_length: fullTranscript.length, fragments: allFragments.length }
+        `Lecture ${lo} transcript assembled from ${lectureFragments.length} fragment(s)`,
+        { lecture_order: lo, lecture_id: lid, transcript_length: fullTranscript.length, fragments: lectureFragments.length }
       );
     } catch (err) {
-      console.error(`[Speech] ⚠️ Failed to update lecture transcript:`, err);
+      console.error(`[Speech] ⚠️ Failed to update lecture ${lo} transcript:`, err);
     }
   }
 

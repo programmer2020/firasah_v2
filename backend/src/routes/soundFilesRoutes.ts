@@ -917,9 +917,10 @@ router.post('/:id/retranscribe', async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: 'Sound file not found' });
     }
 
-    // Delete any existing fragments for this file (e.g. [transcription_pending] placeholders)
+    // Delete any existing fragments and lectures for this file (clean slate)
     await executeQuery('DELETE FROM fragments WHERE file_id = $1', [fileId]);
-    console.log(`[Retranscribe] Cleared existing fragments for file_id=${fileId}`);
+    await executeQuery('DELETE FROM lecture WHERE file_id = $1', [fileId]);
+    console.log(`[Retranscribe] Cleared existing fragments and lectures for file_id=${fileId}`);
 
     const classId = req.body.class_id ? Number(req.body.class_id) : undefined;
     const dayOfWeek = req.body.day_of_week || undefined;
