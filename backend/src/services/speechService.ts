@@ -483,32 +483,10 @@ export const saveFragment = async (
       `[Fragment] ✅ Fragment saved successfully: fragment_id=${fid}, file_id=${result.file_id}`
     );
     
-    // Automatically evaluate fragment against KPIs asynchronously
-    if (transcript && transcript.trim() && transcript !== '[transcription_pending]') {
-      setImmediate(async () => {
-        try {
-          // Resolve lecture_id from file_id
-          const lecture = await getOne(`SELECT lecture_id FROM lecture WHERE file_id = $1 LIMIT 1`, [fileId]);
-          if (!lecture?.lecture_id) {
-            console.warn(`[Evaluation] No lecture found for file_id=${fileId}, skipping evaluation`);
-            return;
-          }
-          console.log(`[Evaluation] 🔄 Starting automatic KPI evaluation for fragment_id=${fid}...`);
-          const evaluations = await evaluateSpeechAgainstKPIs(
-            transcript,
-            lecture.lecture_id,
-            undefined,
-            undefined,
-            startTime,
-            endTime
-          );
-          console.log(`[Evaluation] ✅ Completed: Evaluated against all KPIs, found ${evaluations.length} evidence records`);
-        } catch (evalErr) {
-          console.error(`[Evaluation] ⚠️ Non-blocking evaluation error for fragment_id=${fid}:`, evalErr);
-        }
-      });
-    }
-    
+    // NOTE: Evaluation is intentionally NOT triggered here.
+    // It runs once per lecture at the end of the full pipeline (in transcribeAndSave)
+    // after all fragments are saved and the lecture transcript is fully assembled.
+
     return result;
   } catch (err) {
     console.error(`[Fragment] ❌ Failed to save fragment:`, err);
@@ -539,24 +517,9 @@ export const saveSpeech = async (
     
     console.log(`[Speech] ✅ Lecture saved successfully: id=${result.id}, file_id=${result.file_id}`);
     
-    // Automatically evaluate lecture against KPIs asynchronously
-    // Do not await - let it process in background without delaying the response
-    const lectureId = result.lecture_id ?? result.id;
-    if (transcript && transcript.trim() && transcript !== '[transcription_pending]' && lectureId) {
-      setImmediate(async () => {
-        try {
-          console.log(`[Evaluation] 🔄 Starting automatic KPI evaluation for lecture_id=${lectureId}...`);
-          const evaluations = await evaluateSpeechAgainstKPIs(
-            transcript,
-            lectureId
-          );
-          console.log(`[Evaluation] ✅ Completed: Evaluated against all KPIs, found ${evaluations.length} evidence records`);
-        } catch (evalErr) {
-          console.error(`[Evaluation] ⚠️ Non-blocking evaluation error for lecture_id=${lectureId}:`, evalErr);
-        }
-      });
-    }
-    
+    // NOTE: Evaluation is intentionally NOT triggered here.
+    // It runs once per lecture at the end of the full pipeline.
+
     return result;
   } catch (err) {
     console.error(`[Speech] ❌ Failed to save speech:`, err);
@@ -646,17 +609,23 @@ export const transcribeAndSave = async (
   const totalLectures = Math.min(7, Math.max(1, Math.ceil(totalDuration / 2700)));
   const lectureMap = new Map<number, number>(); // lectureOrder → lecture_id
 
-  let timeSlotId: number | null = null;
+  // Build a map: slot_order → time_slot_id for this class + day
+  const slotMap = new Map<number, number>(); // slot_order → time_slot_id
+  let resolvedClassId: number | null = classId ?? null;
   try {
-    const sfRow = await getOne('SELECT class_id FROM sound_files WHERE file_id = $1', [fileId]);
-    if (sfRow?.class_id) {
-      const tsRow = await getOne(
-        'SELECT time_slot_id FROM section_time_slots WHERE class_id = $1 ORDER BY start_time ASC LIMIT 1',
-        [sfRow.class_id]
+    if (!resolvedClassId) {
+      const sfRow = await getOne('SELECT class_id FROM sound_files WHERE file_id = $1', [fileId]);
+      resolvedClassId = sfRow?.class_id ? Number(sfRow.class_id) : null;
+    }
+    if (resolvedClassId && dayOfWeek) {
+      const slots = await getMany(
+        'SELECT time_slot_id, slot_order FROM section_time_slots WHERE class_id = $1 AND day_of_week = $2 ORDER BY slot_order ASC',
+        [resolvedClassId, dayOfWeek]
       );
-      if (tsRow) {
-        timeSlotId = Number(tsRow.time_slot_id);
+      for (const s of slots) {
+        slotMap.set(Number(s.slot_order), Number(s.time_slot_id));
       }
+      console.log(`[Speech] Found ${slotMap.size} time slot(s) for class_id=${resolvedClassId}, day=${dayOfWeek}`);
     }
   } catch { /* non-blocking */ }
 
@@ -665,6 +634,10 @@ export const transcribeAndSave = async (
       const lectureDuration = lo < totalLectures
         ? 2700
         : Math.max(0, totalDuration - (lo - 1) * 2700);
+
+      // Match lecture_order to slot_order → get the correct time_slot_id
+      const timeSlotId = slotMap.get(lo) ?? null;
+
       const lectureRow = await insert('lecture', {
         file_id: fileId,
         transcript: '',
@@ -678,7 +651,7 @@ export const transcribeAndSave = async (
       if (lid != null) {
         lectureMap.set(lo, Number(lid));
       }
-      console.log(`[Speech] ✅ Lecture ${lo}/${totalLectures} created: lecture_id=${lid}`);
+      console.log(`[Speech] ✅ Lecture ${lo}/${totalLectures} created: lecture_id=${lid}, time_slot_id=${timeSlotId}`);
     } catch (lecErr) {
       console.warn(`[Speech] ⚠️ Could not create lecture row ${lo}:`, lecErr);
     }
@@ -686,7 +659,7 @@ export const transcribeAndSave = async (
 
   await logUpload(fileId, 'lectures_created', 'success',
     `Created ${lectureMap.size} lecture record(s) for ${totalLectures} period(s)`,
-    { total_lectures: totalLectures, lecture_ids: Array.from(lectureMap.values()) }
+    { total_lectures: totalLectures, lecture_ids: Array.from(lectureMap.values()), slot_map: Object.fromEntries(slotMap) }
   );
 
   // Calculate 15-minute fragments
@@ -894,6 +867,19 @@ export const transcribeAndSave = async (
         `Lecture ${lo} transcript assembled from ${lectureFragments.length} fragment(s)`,
         { lecture_order: lo, lecture_id: lid, transcript_length: fullTranscript.length, fragments: lectureFragments.length }
       );
+
+      // Run KPI evaluation once per lecture — only after full transcript is ready
+      if (fullTranscript.trim()) {
+        setImmediate(async () => {
+          try {
+            console.log(`[Evaluation] 🔄 Starting KPI evaluation for lecture_id=${lid} (order=${lo})...`);
+            const evaluations = await evaluateSpeechAgainstKPIs(fullTranscript, lid);
+            console.log(`[Evaluation] ✅ lecture_id=${lid}: ${evaluations.length} evidence record(s) created`);
+          } catch (evalErr) {
+            console.error(`[Evaluation] ⚠️ lecture_id=${lid}:`, evalErr);
+          }
+        });
+      }
     } catch (err) {
       console.error(`[Speech] ⚠️ Failed to update lecture ${lo} transcript:`, err);
     }
@@ -993,16 +979,6 @@ export const retranscribePendingFragments = async (
           [pk]
         );
         retranscribed++;
-        setImmediate(async () => {
-          try {
-            const lecture = await getOne(`SELECT lecture_id FROM lecture WHERE file_id = $1 LIMIT 1`, [fileId]);
-            if (lecture?.lecture_id) {
-              await evaluateSpeechAgainstKPIs(result.text, lecture.lecture_id);
-            }
-          } catch (evalErr) {
-            console.error(`[Evaluation] ⚠️ After retranscribe fragment_id=${pk}:`, evalErr);
-          }
-        });
       } catch (err) {
         console.error(`[RetranscribePending] Fragment pk=${pk}:`, err);
         failed++;

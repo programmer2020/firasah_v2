@@ -14,42 +14,6 @@ const IconSchool = ({ className = 'h-5 w-5' }) => (
   </svg>
 );
 
-const IconClips = ({ className = 'h-5 w-5' }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
-    <path d="M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Zm4 3v6l5-3-5-3Zm8-4h2v2h-2V5Zm0 12h2v2h-2v-2Z" />
-  </svg>
-);
-
-const IconTexture = ({ className = 'h-5 w-5' }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
-    <path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z" />
-  </svg>
-);
-
-const IconHighlights = ({ className = 'h-5 w-5' }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
-    <path d="m12 2 1.9 5.8H20l-4.95 3.6 1.9 5.8L12 13.6l-4.95 3.6 1.9-5.8L4 7.8h6.1L12 2Z" />
-  </svg>
-);
-
-const IconUpload = ({ className = 'h-5 w-5' }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
-    <path d="M19 15v4H5v-4H3v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4h-2ZM11 16h2V8h3l-4-4-4 4h3v8Z" />
-  </svg>
-);
-
-const IconAnalytics = ({ className = 'h-5 w-5' }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
-    <path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z" />
-  </svg>
-);
-
-const IconGlobe = ({ className = 'h-5 w-5' }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
-    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-  </svg>
-);
-
 const CloseIcon = () => (
   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
@@ -75,10 +39,6 @@ export const Sidebar = ({ isOpen, onClose, onCollapseChange }) => {
   const menuItems = [
     { label: 'Dashboard', href: '/dashboard', icon: IconDashboard },
     { label: 'Lectures', href: '/audio-upload', icon: IconSchool },
-    { label: 'Failed Fragments', href: '/failed-fragments', icon: IconClips },
-    { label: 'Class Schedule', href: '/schedule', icon: IconTexture },
-    { label: 'Highlights', href: '/evaluations', icon: IconHighlights },
-    { label: 'Admin Upload', href: '/worker-jobs', icon: IconUpload },
   ];
 
   const activeIndex = Math.max(

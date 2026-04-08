@@ -788,22 +788,77 @@ const TeacherDashboard = () => {
     },
   ];
 
-  const getOpacityClass = (value) => {
-    if (value >= 90) return 'opacity-100';
-    if (value >= 80) return 'opacity-90';
-    if (value >= 70) return 'opacity-80';
-    if (value >= 60) return 'opacity-70';
-    if (value >= 50) return 'opacity-60';
-    if (value >= 40) return 'opacity-50';
-    return 'opacity-40';
+  const fallbackHeatmapSubjects = [
+    { id: 'sub-1', name: 'Math' },
+    { id: 'sub-2', name: 'Science' },
+    { id: 'sub-3', name: 'English' },
+    { id: 'sub-4', name: 'History' },
+    { id: 'sub-5', name: 'Arabic' },
+    { id: 'sub-6', name: 'Geography' },
+    { id: 'sub-7', name: 'Social Studies' },
+    { id: 'sub-8', name: 'PE' },
+  ];
+
+  const heatmapDomains = domains;
+  const heatmapWeekLabels = (heatmapDomains[0]?.weeks || Array.from({ length: 8 }, () => 0)).map((_, index) => `W${index + 1}`);
+  const heatmapSubjects = (subjects.length ? subjects : fallbackHeatmapSubjects).slice(0, 8);
+  const subjectHeatmapMatrix = heatmapDomains.map((domain, domainIdx) =>
+    heatmapSubjects.map((_, subjectIdx) =>
+      domain.weeks?.[subjectIdx % (domain.weeks?.length || 1)] ??
+      (((domainIdx + 2) * (subjectIdx + 3) * 9) % 55) + 40
+    )
+  );
+  const heatmapCellSize = 120;
+  const heatmapLabelColumnWidth = 360;
+
+  const getHeatmapTone = (value) => {
+    if (value >= 90) {
+      return {
+        bg: '#006c4a',
+        border: '#005137',
+        text: '#ffffff',
+        label: 'High',
+      };
+    }
+    if (value >= 75) {
+      return {
+        bg: '#3fb687',
+        border: '#2a9a6f',
+        text: '#ffffff',
+        label: 'Strong',
+      };
+    }
+    if (value >= 60) {
+      return {
+        bg: '#85f8c4',
+        border: '#68dba9',
+        text: '#00422c',
+        label: 'Good',
+      };
+    }
+    if (value >= 45) {
+      return {
+        bg: '#e0e3e5',
+        border: '#bbcabf',
+        text: '#3c4a42',
+        label: 'Moderate',
+      };
+    }
+    return {
+      bg: '#ffdadb',
+      border: '#ffb2b7',
+      text: '#92002a',
+      label: 'Low',
+    };
   };
 
-  const getHeatmapColor = (value, isError = false) => {
-    if (isError) {
-      return value >= 50 ? 'bg-red-500' : 'bg-red-400';
-    }
-    return 'bg-emerald-500';
-  };
+  const heatmapLegend = [
+    { label: 'Low', range: '0-44', bg: '#ffdadb', border: '#ffb2b7' },
+    { label: 'Moderate', range: '45-59', bg: '#e0e3e5', border: '#bbcabf' },
+    { label: 'Good', range: '60-74', bg: '#85f8c4', border: '#68dba9' },
+    { label: 'Strong', range: '75-89', bg: '#3fb687', border: '#2a9a6f' },
+    { label: 'High', range: '90-100', bg: '#006c4a', border: '#005137' },
+  ];
 
   return (
     <ProtectedLayout>
@@ -818,536 +873,341 @@ const TeacherDashboard = () => {
           </p>
         </section>
 
-        {/* Stats Section */}
-        <section className="mb-1 -mt-2 grid grid-cols-1 gap-0 md:grid-cols-4">
-          {/* Lectures Analyzed */}
-          <div className="dashboard-panel dashboard-ghost-top px-8 py-8">
-            <p className="font-dashboard-mono mb-4 text-[10px] uppercase tracking-[0.28em] text-[#7e8f89]">Lectures Analyzed</p>
-            <div className="flex items-baseline gap-2">
-              <span className="font-headline text-[3.5rem] font-bold leading-none tracking-[-0.05em] text-[var(--dashboard-primary)]">
-                {loading ? '-' : lectureStats.currentMonth}
-              </span>
-              <span className="text-sm text-[#51555c]">{loading ? '-' : lectureStats.trend}</span>
-            </div>
-          </div>
-
-          {/* Average KPI Score */}
-          <div className="dashboard-panel-soft dashboard-ghost-top px-8 py-8">
-            <p className="font-dashboard-mono mb-4 text-[10px] uppercase tracking-[0.28em] text-[#7e8f89]">This academic term</p>
-            <div className="flex items-baseline gap-2">
-              <span className="font-headline text-[3.5rem] font-bold leading-none tracking-[-0.05em] text-[var(--dashboard-primary)]">
-                82
-              </span>
-              <span className="font-headline text-2xl text-[rgba(0,96,73,0.6)]">%</span>
-            </div>
-          </div>
-
-          {/* Top Strength */}
-          <div className="dashboard-panel dashboard-ghost-top px-8 py-8">
-            <p className="font-dashboard-mono mb-4 text-[10px] uppercase tracking-[0.28em] text-[#7e8f89]">Top Strength</p>
-            <div className="flex flex-col">
-              <span className="font-headline mb-2 text-xl font-bold text-[#172b26]">Questioning</span>
-              <div className="flex items-baseline gap-1">
-                <span className="font-headline text-3xl font-bold leading-none tracking-[-0.05em] text-[var(--dashboard-primary)]">
-                  94
-                </span>
-                <span className="font-dashboard-mono text-xs text-[#7f938a]">/100</span>
+        {/* Filters Section */}
+        <section className="mb-[20px] mt-4">
+          <div className="dashboard-panel dashboard-ghost-top rounded-[28px] px-8 py-7">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="font-dashboard-mono text-[10px] uppercase tracking-[0.28em] text-[#7e8f89]">
+                  Dashboard Filters
+                </p>
+                <h3 className="font-headline mt-3 text-2xl font-bold text-[var(--dashboard-primary)]">
+                  Real-time analytics and evidence-based insights
+                </h3>
               </div>
+
+              <button
+                onClick={() => setShowFilterPanel(!showFilterPanel)}
+                className="inline-flex items-center gap-2 self-start rounded-full bg-[var(--dashboard-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+              >
+                <span>🔍</span>
+                <span>{showFilterPanel ? 'Hide Filters' : 'Filters'}</span>
+              </button>
             </div>
-          </div>
 
-          {/* Area to Improve */}
-          <div className="dashboard-panel-soft dashboard-ghost-top px-8 py-8">
-            <p className="font-dashboard-mono mb-4 text-[10px] uppercase tracking-[0.28em] text-[#7e8f89]">Area to Improve</p>
-            <div className="flex flex-col">
-              <span className="font-headline mb-2 text-xl font-bold text-[#172b26]">Wait Time</span>
-              <div className="flex items-baseline gap-1">
-                <span className="font-headline text-3xl font-bold leading-none tracking-[-0.05em] text-[var(--dashboard-primary)]">
-                  8
-                </span>
-                <span className="font-dashboard-mono text-xs text-[#7f938a]">s avg</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Header with Filters */}
-        <div className="space-y-0 mb-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="font-headline text-3xl font-bold tracking-tight" style={{color: '#005239'}}>
-              Teacher Performance Dashboard
-            </h1>
-            <p className="mt-2 text-sm" style={{color: '#006d4a'}}>Real-time analytics and evidence-based insights</p>
-          </div>
-        </div>
-
-      {/* Filter Bar */}
-        <div className="rounded-2xl p-4 shadow-sm" style={{ background: 'linear-gradient(180deg, #006d4a 0%, #005239 100%)', border: '1px solid rgba(255,255,255,0.1)' }}>
-          {/* Filter Header */}
-          <div className="flex items-center justify-between mb-4">
-            <button
-              onClick={() => setShowFilterPanel(!showFilterPanel)}
-              className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-400 transition-colors"
-            >
-              <span>🔍</span> Filters
-            </button>
             {!showFilterPanel && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white">
+              <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-[rgba(0,76,58,0.08)] pt-5">
+                <span className="rounded-full bg-[rgba(238,243,239,0.88)] px-3 py-1.5 text-xs font-medium text-[#24433b]">
                   Subject: {filters.subject}
                 </span>
-                <span className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white">
+                <span className="rounded-full bg-[rgba(238,243,239,0.88)] px-3 py-1.5 text-xs font-medium text-[#24433b]">
                   {filters.week}
                 </span>
-                <span className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white">
+                <span className="rounded-full bg-[rgba(238,243,239,0.88)] px-3 py-1.5 text-xs font-medium text-[#24433b]">
                   {filters.grade}
                 </span>
-                <span className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white">
+                <span className="rounded-full bg-[rgba(238,243,239,0.88)] px-3 py-1.5 text-xs font-medium text-[#24433b]">
                   {filters.kpi}
                 </span>
               </div>
             )}
+
+            {showFilterPanel && (
+              <div className="filter-panel mt-6 space-y-5 border-t border-[rgba(0,76,58,0.08)] pt-5">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <div className="dashboard-panel-soft rounded-2xl p-4">
+                    <label className="mb-2 block text-sm font-semibold text-[#172b26]">
+                      Subject
+                    </label>
+                    <select
+                      value={tempFilters.subject}
+                      onChange={(e) => handleFilterChange('subject', e.target.value)}
+                      className="w-full rounded-xl border border-[rgba(0,76,58,0.12)] bg-white px-3 py-2 text-sm text-[#172b26] outline-none transition focus:border-[var(--dashboard-primary)] focus:ring-2 focus:ring-[rgba(0,96,73,0.12)]"
+                    >
+                      <option>Math</option>
+                      <option>Science</option>
+                      <option>English</option>
+                      <option>History</option>
+                    </select>
+                  </div>
+
+                  <div className="dashboard-panel-soft rounded-2xl p-4">
+                    <label className="mb-2 block text-sm font-semibold text-[#172b26]">
+                      Week
+                    </label>
+                    <select
+                      value={tempFilters.week}
+                      onChange={(e) => handleFilterChange('week', e.target.value)}
+                      className="w-full rounded-xl border border-[rgba(0,76,58,0.12)] bg-white px-3 py-2 text-sm text-[#172b26] outline-none transition focus:border-[var(--dashboard-primary)] focus:ring-2 focus:ring-[rgba(0,96,73,0.12)]"
+                    >
+                      <option>Week 1</option>
+                      <option>Week 2</option>
+                      <option>Week 3</option>
+                      <option>Week 4</option>
+                      <option>Week 5</option>
+                      <option>Week 6</option>
+                      <option>Week 7</option>
+                      <option>Week 8</option>
+                    </select>
+                  </div>
+
+                  <div className="dashboard-panel-soft rounded-2xl p-4">
+                    <label className="mb-2 block text-sm font-semibold text-[#172b26]">
+                      Grade
+                    </label>
+                    <select
+                      value={tempFilters.grade}
+                      onChange={(e) => handleFilterChange('grade', e.target.value)}
+                      className="w-full rounded-xl border border-[rgba(0,76,58,0.12)] bg-white px-3 py-2 text-sm text-[#172b26] outline-none transition focus:border-[var(--dashboard-primary)] focus:ring-2 focus:ring-[rgba(0,96,73,0.12)]"
+                    >
+                      <option>Grade 8</option>
+                      <option>Grade 9</option>
+                      <option>Grade 10</option>
+                      <option>Grade 11</option>
+                      <option>Grade 12</option>
+                    </select>
+                  </div>
+
+                  <div className="dashboard-panel-soft rounded-2xl p-4">
+                    <label className="mb-2 block text-sm font-semibold text-[#172b26]">
+                      KPI Status
+                    </label>
+                    <select
+                      value={tempFilters.kpi}
+                      onChange={(e) => handleFilterChange('kpi', e.target.value)}
+                      className="w-full rounded-xl border border-[rgba(0,76,58,0.12)] bg-white px-3 py-2 text-sm text-[#172b26] outline-none transition focus:border-[var(--dashboard-primary)] focus:ring-2 focus:ring-[rgba(0,96,73,0.12)]"
+                    >
+                      <option>Active KPI</option>
+                      <option>All KPIs</option>
+                      <option>High Performers</option>
+                      <option>Needs Improvement</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 border-t border-[rgba(0,76,58,0.08)] pt-5">
+                  <button
+                    onClick={handleResetFilters}
+                    className="rounded-xl border border-[rgba(0,76,58,0.16)] px-4 py-2 text-sm font-semibold text-[#24433b] transition hover:bg-[rgba(238,243,239,0.88)]"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    onClick={handleApplyFilters}
+                    className="rounded-xl bg-[var(--dashboard-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
+        </section>
 
-          {/* Expandable Filter Panel */}
-          {showFilterPanel && (
-            <div className="filter-panel space-y-4 mb-4 pt-4 border-t border-white/20">
-              {/* Subject Filter */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-white mb-2">
-                    Subject
-                  </label>
-                  <select
-                    value={tempFilters.subject}
-                    onChange={(e) => handleFilterChange('subject', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  >
-                    <option>Math</option>
-                    <option>Science</option>
-                    <option>English</option>
-                    <option>History</option>
-                  </select>
-                </div>
-
-                {/* Week Filter */}
-                <div>
-                  <label className="block text-sm font-semibold text-white mb-2">
-                    Week
-                  </label>
-                  <select
-                    value={tempFilters.week}
-                    onChange={(e) => handleFilterChange('week', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  >
-                    <option>Week 1</option>
-                    <option>Week 2</option>
-                    <option>Week 3</option>
-                    <option>Week 4</option>
-                    <option>Week 5</option>
-                    <option>Week 6</option>
-                    <option>Week 7</option>
-                    <option>Week 8</option>
-                  </select>
-                </div>
-
-                {/* Grade Filter */}
-                <div>
-                  <label className="block text-sm font-semibold text-white mb-2">
-                    Grade
-                  </label>
-                  <select
-                    value={tempFilters.grade}
-                    onChange={(e) => handleFilterChange('grade', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  >
-                    <option>Grade 8</option>
-                    <option>Grade 9</option>
-                    <option>Grade 10</option>
-                    <option>Grade 11</option>
-                    <option>Grade 12</option>
-                  </select>
-                </div>
-
-                {/* KPI Filter */}
-                <div>
-                  <label className="block text-sm font-semibold text-white mb-2">
-                    KPI Status
-                  </label>
-                  <select
-                    value={tempFilters.kpi}
-                    onChange={(e) => handleFilterChange('kpi', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  >
-                    <option>Active KPI</option>
-                    <option>All KPIs</option>
-                    <option>High Performers</option>
-                    <option>Needs Improvement</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-white/20">
-                <button
-                  onClick={handleResetFilters}
-                  className="px-4 py-2 text-sm font-semibold text-white border border-white/40 rounded-lg hover:bg-white/10 transition-colors"
-                >
-                  Reset
-                </button>
-                <button
-                  onClick={handleApplyFilters}
-                  className="px-4 py-2 text-sm font-semibold text-white bg-emerald-500 rounded-lg hover:bg-emerald-400 transition-colors"
-                >
-                  Apply
-                </button>
+        {/* Stats Section */}
+        <section className="mb-1 mt-0 grid grid-cols-1 gap-0 md:grid-cols-4" dir="ltr">
+          {stats.map((stat, idx) => (
+            <div
+              key={stat.label}
+              className={`${idx % 2 === 0 ? 'dashboard-panel' : 'dashboard-panel-soft'} dashboard-ghost-top px-8 py-8`}
+            >
+              <p className="font-dashboard-mono mb-4 text-[10px] uppercase tracking-[0.28em] text-[#7e8f89]">
+                {stat.label}
+              </p>
+              <div className="flex items-baseline gap-2">
+                <span className="font-headline text-[3.5rem] font-bold leading-none tracking-[-0.05em] text-[var(--dashboard-primary)]">
+                  {stat.value}
+                </span>
+                <span className={`text-sm ${stat.trendUp ? 'text-[#006d4a]' : 'text-[#9b4d4d]'}`}>
+                  {stat.trend}
+                </span>
               </div>
             </div>
-          )}
-
-          {/* Fixed Performance Overview Text */}
-          {!showFilterPanel && (
-            <div className="flex justify-between items-center pt-2 border-t border-white/10">
-              <span className="text-xs font-bold uppercase tracking-widest text-emerald-200">
-                Performance Overview
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-      </div>
-
-      {/* KPI Overview Cards */}
-      <section className="mb-0 -mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4" style={{marginBottom: '-8px'}}>
-        {stats.map((stat, idx) => (
-          <div
-            key={idx}
-            className="rounded-2xl p-4 shadow-sm transition-transform hover:shadow-md"
-            style={{ background: 'linear-gradient(180deg, #006d4a 0%, #005239 100%)', border: '1px solid rgba(255,255,255,0.1)' }}
-          >
-            <div className="mb-2 flex items-start justify-between">
-              <div
-                className="flex h-11 w-11 items-center justify-center rounded-2xl shadow-sm"
-                style={{ background: stat.iconBg }}
-              >
-                {stat.icon}
-              </div>
-              <span
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
-                  stat.trendUp
-                    ? 'bg-emerald-100 text-emerald-700'
-                    : 'bg-red-100 text-red-700'
-                }`}
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  {stat.trendUp
-                    ? <polyline points="1,8 5,2 9,8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                    : <polyline points="1,2 5,8 9,2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                  }
-                </svg>
-                {stat.trend}
-              </span>
-            </div>
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-emerald-200">
-              {stat.label}
-            </h3>
-            <p className="mt-1 text-3xl font-bold text-white">{stat.value}</p>
-          </div>
-        ))}
-      </section>
+          ))}
+        </section>
 
       {/* Heatmaps */}
-      <section className="mb-0 mt-2 space-y-2">
-        {/* Domains Score vs Weeks */}
-        <div className="rounded-3xl bg-gradient-to-br from-emerald-900 via-emerald-800 to-emerald-900 p-8 shadow-2xl border border-emerald-700">
-          <div className="mb-6 flex items-center justify-between">
+      <section className="mb-0 mt-6 space-y-6">
+        <div className="overflow-hidden rounded-[24px] border border-[rgba(187,202,191,0.4)] bg-white px-8 py-7 shadow-[0_-4px_24px_rgba(25,28,30,0.04)]">
+          <div className="mb-8 flex items-center justify-between gap-4">
             <div>
-              <h2 className="font-headline text-2xl font-black text-white">Domains Score vs Weeks</h2>
-              <p className="mt-2 text-sm text-emerald-200">8-week performance progression across all domains</p>
+              <h2 className="font-headline text-xl font-bold text-[#191c1e]">Domains Score vs Weeks</h2>
+              <p className="mt-1 text-sm text-[#6c7a71]">Distribution of domain performance across the latest eight weeks</p>
             </div>
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl shadow-lg" style={{background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 100%)', border: '1px solid rgba(255,255,255,0.15)'}}>
-              <svg width="30" height="30" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <linearGradient id="dsw-bar1" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#34d399"/>
-                    <stop offset="100%" stopColor="#059669"/>
-                  </linearGradient>
-                  <linearGradient id="dsw-bar2" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#fbbf24"/>
-                    <stop offset="100%" stopColor="#d97706"/>
-                  </linearGradient>
-                  <linearGradient id="dsw-bar3" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#818cf8"/>
-                    <stop offset="100%" stopColor="#6366f1"/>
-                  </linearGradient>
-                  <linearGradient id="dsw-bar4" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#fb923c"/>
-                    <stop offset="100%" stopColor="#ea580c"/>
-                  </linearGradient>
-                </defs>
-                {/* Bar chart */}
-                <rect x="2" y="16" width="5" height="11" rx="1.5" fill="url(#dsw-bar1)"/>
-                <rect x="9" y="10" width="5" height="17" rx="1.5" fill="url(#dsw-bar2)"/>
-                <rect x="16" y="13" width="5" height="14" rx="1.5" fill="url(#dsw-bar3)"/>
-                <rect x="23" y="6" width="5" height="21" rx="1.5" fill="url(#dsw-bar4)"/>
-                {/* Trend line */}
-                <polyline points="4.5,15 11.5,9 18.5,11 25.5,5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.7"/>
-                <circle cx="4.5" cy="15" r="1.5" fill="white" opacity="0.9"/>
-                <circle cx="11.5" cy="9" r="1.5" fill="white" opacity="0.9"/>
-                <circle cx="18.5" cy="11" r="1.5" fill="white" opacity="0.9"/>
-                <circle cx="25.5" cy="5" r="1.5" fill="white" opacity="0.9"/>
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[rgba(63,182,135,0.12)]">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 14.5 7 10.5l3 2.5 5-6" stroke="#006c4a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M13.5 7h3.5v3.5" stroke="#006c4a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
           </div>
-          <div className="space-y-3 overflow-x-auto pb-1">
-            {/* Week Labels Header */}
-            <div className="flex items-stretch gap-3">
-              <div className="w-40 flex-shrink-0 pr-3 flex items-center">
-                <div className="text-xs font-black uppercase tracking-widest text-emerald-300">Domain</div>
-              </div>
-              <div className="flex flex-1 gap-3">
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((week) => (
-                  <div key={`week-${week}`} className="flex-1 flex items-center justify-center flex-shrink-0">
-                    <span className="text-sm font-black text-emerald-200 bg-emerald-700 bg-opacity-50 w-full py-2 flex items-center justify-center rounded-lg border border-emerald-600">W{week}</span>
-                  </div>
+
+          <div className="overflow-x-auto pb-4">
+            <div className="w-max min-w-full">
+              <div
+                className="grid items-center gap-3"
+                style={{ gridTemplateColumns: `${heatmapLabelColumnWidth}px repeat(${heatmapWeekLabels.length}, ${heatmapCellSize}px)` }}
+              >
+                <div />
+                {heatmapWeekLabels.map((label) => (
+                  <span
+                    key={label}
+                    className="text-center font-dashboard-mono text-[10px] font-bold uppercase tracking-[0.22em] text-[#6c7a71]"
+                  >
+                    {label}
+                  </span>
                 ))}
-              </div>
-            </div>
-            {/* Divider */}
-            <div className="border-b border-emerald-700"></div>
-            {domains.map((domain, idx) => (
-              <div key={idx} className="flex items-stretch hover:bg-emerald-700 hover:bg-opacity-20 rounded-lg transition-all px-3 py-2 gap-3 group">
-                <div className="w-40 flex-shrink-0 pr-2 flex items-center">
-                  <p className="text-sm font-black text-white line-clamp-2 group-hover:text-emerald-300 transition-colors">{domain.name}</p>
-                </div>
-                <div className="flex flex-1 gap-3">
-                  {domain.weeks.map((value, weekIdx) => {
-                    let gradient, glowColor, textColor = '#fff';
-                    if (value >= 90) {
-                      gradient = 'linear-gradient(135deg, #059669 0%, #10b981 100%)';
-                      glowColor = '#059669';
-                    } else if (value >= 75) {
-                      gradient = 'linear-gradient(135deg, #10b981 0%, #34d399 100%)';
-                      glowColor = '#10b981';
-                    } else if (value >= 60) {
-                      gradient = 'linear-gradient(135deg, #d97706 0%, #fbbf24 100%)';
-                      glowColor = '#d97706';
-                    } else if (value >= 40) {
-                      gradient = 'linear-gradient(135deg, #dc2626 0%, #f87171 100%)';
-                      glowColor = '#dc2626';
-                    } else {
-                      gradient = 'linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%)';
-                      glowColor = '#7f1d1d';
-                    }
-                    return (
-                      <div
-                        key={weekIdx}
-                        className="flex-1 rounded-2xl transition-all hover:scale-110 cursor-pointer flex items-center justify-center text-sm font-black py-3 flex-shrink-0"
-                        style={{
-                          background: gradient,
-                          opacity: value / 100,
-                          boxShadow: `0 4px 14px ${glowColor}60, inset 0 1px 0 rgba(255,255,255,0.25)`,
-                          border: '1px solid rgba(255,255,255,0.15)',
-                          color: textColor,
-                        }}
-                        title={`Week ${weekIdx + 1}: ${value}%`}
+
+                {heatmapDomains.map((domain) => (
+                  <React.Fragment key={domain.domainCode || domain.name}>
+                    <div className="pr-4">
+                      <p
+                        className="whitespace-nowrap text-sm font-semibold leading-5 text-[#191c1e]"
+                        title={domain.domainCode ? `${domain.domainCode} - ${domain.name}` : domain.name}
                       >
-                        <span className="drop-shadow font-black">{value}%</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Domains vs Subject - Professional Performance Matrix */}
-        <div className="rounded-3xl bg-gradient-to-br from-emerald-900 via-emerald-800 to-emerald-900 p-8 shadow-2xl border border-emerald-700">
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-2">
-              <div>
-                <h2 className="font-headline text-3xl font-black text-white">Domain vs Subject</h2>
-                <p className="text-emerald-200 mt-2">Real-time domain performance across all subjects - Track progress instantly</p>
-              </div>
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl shadow-lg" style={{background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 100%)', border: '1px solid rgba(255,255,255,0.15)'}}>
-                <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    <linearGradient id="pm-grad1" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="#34d399"/>
-                      <stop offset="100%" stopColor="#059669"/>
-                    </linearGradient>
-                    <linearGradient id="pm-grad2" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="#fbbf24"/>
-                      <stop offset="100%" stopColor="#f59e0b"/>
-                    </linearGradient>
-                    <linearGradient id="pm-grad3" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="#f87171"/>
-                      <stop offset="100%" stopColor="#ef4444"/>
-                    </linearGradient>
-                    <linearGradient id="pm-grad4" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="#818cf8"/>
-                      <stop offset="100%" stopColor="#6366f1"/>
-                    </linearGradient>
-                  </defs>
-                  {/* Grid matrix dots */}
-                  <rect x="3" y="3" width="8" height="8" rx="2" fill="url(#pm-grad1)" opacity="0.95"/>
-                  <rect x="13" y="3" width="8" height="8" rx="2" fill="url(#pm-grad1)" opacity="0.6"/>
-                  <rect x="23" y="3" width="8" height="8" rx="2" fill="url(#pm-grad2)" opacity="0.8"/>
-                  <rect x="3" y="13" width="8" height="8" rx="2" fill="url(#pm-grad2)" opacity="0.7"/>
-                  <rect x="13" y="13" width="8" height="8" rx="2" fill="url(#pm-grad1)" opacity="0.95"/>
-                  <rect x="23" y="13" width="8" height="8" rx="2" fill="url(#pm-grad3)" opacity="0.85"/>
-                  <rect x="3" y="23" width="8" height="8" rx="2" fill="url(#pm-grad3)" opacity="0.6"/>
-                  <rect x="13" y="23" width="8" height="8" rx="2" fill="url(#pm-grad4)" opacity="0.8"/>
-                  <rect x="23" y="23" width="8" height="8" rx="2" fill="url(#pm-grad1)" opacity="0.9"/>
-                </svg>
-              </div>
-            </div>
-            <div className="h-1 w-16 bg-gradient-to-r from-amber-300 via-emerald-300 to-rose-300 rounded-full"></div>
-          </div>
-
-          {/* Stats Summary */}
-          <div className="grid grid-cols-3 gap-4 mb-8">
-            <div className="bg-gradient-to-br from-emerald-500 to-emerald-400 rounded-2xl p-4 border border-emerald-300 shadow-lg shadow-emerald-400/50">
-              <div className="text-sm font-semibold text-white uppercase tracking-wider font-black">Excellent</div>
-              <div className="text-3xl font-black text-white mt-1 drop-shadow-lg">
-                {Math.floor(Math.random() * 30) + 50}%
-              </div>
-            </div>
-            <div className="bg-gradient-to-br from-amber-500 to-amber-400 rounded-2xl p-4 border border-amber-300 shadow-lg shadow-amber-400/50">
-              <div className="text-sm font-semibold text-white uppercase tracking-wider font-black">Good</div>
-              <div className="text-3xl font-black text-white mt-1 drop-shadow-lg">
-                {Math.floor(Math.random() * 30) + 20}%
-              </div>
-            </div>
-            <div className="bg-gradient-to-br from-rose-500 to-rose-400 rounded-2xl p-4 border border-rose-300 shadow-lg shadow-rose-400/50">
-              <div className="text-sm font-semibold text-white uppercase tracking-wider font-black">Needs Work</div>
-              <div className="text-3xl font-black text-white mt-1 drop-shadow-lg">
-                {Math.floor(Math.random() * 30) + 10}%
-              </div>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <div className="space-y-4 min-w-max">
-              {/* Header Row */}
-              <div className="flex items-center gap-3 pb-4 border-b border-emerald-700">
-                <div className="w-40 pr-4 flex-shrink-0">
-                  <div className="text-xs font-black uppercase tracking-widest text-emerald-300">📌 Domain</div>
-                </div>
-                <div className="flex gap-3">
-                  {subjects.map((sub, idx) => (
-                    <div key={idx} className="w-24 text-center flex-shrink-0">
-                      <div className="text-xs font-black uppercase tracking-wider text-emerald-200 whitespace-nowrap">
-                        {sub.name}
-                      </div>
+                        {domain.domainCode ? `${domain.domainCode} - ${domain.name}` : domain.name}
+                      </p>
                     </div>
-                  ))}
-                </div>
-              </div>
 
-              {/* Data Rows */}
-              {domains.map((domain, idx) => (
-                <div key={idx} className="flex items-start gap-3 pb-4 group hover:bg-emerald-700 hover:bg-opacity-30 px-4 py-3 rounded-2xl transition-all duration-300">
-                  <div className="w-40 pr-4 flex-shrink-0 pt-2">
-                    <div className="text-sm font-black text-white leading-snug group-hover:text-emerald-300 transition-colors">
-                      {domain.name}
-                    </div>
-                  </div>
-                  <div className="flex gap-3">
-                    {subjects.map((sub, subIdx) => {
-                      const value = domain.weeks?.[subIdx] ?? Math.floor(Math.random() * 71) + 30;
-                      const isExcellent = value >= 85;
-                      const isGood = value >= 70;
-                      const opacity = value / 100;
-                      
-                      // Vibrant, bright color scheme with maximum shine
-                      let bgColor = '#ff6b9d'; // rose vibrant (needs improvement)
-                      let bgColorLight = '#ff85b3'; // rose light
-                      if (isGood && !isExcellent) {
-                        bgColor = '#ffc107'; // amber vibrant (good)
-                        bgColorLight = '#ffd54f'; // amber light
-                      }
-                      if (isExcellent) {
-                        bgColor = '#00e5a0'; // emerald vibrant (excellent)
-                        bgColorLight = '#26f0ce'; // emerald light
-                      }
-                      
+                    {domain.weeks.map((value, weekIdx) => {
+                      const tone = getHeatmapTone(value);
+
                       return (
                         <div
-                          key={subIdx}
-                          className={`
-                            w-24 h-24 rounded-2xl flex flex-col items-center justify-center
-                            transition-all duration-300 cursor-pointer flex-shrink-0
-                            border-2 border-white border-opacity-40
-                            shadow-lg hover:shadow-2xl hover:scale-110
-                            group/card relative
-                            backdrop-blur-sm
-                          `}
-                          style={{ 
-                            backgroundColor: bgColor,
-                            opacity: opacity,
-                            boxShadow: `0 0 15px ${bgColor}60, inset 0 1px 0 rgba(255,255,255,0.3)`
+                          key={`${domain.domainCode || domain.name}-week-${weekIdx}`}
+                          className="aspect-square rounded-xl border transition-transform duration-200 hover:scale-[1.03]"
+                          style={{
+                            backgroundColor: tone.bg,
+                            borderColor: tone.border,
+                            color: tone.text,
                           }}
-                          title={`${domain.name} - ${sub.name}: ${value}%`}
+                          title={`${domain.name} - Week ${weekIdx + 1}: ${value}%`}
                         >
-                          {/* Score Text */}
-                          <div className="text-2xl font-black text-white drop-shadow-lg">
-                            {value}%
+                          <div className="flex h-full items-center justify-center">
+                            <span className="font-headline text-base font-bold">{value}%</span>
                           </div>
-                          
-                          {/* Grade Badge */}
-                          <div className="text-xs font-black text-white opacity-90 drop-shadow-md mt-0.5">
-                            {isExcellent ? '⭐ Excellent' : isGood ? '✓ Good' : '⚠ Improve'}
-                          </div>
-
-                          {/* Hover Info */}
-                          <div className="
-                            absolute -top-14 left-1/2 transform -translate-x-1/2
-                            bg-emerald-950 text-white px-4 py-2 rounded-xl
-                            text-xs font-bold whitespace-nowrap
-                            opacity-0 group-hover/card:opacity-100
-                            transition-opacity duration-200
-                            pointer-events-none border border-emerald-700
-                            shadow-xl
-                          ">
-                            {domain.name} → {sub.name}
-                          </div>
-
-                          {/* Corner indicator */}
-                          <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-white opacity-40"></div>
                         </div>
                       );
                     })}
-                  </div>
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-[rgba(187,202,191,0.3)] pt-6">
+            <span className="font-dashboard-mono text-[10px] uppercase tracking-[0.28em] text-[#6c7a71]">
+              Intensity Scale
+            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              {heatmapLegend.map((item) => (
+                <div key={item.label} className="flex items-center gap-2">
+                  <div
+                    className="h-3.5 w-3.5 rounded-[4px] border"
+                    style={{ backgroundColor: item.bg, borderColor: item.border }}
+                  />
+                  <span className="text-[11px] font-medium text-[#6c7a71]">
+                    {item.label} ({item.range})
+                  </span>
                 </div>
               ))}
             </div>
           </div>
+        </div>
 
-          {/* Enhanced Legend */}
-          <div className="mt-8 pt-6 border-t border-emerald-700 flex flex-wrap items-center gap-6">
-            <div className="flex items-center gap-3 group">
-              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-lg group-hover:scale-110 transition-transform"></div>
-              <div>
-                <div className="text-xs font-bold uppercase text-emerald-300">Excellent</div>
-                <div className="text-sm font-semibold text-emerald-200">85-100%</div>
+        <div className="overflow-hidden rounded-[24px] border border-[rgba(187,202,191,0.4)] bg-[#f2f4f6] px-8 py-7 shadow-[0_-4px_24px_rgba(25,28,30,0.04)]">
+          <div className="mb-8 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="font-headline text-xl font-bold text-[#191c1e]">Domain vs Subject</h2>
+              <p className="mt-1 text-sm text-[#6c7a71]">Cross-view of domain performance across your available subjects</p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[rgba(0,108,74,0.08)]">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="3" width="4" height="4" rx="1" fill="#85f8c4" />
+                <rect x="8" y="3" width="4" height="4" rx="1" fill="#3fb687" />
+                <rect x="13" y="3" width="4" height="4" rx="1" fill="#006c4a" />
+                <rect x="3" y="8" width="4" height="4" rx="1" fill="#e0e3e5" />
+                <rect x="8" y="8" width="4" height="4" rx="1" fill="#85f8c4" />
+                <rect x="13" y="8" width="4" height="4" rx="1" fill="#ffdadb" />
+                <rect x="3" y="13" width="4" height="4" rx="1" fill="#3fb687" />
+                <rect x="8" y="13" width="4" height="4" rx="1" fill="#006c4a" />
+                <rect x="13" y="13" width="4" height="4" rx="1" fill="#85f8c4" />
+              </svg>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto pb-4">
+            <div className="w-max min-w-full">
+              <div
+                className="grid items-center gap-3"
+                style={{ gridTemplateColumns: `${heatmapLabelColumnWidth}px repeat(${heatmapSubjects.length}, ${heatmapCellSize}px)` }}
+              >
+                <div />
+                {heatmapSubjects.map((subject) => (
+                  <span
+                    key={subject.id || subject.name}
+                    className="whitespace-nowrap px-1 text-center font-dashboard-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#6c7a71]"
+                  >
+                    {subject.name}
+                  </span>
+                ))}
+
+                {heatmapDomains.map((domain, domainIdx) => (
+                  <React.Fragment key={`${domain.domainCode || domain.name}-subject-row`}>
+                    <div className="pr-4">
+                      <p
+                        className="whitespace-nowrap text-sm font-semibold leading-5 text-[#191c1e]"
+                        title={domain.domainCode ? `${domain.domainCode} - ${domain.name}` : domain.name}
+                      >
+                        {domain.domainCode ? `${domain.domainCode} - ${domain.name}` : domain.name}
+                      </p>
+                    </div>
+
+                    {(subjectHeatmapMatrix[domainIdx] || []).map((value, subjectIdx) => {
+                      const tone = getHeatmapTone(value);
+
+                      return (
+                        <div
+                          key={`${domain.domainCode || domain.name}-subject-${subjectIdx}`}
+                          className="aspect-square rounded-xl border transition-transform duration-200 hover:scale-[1.03]"
+                          style={{
+                            backgroundColor: tone.bg,
+                            borderColor: tone.border,
+                            color: tone.text,
+                          }}
+                          title={`${domain.name} - ${heatmapSubjects[subjectIdx]?.name}: ${value}%`}
+                        >
+                          <div className="flex h-full flex-col items-center justify-center text-center">
+                            <span className="font-headline text-sm font-bold leading-none">{value}%</span>
+                            <span className="mt-0.5 text-[8px] font-semibold uppercase leading-none tracking-[0.08em] opacity-80">
+                              {tone.label}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
               </div>
             </div>
-            <div className="flex items-center gap-3 group">
-              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-amber-300 to-amber-500 shadow-lg group-hover:scale-110 transition-transform"></div>
-              <div>
-                <div className="text-xs font-bold uppercase text-emerald-300">Good</div>
-                <div className="text-sm font-semibold text-emerald-200">70-84%</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 group">
-              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-rose-300 to-rose-500 shadow-lg group-hover:scale-110 transition-transform"></div>
-              <div>
-                <div className="text-xs font-bold uppercase text-emerald-300">Needs Improvement</div>
-                <div className="text-sm font-semibold text-emerald-200">0-69%</div>
-              </div>
+          </div>
+
+          <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-[rgba(187,202,191,0.3)] pt-6">
+            <span className="font-dashboard-mono text-[10px] uppercase tracking-[0.28em] text-[#6c7a71]">
+              Performance Scale
+            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              {heatmapLegend.map((item) => (
+                <div key={`subject-${item.label}`} className="flex items-center gap-2">
+                  <div
+                    className="h-3.5 w-3.5 rounded-[4px] border"
+                    style={{ backgroundColor: item.bg, borderColor: item.border }}
+                  />
+                  <span className="text-[11px] font-medium text-[#6c7a71]">
+                    {item.label}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -1392,7 +1252,10 @@ const TeacherDashboard = () => {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {sampleEvidences.map((evidence, idx) => (
-                  <tr key={idx} className="transition-colors hover:bg-gray-50">
+                  <tr
+                    key={idx}
+                    className={`${idx % 2 === 0 ? 'bg-white' : 'bg-[#f3f5f4]'} transition-colors hover:bg-gray-50`}
+                  >
                     <td className="px-6 py-5 font-headline font-bold text-gray-900">{evidence.rank}</td>
                     <td className="px-6 py-5">
                       <div className="flex flex-col">
@@ -1418,6 +1281,7 @@ const TeacherDashboard = () => {
           </div>
         </div>
       </section>
+      </div>
     </ProtectedLayout>
   );
 };

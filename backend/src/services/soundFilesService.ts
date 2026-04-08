@@ -12,6 +12,7 @@ interface SoundFile {
   createdBy: string;
   note?: string;
   classId?: number;
+  dayOfWeek?: string;
 }
 
 const syncSoundFilesIdSequence = async () => {
@@ -76,6 +77,7 @@ export const createSoundFile = async (data: SoundFile) => {
       createdBy: data.createdBy,
       note: data.note || null,
       ...(data.classId != null ? { class_id: data.classId } : {}),
+      ...(data.dayOfWeek ? { day_of_week: data.dayOfWeek } : {}),
     });
 
     // Keep SERIAL sequence aligned with imported/migrated data before insert.

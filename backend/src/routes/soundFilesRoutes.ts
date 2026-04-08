@@ -151,6 +151,7 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
       createdBy: userId,
       note: (req.body as any).note || null,
       classId,
+      dayOfWeek,
     });
 
     // Log: file received and record created
@@ -922,8 +923,8 @@ router.post('/:id/retranscribe', async (req: Request, res: Response) => {
     await executeQuery('DELETE FROM lecture WHERE file_id = $1', [fileId]);
     console.log(`[Retranscribe] Cleared existing fragments and lectures for file_id=${fileId}`);
 
-    const classId = req.body.class_id ? Number(req.body.class_id) : undefined;
-    const dayOfWeek = req.body.day_of_week || undefined;
+    const classId = req.body.class_id ? Number(req.body.class_id) : (soundFile.class_id ? Number(soundFile.class_id) : undefined);
+    const dayOfWeek = req.body.day_of_week || soundFile.day_of_week || undefined;
 
     // Resolve file path
     let audioPath = path.isAbsolute(soundFile.filepath)

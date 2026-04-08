@@ -356,11 +356,10 @@ const getAllKPIsForEvaluation = async () => {
       k.kpi_name,
       k.kpi_description,
       d.domain_id,
-      d.domain_code,
       d.domain_name,
       d.domain_description
     FROM kpis k
-    LEFT JOIN domains d ON k.domain_id = d.domain_id
+    LEFT JOIN public.domains d ON k.domain_id = d.domain_id
     ORDER BY d.sort_order ASC, k.kpi_code ASC
   `;
   return await getMany(query);
