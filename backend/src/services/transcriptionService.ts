@@ -9,9 +9,17 @@ import fs from 'fs';
 import path from 'path';
 import { getMany, getOne, update } from '../helpers/database.js';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Lazy initialization: don't crash at startup if key is missing
+let _openai: OpenAI | null = null;
+function getOpenAIClient(): OpenAI {
+  if (!_openai) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY environment variable is not set');
+    }
+    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return _openai;
+}
 
 interface FragmentWithOrder {
   fragment_id: number;
@@ -44,7 +52,7 @@ export const transcribeFragment = async (fragmentPath: string): Promise<string> 
 
     const fileStream = fs.createReadStream(fragmentPath);
     
-    const transcription = await openai.audio.transcriptions.create({
+    const transcription = await getOpenAIClient().audio.transcriptions.create({
       file: fileStream,
       model: 'whisper-1',
       language: 'ar', // Arabic language
