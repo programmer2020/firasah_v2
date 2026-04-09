@@ -2,7 +2,9 @@ import axios from 'axios';
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
-  (import.meta.env.DEV ? 'http://localhost:5000' : `${window.location.origin}`);
+  (import.meta.env.DEV ? 'http://localhost:5000' : '');
+
+console.log('[API] Base URL:', API_BASE_URL || '(same origin)');
 
 // Create axios instance with default config and UTF-8 encoding
 const api = axios.create({
