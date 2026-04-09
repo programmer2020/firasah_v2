@@ -26,6 +26,7 @@ export const AudioUpload = () => {
   const [selectedClassId, setSelectedClassId] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [shouldDenoise, setShouldDenoise] = useState(null);
+  const [modalError, setModalError] = useState('');
 
   // Uploaded files list
   const [uploadedFiles, setUploadedFiles] = useState([]);
@@ -158,6 +159,7 @@ export const AudioUpload = () => {
     setSelectedFile(file);
     setSelectedClassId('');
     setSelectedDate('');
+    setModalError('');
     setShowModal(true);
   };
 
@@ -172,16 +174,34 @@ export const AudioUpload = () => {
 
   const handleModalUpload = async () => {
     if (!selectedFile) return;
+    setModalError('');
     if (!selectedClassId) {
-      setError('Please select a class');
+      setModalError('يرجى اختيار الفصل');
       return;
     }
     if (!selectedDate) {
-      setError('Please select a date');
+      setModalError('يرجى اختيار التاريخ');
       return;
     }
 
+    // Validate: check if the selected day exists in section_time_slots for this class
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const selectedDay = dayNames[new Date(selectedDate).getDay()];
+    try {
+      const res = await api.get(`/api/schedule/time-slots/${selectedClassId}`);
+      const allSlots = res.data?.data || res.data || [];
+      const daySlots = allSlots.filter(s => s.day_of_week === selectedDay);
+      if (!daySlots.length) {
+        const availableDays = [...new Set(allSlots.map(s => s.day_of_week))].join(', ');
+        setModalError(`لا يوجد جدول حصص ليوم ${selectedDay} للفصل المختار. الأيام المتاحة: ${availableDays}`);
+        return;
+      }
+    } catch {
+      // If API fails, skip validation and proceed
+    }
+
     setShowModal(false);
+    setModalError('');
     // Show denoise modal before proceeding with upload
     setShowDenoiseModal(true);
   };
@@ -538,7 +558,7 @@ export const AudioUpload = () => {
                 </label>
                 <select
                   value={selectedClassId}
-                  onChange={(e) => setSelectedClassId(e.target.value)}
+                  onChange={(e) => { setSelectedClassId(e.target.value); setModalError(''); }}
                   className="w-full px-4 py-3 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none transition-colors"
                   style={{border: '1.5px solid #a7f3d0'}}
                   onFocus={e => e.target.style.borderColor = '#006d4a'}
@@ -561,13 +581,20 @@ export const AudioUpload = () => {
                 <input
                   type="date"
                   value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
+                  onChange={(e) => { setSelectedDate(e.target.value); setModalError(''); }}
                   className="w-full px-4 py-3 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none transition-colors"
                   style={{border: '1.5px solid #a7f3d0'}}
                   onFocus={e => e.target.style.borderColor = '#006d4a'}
                   onBlur={e => e.target.style.borderColor = '#a7f3d0'}
                 />
               </div>
+
+              {/* Modal Error Message */}
+              {modalError && (
+                <div className="mb-4 p-3 rounded-xl text-sm font-semibold text-red-700 bg-red-50 border border-red-200">
+                  {modalError}
+                </div>
+              )}
 
               {/* Modal Actions */}
               <div className="flex gap-3">

@@ -868,13 +868,26 @@ export const transcribeAndSave = async (
         { lecture_order: lo, lecture_id: lid, transcript_length: fullTranscript.length, fragments: lectureFragments.length }
       );
 
-      // Run KPI evaluation once per lecture — only after full transcript is ready
+      // Run KPI evaluation per fragment — each evidence gets the fragment's specific time
       if (fullTranscript.trim()) {
         setImmediate(async () => {
           try {
-            console.log(`[Evaluation] 🔄 Starting KPI evaluation for lecture_id=${lid} (order=${lo})...`);
-            const evaluations = await evaluateSpeechAgainstKPIs(fullTranscript, lid);
-            console.log(`[Evaluation] ✅ lecture_id=${lid}: ${evaluations.length} evidence record(s) created`);
+            const frags = await getMany(
+              'SELECT transcript, start_time, end_time FROM fragments WHERE file_id = $1 AND lecture_order = $2 AND transcript != $3 ORDER BY fragment_order',
+              [fileId, lo, '[transcription_pending]']
+            );
+            for (const frag of frags) {
+              const fragStart = Number(frag.start_time ?? 0);
+              const fragEnd = Number(frag.end_time ?? 0);
+              if (!frag.transcript?.trim()) continue;
+              console.log(`[Evaluation] 🔄 Evaluating lecture_id=${lid}, fragment ${fragStart}s-${fragEnd}s...`);
+              const evals = await evaluateSpeechAgainstKPIs(
+                frag.transcript, lid,
+                undefined, undefined,
+                fragStart, fragEnd
+              );
+              console.log(`[Evaluation] ✅ lecture_id=${lid} [${fragStart}s-${fragEnd}s]: ${evals.length} evidence record(s)`);
+            }
           } catch (evalErr) {
             console.error(`[Evaluation] ⚠️ lecture_id=${lid}:`, evalErr);
           }

@@ -8,12 +8,6 @@ const MenuIcon = () => (
   </svg>
 );
 
-const SearchIcon = () => (
-  <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
-  </svg>
-);
-
 const BellIcon = () => (
   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path d="M14.86 17H9.14m9.3 0H19a1 1 0 0 0 .8-1.6l-1.3-1.73a2 2 0 0 1-.4-1.2V10a6.1 6.1 0 0 0-4.5-5.89V3.5a1.6 1.6 0 0 0-3.2 0v.61A6.1 6.1 0 0 0 5.9 10v2.47a2 2 0 0 1-.4 1.2L4.2 15.4A1 1 0 0 0 5 17h.56m9.3 0a2.86 2.86 0 0 1-5.72 0" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
@@ -32,6 +26,18 @@ const ChevronRightIcon = () => (
     <path d="m9 6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
   </svg>
 );
+
+const getInitials = (name) => {
+  if (!name) return '?';
+
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+};
 
 const routeMeta = {
   '/dashboard': { section: 'Dashboard', title: 'Overview' },
@@ -76,17 +82,6 @@ const Header = ({ onOpenSidebar }) => {
         </div>
 
         <div className="flex items-center gap-4 sm:gap-6">
-          <label className="relative hidden w-64 items-center bg-[rgba(238,243,239,0.95)] px-4 py-2 text-[#62746d] lg:flex">
-            <span className="mr-2">
-              <SearchIcon />
-            </span>
-            <input
-              type="text"
-              placeholder="Search insights..."
-              className="w-full border-none bg-transparent p-0 text-xs outline-none placeholder:text-[#7f938a]"
-            />
-          </label>
-
           <div className="flex items-center gap-4 text-[#62746d]">
             <button type="button" className="hidden transition hover:text-[var(--dashboard-primary)] md:inline-flex" aria-label="Notifications">
               <BellIcon />
@@ -100,14 +95,26 @@ const Header = ({ onOpenSidebar }) => {
               <button
                 type="button"
                 onClick={() => setShowMenu((previous) => !previous)}
-                className="text-left text-xs font-bold text-[#172b26]"
+                className="flex items-center gap-3 text-left"
               >
-                {user?.name || 'User'}
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#0e7755] text-sm font-bold text-white shadow-[0_12px_24px_-18px_rgba(14,119,85,0.85)]">
+                  {getInitials(user?.name)}
+                </span>
+
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate text-sm font-semibold text-[#172b26]">
+                    {user?.email || user?.name || 'user@example.com'}
+                  </span>
+                  <span className="truncate text-[11px] text-[#7f938a]">
+                    {user?.name || user?.role || 'Account'}
+                  </span>
+                </span>
               </button>
 
               {showMenu && (
                 <div className="absolute right-0 mt-3 min-w-[180px] bg-white p-4 shadow-[0_24px_50px_-32px_rgba(16,24,40,0.55)]">
                   <p className="font-headline text-sm font-semibold text-[#172b26]">{user?.name || 'User'}</p>
+                  <p className="mt-1 text-xs text-[#62746d]">{user?.email || ''}</p>
                   <p className="font-dashboard-mono mt-1 text-[10px] uppercase tracking-[0.2em] text-[#7f938a]">{user?.role || ''}</p>
                   <div className="mt-4 border-t border-[#e5ece7] pt-4">
                     <button

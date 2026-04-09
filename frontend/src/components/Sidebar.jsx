@@ -1,140 +1,195 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 
-const IconDashboard = ({ className = 'h-5 w-5' }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
-    <path d="M3 13h8V3H3v10Zm10 8h8V3h-8v18ZM3 21h8v-6H3v6Z" />
+const IconHome = ({ className = 'h-6 w-6' }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24">
+    <path
+      d="M5 10.25 12 4l7 6.25V19a1 1 0 0 1-1 1h-3.75v-5.25h-4.5V20H6a1 1 0 0 1-1-1v-8.75Z"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.9"
+    />
   </svg>
 );
 
-const IconSchool = ({ className = 'h-5 w-5' }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
-    <path d="M12 3 2 9v2h20V9L12 3Zm0 4.18V7.82L6.9 10.5h10.2L12 7.18ZM4 13h2v5H4v-5Zm4 0h2v5H8v-5Zm4 0h2v5h-2v-5Zm4 0h2v5h-2v-5ZM2 20h20v2H2v-2Z" />
+const IconLectures = ({ className = 'h-6 w-6' }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24">
+    <path
+      d="M4.75 6.5h5.75a2.5 2.5 0 0 1 2.5 2.5V18.5H7.25a2.5 2.5 0 0 0-2.5 2.5V6.5Zm14.5 0H13.5v12h5.75A2.5 2.5 0 0 1 21.75 21V9a2.5 2.5 0 0 0-2.5-2.5Z"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.75"
+    />
+    <path
+      d="M8 10h2.5M8 13h2.5M16 10h-2.5M16 13h-2.5"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeWidth="1.55"
+    />
+  </svg>
+);
+
+const ChevronLeftIcon = ({ className = 'h-4 w-4' }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24">
+    <path d="m14.5 6-6 6 6 6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+  </svg>
+);
+
+const ChevronRightIcon = ({ className = 'h-4 w-4' }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24">
+    <path d="m9.5 6 6 6-6 6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
   </svg>
 );
 
 const CloseIcon = () => (
-  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+    <path d="m6 6 12 12M18 6 6 18" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
   </svg>
 );
 
-const getInitials = (name) => {
-  if (!name) return '?';
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
-};
+const BrandMark = () => (
+  <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#0e7755] shadow-[0_12px_28px_-16px_rgba(14,119,85,0.7)]">
+    <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24">
+      <path
+        d="M6.5 16.5 10.8 7.8a1 1 0 0 1 1.82.08l1.28 3.15a1 1 0 0 0 .93.63h2.7"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+      />
+      <path
+        d="M6.5 16.5h11"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.9"
+      />
+    </svg>
+  </div>
+);
 
-export const Sidebar = ({ isOpen, onClose, onCollapseChange }) => {
+const SidebarBrand = () => (
+  <div className="hidden lg:flex fixed left-0 top-0 z-50 h-[116px] w-64 items-start justify-between bg-[#f3f4f5] px-4 py-8 text-[#191c1d]">
+    <div className="flex items-center gap-3 overflow-hidden px-2">
+      <BrandMark />
+
+      <div className="overflow-hidden whitespace-nowrap">
+        <p className="font-body text-[2rem] font-black leading-none tracking-[-0.06em] text-[#111827]">
+          Firasah
+        </p>
+        <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-[#5f5e5e]">
+          Educational Insights
+        </p>
+      </div>
+    </div>
+  </div>
+);
+
+export const Sidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
-  const { user } = useAuth();
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const menuItems = [
-    { label: 'Dashboard', href: '/dashboard', icon: IconDashboard },
-    { label: 'Lectures', href: '/audio-upload', icon: IconSchool },
+    { label: 'Home', href: '/dashboard', icon: IconHome },
+    { label: 'Lectures', href: '/audio-upload', icon: IconLectures },
   ];
 
-  const activeIndex = Math.max(
-    0,
-    menuItems.findIndex((item) => location.pathname === item.href),
-  );
+  const showExpandedContent = isOpen || !isCollapsed;
 
-  const handleMouseEnter = () => {
-    setIsCollapsed(false);
-    if (onCollapseChange) onCollapseChange(false);
-  };
-
-  const handleMouseLeave = () => {
-    setIsCollapsed(true);
-    if (onCollapseChange) onCollapseChange(true);
+  const handleToggleCollapse = () => {
+    setIsCollapsed((currentValue) => !currentValue);
   };
 
   return (
     <>
+      <SidebarBrand />
+
       <button
         type="button"
         onClick={onClose}
-        className={`fixed inset-0 z-30 bg-[#0a1814]/45 backdrop-blur-sm transition lg:hidden ${
+        className={`fixed inset-0 z-40 bg-[rgba(25,28,29,0.2)] backdrop-blur-[2px] transition lg:hidden ${
           isOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
         }`}
         aria-label="Close sidebar overlay"
       />
 
       <aside
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        className={`emerald-sidebar fixed left-0 top-0 z-50 flex h-screen flex-col py-8 text-white transition-all duration-300 ${
-          isCollapsed ? 'w-20 collapsed' : 'w-64'
+        className={`fixed bottom-0 left-0 top-0 z-50 flex flex-col bg-[#f3f4f5] px-4 py-8 text-[#191c1d] shadow-[0_18px_40px_-28px_rgba(25,28,29,0.45)] transition-[width,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+          showExpandedContent ? 'w-[272px] lg:w-64' : 'w-[272px] lg:w-20'
         } ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0`}
+        } lg:top-[116px] lg:translate-x-0 lg:shadow-none`}
       >
-        <div className={`mb-12 flex items-start justify-between px-8 transition-opacity duration-300 ${isCollapsed ? 'opacity-0' : 'opacity-100'}`}>
-          <div>
-            <h1 className="font-headline text-2xl font-bold tracking-[-0.08em] text-white">FIRASAH</h1>
-            <p className="font-dashboard-mono text-[10px] uppercase tracking-[0.2em] text-white/60">Precision Intelligence</p>
+        <button
+          type="button"
+          onClick={handleToggleCollapse}
+          className="absolute -right-3 top-6 hidden h-7 w-7 items-center justify-center rounded-full bg-white text-[#727a64] shadow-[0_4px_20px_rgba(25,28,29,0.08)] ring-1 ring-[rgba(193,202,176,0.48)] transition hover:text-[#0e7755] lg:flex"
+          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {isCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+        </button>
+
+        <div className="flex min-h-0 flex-1 flex-col gap-8 font-body">
+          <div className="flex items-start justify-between gap-3 px-2 lg:hidden">
+            <div className="flex items-center gap-3 overflow-hidden">
+              <BrandMark />
+
+              <div className="overflow-hidden whitespace-nowrap">
+                <p className="font-body text-[2rem] font-black leading-none tracking-[-0.06em] text-[#111827]">
+                  Firasah
+                </p>
+                <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-[#5f5e5e]">
+                  Educational Insights
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#5f5e5e] shadow-[0_10px_24px_-18px_rgba(25,28,29,0.32)] transition hover:text-[#0e7755] lg:hidden"
+              aria-label="Close sidebar"
+            >
+              <CloseIcon />
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex h-10 w-10 items-center justify-center text-white/80 transition hover:text-white lg:hidden"
-            aria-label="Close sidebar"
-          >
-            <CloseIcon />
-          </button>
-        </div>
+          <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+            {menuItems.map((item) => {
+              const IconComponent = item.icon;
+              const isActive = location.pathname === item.href;
 
-        <nav className={`relative flex-1 space-y-1 px-4 transition-all duration-300 ${isCollapsed ? 'px-2' : 'px-4'}`}>
-          <div
-            className="absolute left-0 h-10 w-1 bg-[#F8F9FA] transition-transform duration-200"
-            style={{ transform: `translateY(${activeIndex * 52}px)` }}
-          />
+              return (
+                <Link
+                  key={item.href}
+                  to={item.href}
+                  onClick={onClose}
+                  title={item.label}
+                  className={`flex items-center rounded-xl px-3 py-3 transition-all duration-200 ${
+                    showExpandedContent ? 'gap-3' : 'justify-center'
+                  } ${
+                    isActive
+                      ? 'bg-[#0e7755] text-white shadow-[0_18px_32px_-22px_rgba(14,119,85,0.9)]'
+                      : 'text-[#64748b] hover:bg-[#e7e8e9] hover:text-[#191c1d]'
+                  }`}
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center">
+                    <IconComponent className="h-6 w-6" />
+                  </span>
 
-          {menuItems.map((item) => {
-            const IconComponent = item.icon;
-            const active = location.pathname === item.href;
+                  <span
+                    className={`overflow-hidden whitespace-nowrap text-[0.95rem] font-medium transition-all duration-300 ${
+                      showExpandedContent ? 'max-w-[160px] opacity-100' : 'max-w-0 opacity-0'
+                    }`}
+                  >
+                    {item.label}
+                  </span>
+                </Link>
+              );
+            })}
+          </nav>
 
-            return (
-              <Link
-                key={item.label}
-                to={item.href}
-                onClick={onClose}
-                className={`relative z-10 flex items-center px-4 py-3 rounded-md transition-all duration-200 ${
-                  isCollapsed ? 'justify-center' : ''
-                } ${
-                  active 
-                    ? 'active font-bold text-white' 
-                    : 'text-white/70 hover:text-white'
-                }`}
-                title={isCollapsed ? item.label : ''}
-              >
-                <IconComponent className={`transition-all duration-300 ${isCollapsed ? 'h-5 w-5' : 'h-5 w-5'} ${isCollapsed ? '' : 'mr-3'}`} />
-                <span className={`text-sm tracking-tight transition-opacity duration-300 ${isCollapsed ? 'hidden' : 'block'}`}>{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className={`mt-auto px-8 pt-8 transition-opacity duration-300 ${isCollapsed ? 'opacity-0' : 'opacity-100'}`}>
-          <div className="flex items-center gap-3 bg-white/5 p-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#d8ede4]">
-              <span className="font-headline text-xs font-bold text-[#006049]">
-                {getInitials(user?.name)}
-              </span>
-            </div>
-            <div className="overflow-hidden">
-              <p className="truncate text-xs font-bold text-white">{user?.name || 'User'}</p>
-              <p className="font-dashboard-mono text-[10px] text-white/50">{user?.role || ''}</p>
-            </div>
-          </div>
         </div>
       </aside>
     </>

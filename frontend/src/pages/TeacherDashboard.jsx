@@ -38,430 +38,65 @@ const TeacherDashboard = () => {
   const [loading, setLoading] = useState(true);
 
   const [filters, setFilters] = useState({
-    subject: 'Math',
-    week: 'Week 8',
-    grade: 'Grade 10',
-    kpi: 'Active KPI',
+    subject: 'All',
+    week: 'All',
+    grade: 'All',
+    kpi: 'All',
   });
 
   const [tempFilters, setTempFilters] = useState(filters);
 
-  // Fetch lecture statistics for current and previous month
+  // Fetch all 4 KPI card metrics in a single API call
   useEffect(() => {
-    const fetchLectureStats = async () => {
+    const fetchKpiCards = async () => {
       try {
         setLoading(true);
-        const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
+        console.log('📊 Fetching all KPI card stats from single endpoint...');
 
-        // Get current month dates (first day of current month to first day of next month)
-        const currentMonthStart = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
-        const currentMonthEnd = new Date(currentYear, currentMonth + 1, 1, 0, 0, 0, 0);
-
-        // Get previous month dates
-        const previousMonthStart = new Date(currentYear, currentMonth - 1, 1, 0, 0, 0, 0);
-        const previousMonthEnd = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
-
-        console.log('📊 Fetching lecture statistics...');
-        console.log('Current month:', currentMonthStart.toISOString(), 'to', currentMonthEnd.toISOString());
-        console.log('Previous month:', previousMonthStart.toISOString(), 'to', previousMonthEnd.toISOString());
-
-        // Fetch lectures for current month
-        const currentUrl = getApiUrl(`/api/lectures?startDate=${currentMonthStart.toISOString()}&endDate=${currentMonthEnd.toISOString()}`);
-        console.log('📡 Fetching current month from:', currentUrl);
-        
-        const currentResponse = await fetch(currentUrl, {
+        const url = getApiUrl('/api/dashboard/kpi-cards');
+        const response = await fetch(url, {
           method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
+          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+          credentials: 'include',
         });
-        
-        console.log('Response status:', currentResponse.status, currentResponse.statusText);
-        
-        if (!currentResponse.ok) {
-          const errorText = await currentResponse.text();
-          throw new Error(`Current month fetch failed: ${currentResponse.status} ${errorText}`);
-        }
-        
-        const currentData = await currentResponse.json();
-        console.log('✅ Current month data:', currentData);
-        const currentCount = currentData.count || currentData.data?.length || 0;
-        console.log('Current count:', currentCount);
 
-        // Fetch lectures for previous month
-        const previousUrl = getApiUrl(`/api/lectures?startDate=${previousMonthStart.toISOString()}&endDate=${previousMonthEnd.toISOString()}`);
-        console.log('📡 Fetching previous month from:', previousUrl);
-        
-        const previousResponse = await fetch(previousUrl, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
-        });
-        
-        console.log('Previous response status:', previousResponse.status, previousResponse.statusText);
-        
-        if (!previousResponse.ok) {
-          const errorText = await previousResponse.text();
-          throw new Error(`Previous month fetch failed: ${previousResponse.status} ${errorText}`);
-        }
-        
-        const previousData = await previousResponse.json();
-        console.log('✅ Previous month data:', previousData);
-        const previousCount = previousData.count || previousData.data?.length || 0;
-        console.log('Previous count:', previousCount);
-
-        // Calculate percentage change
-        let percentageChange = 0;
-        if (previousCount > 0) {
-          percentageChange = ((currentCount - previousCount) / previousCount) * 100;
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`KPI cards fetch failed: ${response.status} ${errorText}`);
         }
 
-        const isPositive = percentageChange >= 0;
-        const trendText = isPositive ? '+' : '';
-        const roundedPercent = Math.round(percentageChange);
+        const json = await response.json();
+        console.log('✅ KPI cards data:', json);
+        const cards = json.data || {};
 
-        console.log('📈 Stats calculated:', { currentCount, previousCount, percentageChange: `${trendText}${roundedPercent}%` });
+        // Helper: build stat object from a card entry
+        const toStat = (entry) => {
+          if (!entry) return { currentMonth: 0, previousMonth: 0, trend: '+0%', trendUp: true };
+          const pct = entry.mom_percent_change || 0;
+          const isPositive = pct >= 0;
+          return {
+            currentMonth: entry.current_value,
+            previousMonth: entry.previous_value,
+            trend: `${isPositive ? '+' : ''}${Math.round(pct)}%`,
+            trendUp: isPositive,
+          };
+        };
 
-        setLectureStats({
-          currentMonth: currentCount,
-          previousMonth: previousCount,
-          trend: `${trendText}${roundedPercent}%`,
-          trendUp: isPositive,
-        });
-        
-        console.log('✅ State updated successfully');
+        setLectureStats(toStat(cards['Lectures']));
+        setTeacherStats(toStat(cards['Teachers']));
+        setUploadStats(toStat(cards['Upload Hours']));
+        setUserStats(toStat(cards['User Sessions']));
+
+        console.log('✅ All KPI card stats updated');
       } catch (error) {
-        console.error('❌ Failed to fetch lecture statistics:', error);
-        console.error('Error message:', error.message);
-        console.error('Error stack:', error.stack);
-        console.log('Using fallback dummy data');
-        // Fallback to dummy data if API fails
-        const errorMsg = error.message ? error.message.substring(0, 50) : 'UNKNOWN ERROR';
-        setLectureStats({
-          currentMonth: 9999,
-          previousMonth: 9999,
-          trend: errorMsg,
-          trendUp: false,
-        });
+        console.error('❌ Failed to fetch KPI cards:', error);
+        // On error, leave current state as-is (zeros)
       } finally {
         setLoading(false);
       }
     };
 
-    fetchLectureStats();
-  }, []);
-
-  // Fetch teacher login statistics for current and previous month
-  useEffect(() => {
-    const fetchTeacherStats = async () => {
-      try {
-        const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
-
-        // Get current month dates
-        const currentMonthStart = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
-        const currentMonthEnd = new Date(currentYear, currentMonth + 1, 1, 0, 0, 0, 0);
-
-        // Get previous month dates
-        const previousMonthStart = new Date(currentYear, currentMonth - 1, 1, 0, 0, 0, 0);
-        const previousMonthEnd = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
-
-        console.log('👨‍🏫 Fetching teacher login statistics...');
-
-        // Fetch teachers for current month
-        const currentUrl = getApiUrl(`/api/teachers/logins/stats?startDate=${currentMonthStart.toISOString()}&endDate=${currentMonthEnd.toISOString()}`);
-        console.log('📡 Fetching current month teachers from:', currentUrl);
-        
-        const currentResponse = await fetch(currentUrl, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
-        });
-        
-        console.log('Teacher current response status:', currentResponse.status);
-        
-        if (!currentResponse.ok) {
-          const errorText = await currentResponse.text();
-          throw new Error(`Current month teacher fetch failed: ${currentResponse.status} ${errorText}`);
-        }
-        
-        const currentData = await currentResponse.json();
-        console.log('✅ Current month teachers:', currentData);
-        const currentCount = currentData.count || currentData.data?.length || 0;
-
-        // Fetch teachers for previous month
-        const previousUrl = getApiUrl(`/api/teachers/logins/stats?startDate=${previousMonthStart.toISOString()}&endDate=${previousMonthEnd.toISOString()}`);
-        console.log('📡 Fetching previous month teachers from:', previousUrl);
-        
-        const previousResponse = await fetch(previousUrl, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
-        });
-        
-        console.log('Teacher previous response status:', previousResponse.status);
-        
-        if (!previousResponse.ok) {
-          const errorText = await previousResponse.text();
-          throw new Error(`Previous month teacher fetch failed: ${previousResponse.status} ${errorText}`);
-        }
-        
-        const previousData = await previousResponse.json();
-        console.log('✅ Previous month teachers:', previousData);
-        const previousCount = previousData.count || previousData.data?.length || 0;
-
-        // Calculate percentage change
-        let percentageChange = 0;
-        if (previousCount > 0) {
-          percentageChange = ((currentCount - previousCount) / previousCount) * 100;
-        }
-
-        const isPositive = percentageChange >= 0;
-        const trendText = isPositive ? '+' : '';
-        const roundedPercent = Math.round(percentageChange);
-
-        console.log('📈 Teacher stats calculated:', { currentCount, previousCount, percentageChange: `${trendText}${roundedPercent}%` });
-
-        setTeacherStats({
-          currentMonth: currentCount,
-          previousMonth: previousCount,
-          trend: `${trendText}${roundedPercent}%`,
-          trendUp: isPositive,
-        });
-        
-        console.log('✅ Teacher stats updated successfully');
-      } catch (error) {
-        console.error('❌ Failed to fetch teacher statistics:', error);
-        // Fallback to dummy data if API fails
-        const errorMsg = error.message ? error.message.substring(0, 50) : 'UNKNOWN ERROR';
-        setTeacherStats({
-          currentMonth: 452,
-          previousMonth: 452,
-          trend: errorMsg,
-          trendUp: false,
-        });
-      }
-    };
-
-    fetchTeacherStats();
-  }, []);
-
-  // Fetch upload hours statistics for current and previous month
-  useEffect(() => {
-    const fetchUploadStats = async () => {
-      try {
-        const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
-
-        // Get current month dates
-        const currentMonthStart = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
-        const currentMonthEnd = new Date(currentYear, currentMonth + 1, 1, 0, 0, 0, 0);
-
-        // Get previous month dates
-        const previousMonthStart = new Date(currentYear, currentMonth - 1, 1, 0, 0, 0, 0);
-        const previousMonthEnd = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
-
-        console.log('📁 Fetching upload hours statistics...');
-
-        // Fetch upload hours for current month
-        const currentUrl = getApiUrl(`/api/sound-files/upload-hours/stats?startDate=${currentMonthStart.toISOString()}&endDate=${currentMonthEnd.toISOString()}`);
-        console.log('📡 Fetching current month upload hours from:', currentUrl);
-        
-        const currentResponse = await fetch(currentUrl, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
-        });
-        
-        console.log('Upload current response status:', currentResponse.status);
-        
-        if (!currentResponse.ok) {
-          const errorText = await currentResponse.text();
-          throw new Error(`Current month upload fetch failed: ${currentResponse.status} ${errorText}`);
-        }
-        
-        const currentData = await currentResponse.json();
-        console.log('✅ Current month upload:', currentData);
-        const currentCount = currentData.count || 0;
-
-        // Fetch upload hours for previous month
-        const previousUrl = getApiUrl(`/api/sound-files/upload-hours/stats?startDate=${previousMonthStart.toISOString()}&endDate=${previousMonthEnd.toISOString()}`);
-        console.log('📡 Fetching previous month upload hours from:', previousUrl);
-        
-        const previousResponse = await fetch(previousUrl, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
-        });
-        
-        console.log('Upload previous response status:', previousResponse.status);
-        
-        if (!previousResponse.ok) {
-          const errorText = await previousResponse.text();
-          throw new Error(`Previous month upload fetch failed: ${previousResponse.status} ${errorText}`);
-        }
-        
-        const previousData = await previousResponse.json();
-        console.log('✅ Previous month upload:', previousData);
-        const previousCount = previousData.count || 0;
-
-        // Calculate percentage change
-        let percentageChange = 0;
-        if (previousCount > 0) {
-          percentageChange = ((currentCount - previousCount) / previousCount) * 100;
-        }
-
-        const isPositive = percentageChange >= 0;
-        const trendText = isPositive ? '+' : '';
-        const roundedPercent = Math.round(percentageChange);
-
-        console.log('📈 Upload stats calculated:', { currentCount, previousCount, percentageChange: `${trendText}${roundedPercent}%` });
-
-        setUploadStats({
-          currentMonth: currentCount,
-          previousMonth: previousCount,
-          trend: `${trendText}${roundedPercent}%`,
-          trendUp: isPositive,
-        });
-        
-        console.log('✅ Upload stats updated successfully');
-      } catch (error) {
-        console.error('❌ Failed to fetch upload statistics:', error);
-        // Fallback to dummy data if API fails
-        const errorMsg = error.message ? error.message.substring(0, 50) : 'UNKNOWN ERROR';
-        setUploadStats({
-          currentMonth: 8920,
-          previousMonth: 8920,
-          trend: errorMsg,
-          trendUp: false,
-        });
-      }
-    };
-
-    fetchUploadStats();
-  }, []);
-
-  // Fetch user login statistics for current and previous month
-  useEffect(() => {
-    const fetchUserStats = async () => {
-      try {
-        const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
-
-        // Get current month dates
-        const currentMonthStart = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
-        const currentMonthEnd = new Date(currentYear, currentMonth + 1, 1, 0, 0, 0, 0);
-
-        // Get previous month dates
-        const previousMonthStart = new Date(currentYear, currentMonth - 1, 1, 0, 0, 0, 0);
-        const previousMonthEnd = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
-
-        console.log('👤 Fetching user login statistics...');
-
-        // Fetch users for current month
-        const currentUrl = getApiUrl(`/api/auth/logins/stats?startDate=${currentMonthStart.toISOString()}&endDate=${currentMonthEnd.toISOString()}`);
-        console.log('📡 Fetching current month users from:', currentUrl);
-        
-        const currentResponse = await fetch(currentUrl, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
-        });
-        
-        console.log('User current response status:', currentResponse.status);
-        
-        if (!currentResponse.ok) {
-          const errorText = await currentResponse.text();
-          throw new Error(`Current month user fetch failed: ${currentResponse.status} ${errorText}`);
-        }
-        
-        const currentData = await currentResponse.json();
-        console.log('✅ Current month users:', currentData);
-        const currentCount = currentData.count || 0;
-
-        // Fetch users for previous month
-        const previousUrl = getApiUrl(`/api/auth/logins/stats?startDate=${previousMonthStart.toISOString()}&endDate=${previousMonthEnd.toISOString()}`);
-        console.log('📡 Fetching previous month users from:', previousUrl);
-        
-        const previousResponse = await fetch(previousUrl, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
-        });
-        
-        console.log('User previous response status:', previousResponse.status);
-        
-        if (!previousResponse.ok) {
-          const errorText = await previousResponse.text();
-          throw new Error(`Previous month user fetch failed: ${previousResponse.status} ${errorText}`);
-        }
-        
-        const previousData = await previousResponse.json();
-        console.log('✅ Previous month users:', previousData);
-        const previousCount = previousData.count || 0;
-
-        // Calculate percentage change
-        let percentageChange = 0;
-        if (previousCount > 0) {
-          percentageChange = ((currentCount - previousCount) / previousCount) * 100;
-        }
-
-        const isPositive = percentageChange >= 0;
-        const trendText = isPositive ? '+' : '';
-        const roundedPercent = Math.round(percentageChange);
-
-        console.log('📈 User stats calculated:', { currentCount, previousCount, percentageChange: `${trendText}${roundedPercent}%` });
-
-        setUserStats({
-          currentMonth: currentCount,
-          previousMonth: previousCount,
-          trend: `${trendText}${roundedPercent}%`,
-          trendUp: isPositive,
-        });
-        
-        console.log('✅ User stats updated successfully');
-      } catch (error) {
-        console.error('❌ Failed to fetch user statistics:', error);
-        // Fallback to dummy data if API fails
-        const errorMsg = error.message ? error.message.substring(0, 50) : 'UNKNOWN ERROR';
-        setUserStats({
-          currentMonth: 12500,
-          previousMonth: 12500,
-          trend: errorMsg,
-          trendUp: false,
-        });
-      }
-    };
-
-    fetchUserStats();
+    fetchKpiCards();
   }, []);
 
   // Fetch 8 domains from database
@@ -862,37 +497,45 @@ const TeacherDashboard = () => {
 
   return (
     <ProtectedLayout>
-      <div className="mx-auto max-w-[1500px]">
+      <div className="mx-auto flex max-w-[1500px] flex-col gap-2">
         {/* Welcome Section */}
-        <section className="mb-0 pt-2 -mt-4">
+        <section className="welcome-section border border-[rgba(0,76,58,0.08)] rounded-2xl bg-white px-6 py-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
           <h2 className="font-headline mb-0 text-5xl font-bold text-[var(--dashboard-primary)]">
             Welcome back, {user?.name || 'User'}
           </h2>
-          <p className="max-w-2xl text-sm -mb-2" style={{color: '#006d4a'}}>
-            Your dashboard is ready with the latest insights from your lessons this week.
-          </p>
         </section>
 
         {/* Filters Section */}
-        <section className="mb-[20px] mt-4">
-          <div className="dashboard-panel dashboard-ghost-top rounded-[28px] px-8 py-7">
+        <section className="shrink-0 border border-[rgba(0,76,58,0.08)] rounded-2xl bg-white shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+          <div className="dashboard-panel dashboard-ghost-top h-auto px-8 py-7">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p className="font-dashboard-mono text-[10px] uppercase tracking-[0.28em] text-[#7e8f89]">
                   Dashboard Filters
                 </p>
-                <h3 className="font-headline mt-3 text-2xl font-bold text-[var(--dashboard-primary)]">
-                  Real-time analytics and evidence-based insights
-                </h3>
               </div>
 
-              <button
-                onClick={() => setShowFilterPanel(!showFilterPanel)}
-                className="inline-flex items-center gap-2 self-start rounded-full bg-[var(--dashboard-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-              >
-                <span>🔍</span>
-                <span>{showFilterPanel ? 'Hide Filters' : 'Filters'}</span>
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleResetFilters}
+                  className="rounded-xl border border-[rgba(0,76,58,0.16)] px-4 py-2 text-sm font-semibold text-[#24433b] transition hover:bg-[rgba(238,243,239,0.88)]"
+                >
+                  Reset
+                </button>
+                <button
+                  onClick={handleApplyFilters}
+                  className="rounded-xl bg-[var(--dashboard-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                >
+                  Apply
+                </button>
+                <button
+                  onClick={() => setShowFilterPanel(!showFilterPanel)}
+                  className="inline-flex items-center gap-2 self-start rounded-full bg-[var(--dashboard-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                >
+                  <span>🔍</span>
+                  <span>{showFilterPanel ? 'Hide Filters' : 'Filters'}</span>
+                </button>
+              </div>
             </div>
 
             {!showFilterPanel && (
@@ -924,6 +567,7 @@ const TeacherDashboard = () => {
                       onChange={(e) => handleFilterChange('subject', e.target.value)}
                       className="w-full rounded-xl border border-[rgba(0,76,58,0.12)] bg-white px-3 py-2 text-sm text-[#172b26] outline-none transition focus:border-[var(--dashboard-primary)] focus:ring-2 focus:ring-[rgba(0,96,73,0.12)]"
                     >
+                      <option>All</option>
                       <option>Math</option>
                       <option>Science</option>
                       <option>English</option>
@@ -940,6 +584,7 @@ const TeacherDashboard = () => {
                       onChange={(e) => handleFilterChange('week', e.target.value)}
                       className="w-full rounded-xl border border-[rgba(0,76,58,0.12)] bg-white px-3 py-2 text-sm text-[#172b26] outline-none transition focus:border-[var(--dashboard-primary)] focus:ring-2 focus:ring-[rgba(0,96,73,0.12)]"
                     >
+                      <option>All</option>
                       <option>Week 1</option>
                       <option>Week 2</option>
                       <option>Week 3</option>
@@ -960,6 +605,7 @@ const TeacherDashboard = () => {
                       onChange={(e) => handleFilterChange('grade', e.target.value)}
                       className="w-full rounded-xl border border-[rgba(0,76,58,0.12)] bg-white px-3 py-2 text-sm text-[#172b26] outline-none transition focus:border-[var(--dashboard-primary)] focus:ring-2 focus:ring-[rgba(0,96,73,0.12)]"
                     >
+                      <option>All</option>
                       <option>Grade 8</option>
                       <option>Grade 9</option>
                       <option>Grade 10</option>
@@ -977,6 +623,7 @@ const TeacherDashboard = () => {
                       onChange={(e) => handleFilterChange('kpi', e.target.value)}
                       className="w-full rounded-xl border border-[rgba(0,76,58,0.12)] bg-white px-3 py-2 text-sm text-[#172b26] outline-none transition focus:border-[var(--dashboard-primary)] focus:ring-2 focus:ring-[rgba(0,96,73,0.12)]"
                     >
+                      <option>All</option>
                       <option>Active KPI</option>
                       <option>All KPIs</option>
                       <option>High Performers</option>
@@ -984,28 +631,14 @@ const TeacherDashboard = () => {
                     </select>
                   </div>
                 </div>
-
-                <div className="flex justify-end gap-3 border-t border-[rgba(0,76,58,0.08)] pt-5">
-                  <button
-                    onClick={handleResetFilters}
-                    className="rounded-xl border border-[rgba(0,76,58,0.16)] px-4 py-2 text-sm font-semibold text-[#24433b] transition hover:bg-[rgba(238,243,239,0.88)]"
-                  >
-                    Reset
-                  </button>
-                  <button
-                    onClick={handleApplyFilters}
-                    className="rounded-xl bg-[var(--dashboard-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-                  >
-                    Apply
-                  </button>
-                </div>
               </div>
             )}
           </div>
         </section>
 
         {/* Stats Section */}
-        <section className="mb-1 mt-0 grid grid-cols-1 gap-0 md:grid-cols-4" dir="ltr">
+        <section className="relative z-10 grid grid-cols-1 gap-0 md:grid-cols-4 border border-[rgba(0,76,58,0.08)] rounded-2xl bg-white overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.05)]" dir="ltr"
+        >
           {stats.map((stat, idx) => (
             <div
               key={stat.label}
@@ -1027,7 +660,7 @@ const TeacherDashboard = () => {
         </section>
 
       {/* Heatmaps */}
-      <section className="mb-0 mt-6 space-y-6">
+      <section className="space-y-4 border border-[rgba(0,76,58,0.08)] rounded-2xl bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
         <div className="overflow-hidden rounded-[24px] border border-[rgba(187,202,191,0.4)] bg-white px-8 py-7 shadow-[0_-4px_24px_rgba(25,28,30,0.04)]">
           <div className="mb-8 flex items-center justify-between gap-4">
             <div>
@@ -1063,9 +696,9 @@ const TeacherDashboard = () => {
                     <div className="pr-4">
                       <p
                         className="whitespace-nowrap text-sm font-semibold leading-5 text-[#191c1e]"
-                        title={domain.domainCode ? `${domain.domainCode} - ${domain.name}` : domain.name}
+                        title={domain.name}
                       >
-                        {domain.domainCode ? `${domain.domainCode} - ${domain.name}` : domain.name}
+                        {domain.name}
                       </p>
                     </div>
 
@@ -1115,10 +748,10 @@ const TeacherDashboard = () => {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-[24px] border border-[rgba(187,202,191,0.4)] bg-[#f2f4f6] px-8 py-7 shadow-[0_-4px_24px_rgba(25,28,30,0.04)]">
+        <div className="overflow-hidden rounded-[24px] border border-[rgba(187,202,191,0.4)] bg-white px-8 py-7 shadow-[0_-4px_24px_rgba(25,28,30,0.04)]">
           <div className="mb-8 flex items-center justify-between gap-4">
             <div>
-              <h2 className="font-headline text-xl font-bold text-[#191c1e]">Domain vs Subject</h2>
+              <h2 className="font-headline text-xl font-bold text-[#191c1e]">Domains vs Subject</h2>
               <p className="mt-1 text-sm text-[#6c7a71]">Cross-view of domain performance across your available subjects</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[rgba(0,108,74,0.08)]">
@@ -1157,9 +790,9 @@ const TeacherDashboard = () => {
                     <div className="pr-4">
                       <p
                         className="whitespace-nowrap text-sm font-semibold leading-5 text-[#191c1e]"
-                        title={domain.domainCode ? `${domain.domainCode} - ${domain.name}` : domain.name}
+                        title={domain.name}
                       >
-                        {domain.domainCode ? `${domain.domainCode} - ${domain.name}` : domain.name}
+                        {domain.name}
                       </p>
                     </div>
 
@@ -1214,16 +847,18 @@ const TeacherDashboard = () => {
       </section>
 
       {/* Charts Section */}
-      <section className="mb-2 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <section className="border border-[rgba(0,76,58,0.08)] rounded-2xl bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+        <div className="space-y-4">
         {/* Teacher Performance Metrics - ECharts Mixed Bar & Line Chart */}
         <MixedChart />
 
         {/* Progress Tracking - ECharts Watermark Chart */}
         <WatermarkChart />
+        </div>
       </section>
 
       {/* Evidence Samples Table */}
-      <section>
+      <section className="border border-[rgba(0,76,58,0.08)] rounded-2xl bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
         <div className="mb-3">
           <h2 className="font-headline text-xl font-bold" style={{color: '#005239'}}>High-Confidence KPI Samples</h2>
           <p className="text-sm" style={{color: '#006d4a'}}>Top 10 AI-verified performance highlights</p>

@@ -27,7 +27,7 @@ const MixedChart = () => {
       legend: {
         top: 10,
         right: 20,
-        data: ['Engagement', 'Content', 'Clarity']
+        data: ['Engagement']
       },
       toolbox: {
         feature: {
@@ -100,63 +100,6 @@ const MixedChart = () => {
             color: '#22c55e',
             opacity: 0.8
           }
-        },
-        {
-          name: 'Content',
-          type: 'line',
-          yAxisIndex: 1,
-          data: [60, 65, 70, 75, 80, 85, 90, 88],
-          smooth: true,
-          lineStyle: {
-            color: '#4648d4',
-            width: 3
-          },
-          itemStyle: {
-            color: '#4648d4'
-          },
-          areaStyle: {
-            color: {
-              type: 'linear',
-              x: 0,
-              y: 0,
-              x2: 0,
-              y2: 1,
-              colorStops: [
-                { offset: 0, color: 'rgba(70, 72, 212, 0.3)' },
-                { offset: 1, color: 'rgba(70, 72, 212, 0.01)' }
-              ]
-            }
-          },
-          symbol: 'circle',
-          symbolSize: 6
-        },
-        {
-          name: 'Clarity',
-          type: 'line',
-          data: [80, 82, 85, 87, 89, 91, 92, 91],
-          smooth: true,
-          lineStyle: {
-            color: '#06b6d4',
-            width: 3
-          },
-          itemStyle: {
-            color: '#06b6d4'
-          },
-          areaStyle: {
-            color: {
-              type: 'linear',
-              x: 0,
-              y: 0,
-              x2: 0,
-              y2: 1,
-              colorStops: [
-                { offset: 0, color: 'rgba(6, 182, 212, 0.3)' },
-                { offset: 1, color: 'rgba(6, 182, 212, 0.01)' }
-              ]
-            }
-          },
-          symbol: 'circle',
-          symbolSize: 6
         }
       ]
     };

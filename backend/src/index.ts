@@ -28,6 +28,7 @@ import configRoutes from './routes/configRoutes.js';
 import fragmentRoutes from './routes/fragmentRoutes.js';
 import transcriptionRoutes from './routes/transcriptionRoutes.js';
 import uploadLogsRoutes from './routes/uploadLogsRoutes.js';
+import dashboardRoutes from './routes/dashboardRoutes.js';
 
 // Import middleware
 import { errorHandler } from './middleware/auth.js';
@@ -131,6 +132,7 @@ app.use('/api/sections', sectionsRoutes);
 app.use('/api/fragments', fragmentRoutes);
 app.use('/api/transcriptions', transcriptionRoutes);
 app.use('/api/upload-logs', uploadLogsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 /**
  * 404 Handler - API endpoint not found
