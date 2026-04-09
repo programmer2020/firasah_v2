@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+// Clean env value: trim whitespace and leading '=' that Railway may inject
+const rawEnv = (import.meta.env.VITE_API_BASE_URL || '').replace(/^[\s=]+/, '');
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
+  rawEnv ||
   (import.meta.env.DEV ? 'http://localhost:5000' : '');
 
 console.log('[API] Base URL:', API_BASE_URL || '(same origin)');
