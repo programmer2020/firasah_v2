@@ -1,138 +1,159 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';
+import { getApiUrl } from '../config/apiConfig';
 
 const MixedChart = () => {
   const chartRef = useRef(null);
-  let chartInstance = null;
+  const chartInstanceRef = useRef(null);
+  const [chartData, setChartData] = useState({ labels: [], scores: [], lectureCounts: [] });
 
+  // Fetch real data from dashboard endpoint
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        console.log('📊 Fetching teacher performance data...');
+        const response = await fetch(getApiUrl('/api/dashboard/teacher-performance'), {
+          method: 'GET',
+          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+          credentials: 'include',
+        });
+
+        if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
+
+        const json = await response.json();
+        console.log('✅ Teacher performance data:', json);
+
+        const weeks = json.data?.weeks || [];
+        setChartData({
+          labels: weeks.map((w) => w.week_label),
+          scores: weeks.map((w) => w.avg_score),
+          lectureCounts: weeks.map((w) => w.lecture_count),
+        });
+      } catch (error) {
+        console.error('❌ Failed to fetch teacher performance:', error);
+        // No fallback — chart will show empty
+        setChartData({ labels: [], scores: [], lectureCounts: [] });
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Render chart when data changes
   useEffect(() => {
     if (!chartRef.current) return;
 
-    // Initialize ECharts instance
-    if (!chartInstance) {
-      chartInstance = echarts.init(chartRef.current);
+    if (!chartInstanceRef.current) {
+      chartInstanceRef.current = echarts.init(chartRef.current);
     }
 
+    const { labels, scores, lectureCounts } = chartData;
+
     const option = {
-      color: ['#22c55e', '#4648d4', '#06b6d4'],
+      color: ['#006c4a', '#3fb687'],
       tooltip: {
         trigger: 'axis',
-        axisPointer: {
-          type: 'cross',
-          label: {
-            backgroundColor: '#6a7985'
+        axisPointer: { type: 'cross', label: { backgroundColor: '#6a7985' } },
+        formatter: (params) => {
+          let tip = `<b>${params[0]?.axisValue}</b><br/>`;
+          for (const p of params) {
+            tip += `${p.marker} ${p.seriesName}: <b>${p.value}</b><br/>`;
           }
-        }
+          return tip;
+        },
       },
       legend: {
         top: 10,
         right: 20,
-        data: ['Engagement']
-      },
-      toolbox: {
-        feature: {
-          saveAsImage: { show: false }
-        }
+        data: ['Avg Score', 'Lectures'],
       },
       grid: {
         left: '3%',
         right: '4%',
         bottom: '3%',
         top: '15%',
-        containLabel: true
+        containLabel: true,
       },
       xAxis: [
         {
           type: 'category',
-          data: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6', 'Week 7', 'Week 8'],
-          axisPointer: {
-            type: 'shadow'
-          },
-          axisLine: {
-            lineStyle: {
-              color: '#d0d0d0'
-            }
-          }
-        }
+          data: labels.length ? labels : ['No data'],
+          axisPointer: { type: 'shadow' },
+          axisLine: { lineStyle: { color: '#d0d0d0' } },
+        },
       ],
       yAxis: [
         {
           type: 'value',
           name: 'Score',
           position: 'left',
-          axisLabel: {
-            formatter: '{value}',
-            color: '#666'
-          },
-          axisLine: {
-            lineStyle: {
-              color: '#d0d0d0'
-            }
-          },
-          splitLine: {
-            lineStyle: {
-              color: '#f0f0f0'
-            }
-          }
+          min: 0,
+          max: 100,
+          axisLabel: { formatter: '{value}', color: '#666' },
+          axisLine: { lineStyle: { color: '#d0d0d0' } },
+          splitLine: { lineStyle: { color: '#f0f0f0' } },
         },
         {
           type: 'value',
-          name: 'Growth %',
+          name: 'Lectures',
           position: 'right',
-          axisLabel: {
-            formatter: '{value}%',
-            color: '#666'
-          },
-          axisLine: {
-            lineStyle: {
-              color: '#d0d0d0'
-            }
-          }
-        }
+          min: 0,
+          axisLabel: { formatter: '{value}', color: '#666' },
+          axisLine: { lineStyle: { color: '#d0d0d0' } },
+        },
       ],
       series: [
         {
-          name: 'Engagement',
+          name: 'Avg Score',
           type: 'bar',
-          data: [70, 75, 80, 85, 90, 92, 95, 93],
-          barWidth: '60%',
+          yAxisIndex: 0,
+          data: scores,
+          barWidth: '50%',
           itemStyle: {
-            color: '#22c55e',
-            opacity: 0.8
-          }
-        }
-      ]
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: '#006c4a' },
+              { offset: 1, color: '#3fb687' },
+            ]),
+            borderRadius: [6, 6, 0, 0],
+          },
+        },
+        {
+          name: 'Lectures',
+          type: 'line',
+          yAxisIndex: 1,
+          data: lectureCounts,
+          smooth: true,
+          symbol: 'circle',
+          symbolSize: 8,
+          lineStyle: { width: 2.5, color: '#f97316' },
+          itemStyle: { color: '#f97316', borderWidth: 2, borderColor: '#fff' },
+        },
+      ],
     };
 
-    chartInstance.setOption(option);
+    chartInstanceRef.current.setOption(option, true);
 
-    // Handle window resize
-    const handleResize = () => {
-      chartInstance?.resize();
-    };
-
+    const handleResize = () => chartInstanceRef.current?.resize();
     window.addEventListener('resize', handleResize);
 
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [chartData]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (chartInstance) {
-        chartInstance.dispose();
-        chartInstance = null;
+      if (chartInstanceRef.current) {
+        chartInstanceRef.current.dispose();
+        chartInstanceRef.current = null;
       }
     };
   }, []);
 
   return (
-    <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm hover:shadow-md transition-shadow">
+    <div className="rounded-2xl border border-[rgba(0,76,58,0.08)] bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
       <div className="mb-6">
-        <h3 className="font-headline text-xl font-bold text-gray-900">Teacher Performance Metrics</h3>
-        <p className="text-sm text-gray-500 mt-1">Mixed Bar & Line Chart Analysis</p>
+        <h3 className="font-headline text-xl font-bold text-gray-900">Teacher Performance</h3>
+        <p className="text-sm text-gray-500 mt-1">Average Score & Lecture Count Over Last 8 Weeks</p>
       </div>
       <div ref={chartRef} style={{ width: '100%', height: '320px' }} />
     </div>

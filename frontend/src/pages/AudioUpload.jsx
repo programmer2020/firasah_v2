@@ -663,8 +663,8 @@ export const AudioUpload = () => {
 
         {/* Uploaded Files Table */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden" style={{border: '1px solid #d1fae5'}}>
-          <div className="px-6 py-5" style={{background: 'linear-gradient(135deg, #006d4a 0%, #005239 100%)', borderBottom: '1px solid #005239'}}>
-            <h2 className="text-xl font-outfit font-bold text-white">
+          <div className="px-6 py-5" style={{borderBottom: '1px solid #d1fae5'}}>
+            <h2 className="text-xl font-outfit font-bold" style={{color: '#005239'}}>
               Uploaded Files
             </h2>
           </div>

@@ -1,170 +1,158 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';
+import { getApiUrl } from '../config/apiConfig';
+
+// Color palette for multiple section lines
+const SECTION_COLORS = [
+  '#06b6d4', // cyan
+  '#22c55e', // green
+  '#8b5cf6', // violet
+  '#f97316', // orange
+  '#ec4899', // pink
+  '#eab308', // yellow
+  '#14b8a6', // teal
+  '#6366f1', // indigo
+];
 
 const WatermarkChart = () => {
   const chartRef = useRef(null);
-  let chartInstance = null;
+  const chartInstanceRef = useRef(null);
+  const [chartData, setChartData] = useState({ week_labels: [], sections: [] });
 
+  // Fetch real data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        console.log('📈 Fetching section progress data...');
+        const response = await fetch(getApiUrl('/api/dashboard/section-progress'), {
+          method: 'GET',
+          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+          credentials: 'include',
+        });
+
+        if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
+
+        const json = await response.json();
+        console.log('✅ Section progress data:', json);
+        setChartData(json.data || { week_labels: [], sections: [] });
+      } catch (error) {
+        console.error('❌ Failed to fetch section progress:', error);
+        setChartData({ week_labels: [], sections: [] });
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Render chart when data changes
   useEffect(() => {
     if (!chartRef.current) return;
 
-    // Initialize ECharts instance
-    if (!chartInstance) {
-      chartInstance = echarts.init(chartRef.current);
+    if (!chartInstanceRef.current) {
+      chartInstanceRef.current = echarts.init(chartRef.current);
     }
+
+    const { week_labels, sections } = chartData;
+
+    const series = sections.map((sec, idx) => ({
+      name: `Section ${sec.section_name}`,
+      type: 'line',
+      smooth: true,
+      data: sec.scores.map((s) => (s !== null ? s : 0)),
+      lineStyle: {
+        color: SECTION_COLORS[idx % SECTION_COLORS.length],
+        width: 3,
+      },
+      itemStyle: {
+        color: SECTION_COLORS[idx % SECTION_COLORS.length],
+      },
+      areaStyle:
+        idx === 0
+          ? {
+              color: {
+                type: 'linear',
+                x: 0, y: 0, x2: 0, y2: 1,
+                colorStops: [
+                  { offset: 0, color: `${SECTION_COLORS[0]}66` },
+                  { offset: 1, color: `${SECTION_COLORS[0]}0D` },
+                ],
+              },
+            }
+          : undefined,
+      symbol: 'circle',
+      symbolSize: 6,
+      emphasis: { focus: 'series' },
+    }));
 
     const option = {
       backgroundColor: '#fff',
-      title: [
-        {
-          text: '',
-          left: -100,
-          top: -300
-        }
-      ],
-      graphic: {
-        elements: []
-      },
       tooltip: {
         trigger: 'axis',
-        axisPointer: {
-          type: 'cross'
-        }
+        axisPointer: { type: 'cross' },
       },
       legend: {
         top: 20,
         right: 20,
-        data: ['Weeks Progress', 'Target'],
-        textStyle: {
-          color: '#666',
-          fontSize: 12
-        }
+        data: sections.map((sec) => `Section ${sec.section_name}`),
+        textStyle: { color: '#666', fontSize: 12 },
       },
       grid: {
         left: '10%',
         right: '10%',
         bottom: '15%',
         top: '15%',
-        containLabel: true
+        containLabel: true,
       },
       xAxis: {
         type: 'category',
-        data: ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8'],
-        axisLine: {
-          lineStyle: {
-            color: '#d0d0d0'
-          }
-        },
-        axisLabel: {
-          color: '#666',
-          fontSize: 11
-        }
+        data: week_labels.length ? week_labels : ['No data'],
+        axisLine: { lineStyle: { color: '#d0d0d0' } },
+        axisLabel: { color: '#666', fontSize: 11 },
       },
       yAxis: {
         type: 'value',
         name: 'Performance Score',
-        nameTextStyle: {
-          color: '#666',
-          fontSize: 12
-        },
-        axisLine: {
-          lineStyle: {
-            color: '#d0d0d0'
-          }
-        },
-        splitLine: {
-          lineStyle: {
-            color: '#f0f0f0'
-          }
-        },
-        axisLabel: {
-          color: '#666',
-          fontSize: 11
-        }
+        min: 0,
+        max: 100,
+        nameTextStyle: { color: '#666', fontSize: 12 },
+        axisLine: { lineStyle: { color: '#d0d0d0' } },
+        splitLine: { lineStyle: { color: '#f0f0f0' } },
+        axisLabel: { color: '#666', fontSize: 11 },
       },
-      series: [
-        {
-          name: 'Weeks Progress',
-          type: 'line',
-          smooth: true,
-          data: [70, 75, 82, 88, 92, 96, 98, 100],
-          lineStyle: {
-            color: '#06b6d4',
-            width: 3
-          },
-          itemStyle: {
-            color: '#06b6d4'
-          },
-          areaStyle: {
-            color: {
-              type: 'linear',
-              x: 0,
-              y: 0,
-              x2: 0,
-              y2: 1,
-              colorStops: [
-                { offset: 0, color: 'rgba(6, 182, 212, 0.4)' },
-                { offset: 1, color: 'rgba(6, 182, 212, 0.05)' }
-              ]
-            }
-          },
-          symbol: 'circle',
-          symbolSize: 6,
-          emphasis: {
-            focus: 'series'
-          }
-        },
-        {
-          name: 'Target',
-          type: 'line',
-          smooth: true,
-          data: [60, 65, 70, 75, 80, 85, 90, 95],
-          lineStyle: {
-            color: '#22c55e',
-            width: 2,
-            type: 'dashed'
-          },
-          itemStyle: {
-            color: '#22c55e'
-          },
-          symbol: 'square',
-          symbolSize: 5,
-          emphasis: {
-            focus: 'series'
-          }
-        }
-      ]
+      series: series.length
+        ? series
+        : [
+            {
+              name: 'No Data',
+              type: 'line',
+              data: [],
+            },
+          ],
     };
 
-    chartInstance.setOption(option);
+    chartInstanceRef.current.setOption(option, true);
 
-    // Handle window resize
-    const handleResize = () => {
-      chartInstance?.resize();
-    };
-
+    const handleResize = () => chartInstanceRef.current?.resize();
     window.addEventListener('resize', handleResize);
 
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [chartData]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (chartInstance) {
-        chartInstance.dispose();
-        chartInstance = null;
+      if (chartInstanceRef.current) {
+        chartInstanceRef.current.dispose();
+        chartInstanceRef.current = null;
       }
     };
   }, []);
 
   return (
-    <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm hover:shadow-md transition-shadow">
+    <div className="rounded-2xl border border-[rgba(0,76,58,0.08)] bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
       <div className="mb-6">
-        <h3 className="font-headline text-xl font-bold text-gray-900">Progress Tracking</h3>
-        <p className="text-sm text-gray-500 mt-1">Weekly Performance vs Target</p>
+        <h3 className="font-headline text-xl font-bold text-gray-900">Class Performance</h3>
+        <p className="text-sm text-gray-500 mt-1">Weekly Section Performance Over Last 8 Weeks</p>
       </div>
       <div ref={chartRef} style={{ width: '100%', height: '320px' }} />
     </div>

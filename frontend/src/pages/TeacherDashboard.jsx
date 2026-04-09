@@ -99,72 +99,51 @@ const TeacherDashboard = () => {
     fetchKpiCards();
   }, []);
 
-  // Fetch 8 domains from database
+  // Fetch domains with real week scores from dashboard materialized view
   useEffect(() => {
-    const fetchDomains = async () => {
+    const fetchDomainsWeeks = async () => {
       try {
-        console.log('📚 Fetching domains from database...');
-        const response = await fetch(getApiUrl('/api/kpis/domains/all'), {
+        console.log('📚 Fetching domains-weeks heatmap data...');
+        const response = await fetch(getApiUrl('/api/dashboard/domains-weeks'), {
           method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
+          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+          credentials: 'include',
         });
-        
-        console.log('Domains response status:', response.status);
-        
+
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`Failed to fetch domains: ${response.status} ${errorText}`);
+          throw new Error(`Domains-weeks fetch failed: ${response.status} ${errorText}`);
         }
-        
-        const data = await response.json();
-        console.log('✅ Domains data:', data);
-        
-        // Transform domains data to include week scores
-        const domainsWithWeeks = (data.data || []).map((domain) => ({
-          name: domain.domain_name_en || domain.domain_name || domain.name,
-          domainCode: domain.domain_code,
-          description: domain.domain_description,
-          // Generate random week scores between 30 and 100
-          weeks: Array.from({ length: 8 }, () => Math.floor(Math.random() * 71) + 30),
+
+        const json = await response.json();
+        console.log('✅ Domains-weeks data:', json);
+
+        const domainsWithWeeks = (json.data || []).map((d) => ({
+          name: d.domain_name,
+          domainCode: `D${d.domain_id}`,
+          weeks: (d.weeks || []).map((v) => (v !== null ? v : 0)),
         }));
-        
-        console.log('📊 Transformed domains with weeks:', domainsWithWeeks);
+
+        console.log('📊 Domains heatmap ready:', domainsWithWeeks);
         setDomains(domainsWithWeeks);
       } catch (error) {
-        console.error('❌ Failed to fetch domains:', error);
-        // Fallback with 8 sample domains - Arabic names from database
+        console.error('❌ Failed to fetch domains-weeks:', error);
+        // Fallback with sample data
         const fallbackDomains = [
-          { name: 'Domain 1: In-Class Lesson Planning & Execution', domainCode: 'D1', weeks: [90, 70, 80, 40, 100, 60, 90, 95] },
-          { name: 'Domain 2: Diversity of Teaching Strategies', domainCode: 'D2', weeks: [40, 50, 80, 60, 70, 80, 90, 100] },
-          { name: 'Domain 3: Learning Environment', domainCode: 'D3', weeks: [80, 90, 100, 90, 80, 30, 70, 80] },
-          { name: 'Domain 4: Classroom Management', domainCode: 'D4', weeks: [85, 75, 85, 95, 80, 75, 90, 85] },
-          { name: 'Domain 5: Diversity of In-Class Assessment', domainCode: 'D5', weeks: [70, 80, 75, 85, 90, 80, 75, 70] },
-          { name: 'Domain 6: Analysing Student Responses & Diagnosing Learning Levels', domainCode: 'D6', weeks: [65, 70, 75, 80, 85, 90, 75, 80] },
-          { name: 'Domain 7: Use of Technology & Learning Resources', domainCode: 'D7', weeks: [60, 65, 70, 75, 80, 85, 90, 80] },
-          { name: 'Domain 8: Improving Learner Outcomes', domainCode: 'D8', weeks: [75, 80, 85, 90, 80, 75, 70, 85] },
+          { name: '1: In-Class Lesson Planning & Execution', domainCode: 'D1', weeks: [0, 0, 0, 0, 0, 0, 0, 0] },
+          { name: '2: Diversity of Teaching Strategies', domainCode: 'D2', weeks: [0, 0, 0, 0, 0, 0, 0, 0] },
+          { name: '3: Learning Environment', domainCode: 'D3', weeks: [0, 0, 0, 0, 0, 0, 0, 0] },
+          { name: '4: Classroom Management', domainCode: 'D4', weeks: [0, 0, 0, 0, 0, 0, 0, 0] },
+          { name: '5: Diversity of In-Class Assessment', domainCode: 'D5', weeks: [0, 0, 0, 0, 0, 0, 0, 0] },
+          { name: '6: Analysing Student Responses & Diagnosing Learning Levels', domainCode: 'D6', weeks: [0, 0, 0, 0, 0, 0, 0, 0] },
+          { name: '7: Use of Technology & Learning Resources', domainCode: 'D7', weeks: [0, 0, 0, 0, 0, 0, 0, 0] },
+          { name: '8: Improving Learner Outcomes', domainCode: 'D8', weeks: [0, 0, 0, 0, 0, 0, 0, 0] },
         ];
         setDomains(fallbackDomains);
-        
-        // Also set fallback subjects
-        const fallbackSubjects = [
-          { id: 1, name: 'Math' },
-          { id: 2, name: 'Science' },
-          { id: 3, name: 'English' },
-          { id: 4, name: 'History' },
-          { id: 5, name: 'Arabic' },
-          { id: 6, name: 'Geography' },
-          { id: 7, name: 'Social Studies' },
-          { id: 8, name: 'Physical Education' },
-        ];
-        setSubjects(fallbackSubjects);
       }
     };
 
-    fetchDomains();
+    fetchDomainsWeeks();
   }, []);
 
   const handleFilterChange = (key, value) => {
@@ -302,147 +281,81 @@ const TeacherDashboard = () => {
     },
   ];
 
-  // KPIs and Subjects for dynamic table
-  const [kpis, setKpis] = useState([]);
+  // Subjects and domain×subject matrix for the "Domains vs Subject" heatmap
   const [subjects, setSubjects] = useState([]);
-  const [kpiSubjectMatrix, setKpiSubjectMatrix] = useState([]);
+  const [domainSubjectMatrix, setDomainSubjectMatrix] = useState([]);
 
-  // Fetch KPIs and Subjects from backend
+  // Fetch real domains×subjects scores from the dashboard endpoint
   useEffect(() => {
-    const fetchKpisAndSubjects = async () => {
+    const fetchDomainsSubjects = async () => {
       try {
-        console.log('📖 Fetching KPIs and Subjects...');
-        
-        // Fetch KPIs
-        console.log('🔍 Calling /api/kpis endpoint...');
-        const kpiRes = await fetch(getApiUrl('/api/kpis'), {
+        console.log('📖 Fetching domains-subjects heatmap data...');
+        const response = await fetch(getApiUrl('/api/dashboard/domains-subjects'), {
           method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
           credentials: 'include',
         });
-        console.log('KPIs response status:', kpiRes.status);
-        const kpiData = await kpiRes.json();
-        console.log('✅ KPI data received:', kpiData);
-        
-        const kpiList = (kpiData.data || []).map(kpi => ({
-          id: kpi.kpi_id,
-          name: kpi.kpi_name,
-        }));
-        console.log('📋 Transformed KPI list:', kpiList);
-        setKpis(kpiList);
 
-        // Fetch Subjects
-        console.log('🔍 Calling /api/subjects endpoint...');
-        const subRes = await fetch(getApiUrl('/api/subjects'), {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        });
-        console.log('Subjects response status:', subRes.status);
-        const subData = await subRes.json();
-        console.log('✅ Subject data received:', subData);
-        
-        const subList = (subData.data || []).map(sub => ({
-          id: sub.subject_id,
-          name: sub.subject_name,
-        }));
-        console.log('📋 Transformed subject list (LENGTH=' + subList.length + '):', subList);
-        setSubjects(subList);
-        console.log('✅ setSubjects called with:', subList);
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Domains-subjects fetch failed: ${response.status} ${errorText}`);
+        }
 
-        // Generate random matrix for demo
-        const matrix = kpiList.map(() => subList.map(() => Math.floor(Math.random() * 71) + 30));
-        setKpiSubjectMatrix(matrix);
-        console.log('✅ KPI/Subject matrix generated:', matrix.length, 'x', matrix[0]?.length);
+        const json = await response.json();
+        console.log('✅ Domains-subjects data:', json);
+
+        const { subjects: subList, domains: domList } = json.data || {};
+
+        setSubjects((subList || []).map((s) => ({ id: s.id, name: s.name })));
+
+        // Build matrix: rows = domains (same order as heatmapDomains), cols = subjects
+        const subjectIds = (subList || []).map((s) => s.id);
+        const matrix = (domList || []).map((d) =>
+          subjectIds.map((sid) => (d.scores[sid] !== null && d.scores[sid] !== undefined ? d.scores[sid] : 0))
+        );
+        setDomainSubjectMatrix(matrix);
+        console.log('✅ Domain-subject matrix ready:', matrix.length, 'x', (matrix[0] || []).length);
       } catch (error) {
-        console.error('❌ Error fetching KPIs/Subjects:', error);
-        console.error('Error message:', error.message);
-        console.error('Error stack:', error.stack);
-        
-        // fallback demo data
-        console.log('📦 Using fallback demo data for KPIs and Subjects');
-        const fallbackKpis = [
-          { id: 1, name: 'Clarity' },
-          { id: 2, name: 'Engagement' },
-          { id: 3, name: 'Pacing' },
-          { id: 4, name: 'Assessment' },
-          { id: 5, name: 'Organization' },
-          { id: 6, name: 'Communication' },
-          { id: 7, name: 'Feedback' },
-          { id: 8, name: 'Participation' },
-        ];
-        const fallbackSubjects = [
-          { id: 1, name: 'Math' },
-          { id: 2, name: 'Science' },
-          { id: 3, name: 'English' },
-          { id: 4, name: 'History' },
-          { id: 5, name: 'Arabic' },
-          { id: 6, name: 'Geography' },
-          { id: 7, name: 'Social Studies' },
-          { id: 8, name: 'Physical Education' },
-        ];
-        setKpis(fallbackKpis);
-        setSubjects(fallbackSubjects);
-        const fallbackMatrix = fallbackKpis.map(() => fallbackSubjects.map(() => Math.floor(Math.random() * 71) + 30));
-        setKpiSubjectMatrix(fallbackMatrix);
-        
-        console.log('📦 Fallback KPIs set:', fallbackKpis);
-        console.log('📦 Fallback Subjects set:', fallbackSubjects);
+        console.error('❌ Failed to fetch domains-subjects:', error);
+        setSubjects([]);
+        setDomainSubjectMatrix([]);
       }
     };
-    fetchKpisAndSubjects();
+
+    fetchDomainsSubjects();
   }, []);
 
-  const sampleEvidences = [
-    {
-      rank: '#01',
-      kpiName: 'Questioning Technique',
-      category: 'Interaction Quality',
-      teacher: 'Dr. Sarah Jenkins',
-      score: '98%',
-    },
-    {
-      rank: '#02',
-      kpiName: 'Scaffolding Complex Concepts',
-      category: 'Instructional Support',
-      teacher: 'Mr. Robert Chen',
-      score: '94%',
-    },
-    {
-      rank: '#03',
-      kpiName: 'Formative Feedback Loop',
-      category: 'Assessment Literacy',
-      teacher: 'Ms. Elena Rodriguez',
-      score: '92%',
-    },
-  ];
+  // Top 10 high-confidence evidence samples from real data
+  const [topEvidences, setTopEvidences] = useState([]);
 
-  const fallbackHeatmapSubjects = [
-    { id: 'sub-1', name: 'Math' },
-    { id: 'sub-2', name: 'Science' },
-    { id: 'sub-3', name: 'English' },
-    { id: 'sub-4', name: 'History' },
-    { id: 'sub-5', name: 'Arabic' },
-    { id: 'sub-6', name: 'Geography' },
-    { id: 'sub-7', name: 'Social Studies' },
-    { id: 'sub-8', name: 'PE' },
-  ];
+  useEffect(() => {
+    const fetchTopEvidences = async () => {
+      try {
+        console.log('🏆 Fetching top evidences...');
+        const response = await fetch(getApiUrl('/api/dashboard/top-evidences'), {
+          method: 'GET',
+          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+          credentials: 'include',
+        });
+
+        if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
+
+        const json = await response.json();
+        console.log('✅ Top evidences:', json);
+        setTopEvidences(json.data || []);
+      } catch (error) {
+        console.error('❌ Failed to fetch top evidences:', error);
+        setTopEvidences([]);
+      }
+    };
+
+    fetchTopEvidences();
+  }, []);
 
   const heatmapDomains = domains;
   const heatmapWeekLabels = (heatmapDomains[0]?.weeks || Array.from({ length: 8 }, () => 0)).map((_, index) => `W${index + 1}`);
-  const heatmapSubjects = (subjects.length ? subjects : fallbackHeatmapSubjects).slice(0, 8);
-  const subjectHeatmapMatrix = heatmapDomains.map((domain, domainIdx) =>
-    heatmapSubjects.map((_, subjectIdx) =>
-      domain.weeks?.[subjectIdx % (domain.weeks?.length || 1)] ??
-      (((domainIdx + 2) * (subjectIdx + 3) * 9) % 55) + 40
-    )
-  );
+  const heatmapSubjects = subjects;
+  const subjectHeatmapMatrix = domainSubjectMatrix;
   const heatmapCellSize = 120;
   const heatmapLabelColumnWidth = 360;
 
@@ -846,15 +759,12 @@ const TeacherDashboard = () => {
         </div>
       </section>
 
-      {/* Charts Section */}
-      <section className="border border-[rgba(0,76,58,0.08)] rounded-2xl bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-        <div className="space-y-4">
-        {/* Teacher Performance Metrics - ECharts Mixed Bar & Line Chart */}
+      {/* Charts Section — side by side */}
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+        {/* Teacher Performance Metrics */}
         <MixedChart />
-
-        {/* Progress Tracking - ECharts Watermark Chart */}
+        {/* Class Performance */}
         <WatermarkChart />
-        </div>
       </section>
 
       {/* Evidence Samples Table */}
@@ -878,36 +788,41 @@ const TeacherDashboard = () => {
                     Teacher
                   </th>
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-emerald-100">
-                    Score
+                    Confidence
                   </th>
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-emerald-100">
-                    Evidence
+                    Time
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {sampleEvidences.map((evidence, idx) => (
+                {topEvidences.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-gray-400">No evidence data available yet</td>
+                  </tr>
+                )}
+                {topEvidences.map((evidence, idx) => (
                   <tr
-                    key={idx}
+                    key={evidence.evidence_id || idx}
                     className={`${idx % 2 === 0 ? 'bg-white' : 'bg-[#f3f5f4]'} transition-colors hover:bg-gray-50`}
                   >
-                    <td className="px-6 py-5 font-headline font-bold text-gray-900">{evidence.rank}</td>
+                    <td className="px-6 py-5 font-headline font-bold text-gray-900">#{String(evidence.rank).padStart(2, '0')}</td>
                     <td className="px-6 py-5">
                       <div className="flex flex-col">
-                        <span className="font-semibold text-gray-900">{evidence.kpiName}</span>
-                        <span className="text-xs text-gray-600">{evidence.category}</span>
+                        <span className="font-semibold text-gray-900">{evidence.kpi_name}</span>
+                        <span className="text-xs text-gray-600">Section {evidence.section_name}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-5 font-medium text-gray-700">{evidence.teacher}</td>
+                    <td className="px-6 py-5 font-medium text-gray-700">{evidence.teacher_name}</td>
                     <td className="px-6 py-5">
                       <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
-                        {evidence.score}
+                        {evidence.confidence}%
                       </span>
                     </td>
                     <td className="px-6 py-5">
-                      <button className="inline-flex items-center gap-2 rounded-xl bg-cyan-100 px-4 py-2 text-xs font-bold text-cyan-600 transition-colors hover:bg-cyan-600 hover:text-white">
-                        <span>▶</span> Play Clip
-                      </button>
+                      <span className="inline-flex items-center gap-1 rounded-xl bg-cyan-50 px-3 py-1.5 text-xs font-semibold text-cyan-700">
+                        {evidence.start_time} - {evidence.end_time}
+                      </span>
                     </td>
                   </tr>
                 ))}
