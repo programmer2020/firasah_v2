@@ -64,11 +64,13 @@ app.use((req: Request, res: Response, next) => {
 });
 
 // Configure CORS for development and production
-const allowedOrigins = [
+const staticAllowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:3000',
   'http://localhost:8080',
+  'https://firasah.ai',
+  'https://www.firasah.ai',
   'https://tranquil-recreation-production-c46b.up.railway.app',
   process.env.CORS_ORIGIN || '',
   process.env.FRONTEND_URL || '',
@@ -76,16 +78,26 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, etc.)
+    // Allow requests with no origin (e.g. curl, mobile apps, server-to-server)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
+
+    // Allow listed origins
+    if (staticAllowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-    // In production, also allow any railway.app subdomain
-    if (origin.endsWith('.railway.app')) {
+
+    // Allow any firasah.ai subdomain
+    if (/^https?:\/\/([a-z0-9-]+\.)*firasah\.ai$/i.test(origin)) {
       return callback(null, true);
     }
-    return callback(null, true); // Allow all for now
+
+    // Allow any *.railway.app subdomain
+    if (/^https?:\/\/[a-z0-9-]+\.up\.railway\.app$/i.test(origin)) {
+      return callback(null, true);
+    }
+
+    console.warn(`[CORS] Blocked origin: ${origin}`);
+    return callback(new Error(`Origin ${origin} not allowed by CORS`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
