@@ -31,6 +31,7 @@ export const AudioUpload = () => {
   // Uploaded files list
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
+  const [retryingFileId, setRetryingFileId] = useState(null);
 
   // Pagination
   const pagination = usePagination(uploadedFiles, 10);
@@ -85,6 +86,23 @@ export const AudioUpload = () => {
       console.error('Failed to fetch uploaded files:', err);
     } finally {
       setLoadingFiles(false);
+    }
+  };
+
+  // Retry pipeline for a failed file
+  const retryPipeline = async (fileId) => {
+    try {
+      setRetryingFileId(fileId);
+      setError('');
+      setSuccess('');
+      await api.post(`/api/sound-files/${fileId}/retranscribe`);
+      setSuccess('Retry started. Processing file again...');
+      startPipelineProgress(fileId);
+      fetchUploadedFiles();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to retry. Please try again.');
+    } finally {
+      setRetryingFileId(null);
     }
   };
 
@@ -454,14 +472,44 @@ export const AudioUpload = () => {
                     {pipelineProgress.message}
                   </p>
 
-                  {pipelineProgress.status === 'partial' && uploadedFile?.file_id && (
+                  {pipelineProgress.status === 'failed' && uploadedFile?.file_id && (
                     <div className="mt-3">
+                      <button
+                        onClick={() => retryPipeline(uploadedFile.file_id)}
+                        disabled={retryingFileId === uploadedFile.file_id}
+                        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors"
+                        style={{background: 'linear-gradient(135deg, #006d4a 0%, #005239 100%)'}}
+                      >
+                        {retryingFileId === uploadedFile.file_id ? (
+                          <>
+                            <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            Retrying...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                            Retry Pipeline
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+
+                  {pipelineProgress.status === 'partial' && uploadedFile?.file_id && (
+                    <div className="mt-3 flex gap-2">
                       <Link
                         to={`/failed-fragments?fileId=${uploadedFile.file_id}`}
                         className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-700"
                       >
                         Open Failed Fragments Page
                       </Link>
+                      <button
+                        onClick={() => retryPipeline(uploadedFile.file_id)}
+                        disabled={retryingFileId === uploadedFile.file_id}
+                        className="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-white px-4 py-2 text-sm font-semibold text-orange-700 transition-colors hover:bg-orange-50"
+                      >
+                        {retryingFileId === uploadedFile.file_id ? 'Retrying...' : 'Retry All'}
+                      </button>
                     </div>
                   )}
 
@@ -723,21 +771,44 @@ export const AudioUpload = () => {
                             : '-'}
                         </td>
                         <td className="px-6 py-4 text-sm">
-                          {status === 'partial' && file.file_id ? (
-                            <Link
-                              to={`/failed-fragments?fileId=${file.file_id}`}
-                              className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition-colors hover:brightness-95 ${statusBadge.bg} ${statusBadge.border} ${statusBadge.text}`}
-                              title="View incomplete fragments and retry"
-                            >
-                              <span>{statusBadge.icon}</span>
-                              <span>{statusBadge.label}</span>
-                            </Link>
-                          ) : (
-                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full border text-xs font-semibold ${statusBadge.bg} ${statusBadge.border} ${statusBadge.text}`}>
-                              <span>{statusBadge.icon}</span>
-                              <span>{statusBadge.label}</span>
-                            </span>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {status === 'partial' && file.file_id ? (
+                              <Link
+                                to={`/failed-fragments?fileId=${file.file_id}`}
+                                className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition-colors hover:brightness-95 ${statusBadge.bg} ${statusBadge.border} ${statusBadge.text}`}
+                                title="View incomplete fragments and retry"
+                              >
+                                <span>{statusBadge.icon}</span>
+                                <span>{statusBadge.label}</span>
+                              </Link>
+                            ) : (
+                              <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full border text-xs font-semibold ${statusBadge.bg} ${statusBadge.border} ${statusBadge.text}`}>
+                                <span>{statusBadge.icon}</span>
+                                <span>{statusBadge.label}</span>
+                              </span>
+                            )}
+                            {(status === 'failed' || status === 'partial') && file.file_id && (
+                              <button
+                                onClick={() => retryPipeline(file.file_id)}
+                                disabled={retryingFileId === file.file_id}
+                                className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition-colors hover:bg-emerald-50"
+                                style={{borderColor: '#a7f3d0', color: '#005239'}}
+                                title="Retry processing pipeline"
+                              >
+                                {retryingFileId === file.file_id ? (
+                                  <>
+                                    <svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                                    Retrying
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                    Retry
+                                  </>
+                                )}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
