@@ -400,12 +400,12 @@ export const AudioUpload = () => {
             {/* Upload Status (shown during upload) */}
             {uploading && (
               <div className="mb-6">
-                <div className="rounded-xl p-4 border flex items-center gap-3" style={{background: '#f0fdf4', borderColor: '#a7f3d0'}}>
+                <div className="rounded-xl p-4 border flex flex-row-reverse items-center gap-3" style={{background: '#f0fdf4', borderColor: '#a7f3d0'}}>
                   <svg className="h-5 w-5 animate-spin shrink-0" style={{color: '#006d4a'}} fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                   </svg>
-                  <span className="text-sm font-semibold" style={{color: '#005239'}}>
+                  <span className="text-sm font-semibold flex-1 text-right" style={{color: '#005239'}}>
                     جاري رفع الملف...
                   </span>
                 </div>
@@ -424,7 +424,7 @@ export const AudioUpload = () => {
                     ? 'border-red-200 bg-red-50'
                     : 'border-blue-200 bg-blue-50'
                 }`}>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-row-reverse items-center gap-3">
                     {pipelineProgress.status === 'completed' ? (
                       <svg className="h-5 w-5 text-green-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -443,7 +443,7 @@ export const AudioUpload = () => {
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                       </svg>
                     )}
-                    <div dir="rtl" className="flex-1 text-right">
+                    <div className="flex-1 text-right">
                       <span className={`text-sm font-semibold ${
                         pipelineProgress.status === 'completed' ? 'text-green-700'
                           : pipelineProgress.status === 'failed' ? 'text-red-700'
