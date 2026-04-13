@@ -6,6 +6,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { authenticate, AuthRequest, getTenantFilter } from '../middleware/auth.js';
 import { getMany, getOne } from '../helpers/database.js';
 
 const router = Router();
@@ -23,7 +24,7 @@ const router = Router();
  *
  * Each metric returns current_value, previous_value, mom_percent_change
  */
-router.get('/kpi-cards', async (req: Request, res: Response) => {
+router.get('/kpi-cards', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const {
       subject_id,
@@ -36,6 +37,7 @@ router.get('/kpi-cards', async (req: Request, res: Response) => {
 
     // Convert to int or null
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
+    const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
       p(subject_id),  // $1
       p(teacher_id),  // $2
@@ -43,6 +45,7 @@ router.get('/kpi-cards', async (req: Request, res: Response) => {
       p(domain_id),   // $4
       p(section_id),  // $5
       p(grade_id),    // $6
+      ownerFilter,    // $7
     ];
 
     const sql = `
@@ -56,33 +59,36 @@ router.get('/kpi-cards', async (req: Request, res: Response) => {
       lecture_count AS (
         SELECT
           'Lectures' AS metric,
-          COUNT(DISTINCT lecture_id)
+          COUNT(DISTINCT dfl.lecture_id)
             FILTER (WHERE DATE_TRUNC('month', dfl.created_at)::date = dp.current_month_start)
             AS current_value,
-          COUNT(DISTINCT lecture_id)
+          COUNT(DISTINCT dfl.lecture_id)
             FILTER (WHERE DATE_TRUNC('month', dfl.created_at)::date = dp.prev_month_start)
             AS previous_value
-        FROM dashboard_fact_lectures dfl, date_params dp
+        FROM dashboard_fact_lectures dfl
+        CROSS JOIN date_params dp
+        LEFT JOIN sound_files sf_owner ON dfl.file_id = sf_owner.file_id
         WHERE ($1::int IS NULL OR dfl.subject_id  = $1)
           AND ($2::int IS NULL OR dfl.teacher_id  = $2)
           AND ($3::int IS NULL OR dfl.kpi_id      = $3)
           AND ($4::int IS NULL OR dfl.domain_id   = $4)
           AND ($5::int IS NULL OR dfl.section_id  = $5)
           AND ($6::int IS NULL OR dfl.grade_id    = $6)
+          AND ($7::int IS NULL OR sf_owner.user_id = $7)
       ),
 
-      -- 2) Teachers: total count from teachers table (all registered teachers)
-      --    Not from MV — MV only has teachers with evaluated lectures
+      -- 2) Teachers: count distinct teachers from user's files only
       teacher_count AS (
         SELECT
           'Teachers' AS metric,
-          COUNT(*)::bigint AS current_value,
-          COUNT(*)::bigint AS previous_value
-        FROM teachers
+          COUNT(DISTINCT dfl.teacher_id)::bigint AS current_value,
+          COUNT(DISTINCT dfl.teacher_id)::bigint AS previous_value
+        FROM dashboard_fact_lectures dfl
+        LEFT JOIN sound_files sf_owner ON dfl.file_id = sf_owner.file_id
+        WHERE ($7::int IS NULL OR sf_owner.user_id = $7)
       ),
 
       -- 3) Upload Hours: SUM(fragments.duration) joined through sound_files
-      --    (not in the MV, so we query the source tables directly)
       upload_count AS (
         SELECT
           'Upload Hours' AS metric,
@@ -103,12 +109,12 @@ router.get('/kpi-cards', async (req: Request, res: Response) => {
             0
           ) AS previous_value
         FROM fragments f
-        INNER JOIN sound_files sf ON f.file_id = sf.file_id,
-        date_params dp
+        INNER JOIN sound_files sf ON f.file_id = sf.file_id
+        CROSS JOIN date_params dp
+        WHERE ($7::int IS NULL OR sf.user_id = $7)
       ),
 
-      -- 4) User Sessions: count login events (each login = 1 session)
-      --    Not DISTINCT — every login counts as a separate session
+      -- 4) User Sessions: for normal user show only their sessions
       user_count AS (
         SELECT
           'User Sessions' AS metric,
@@ -118,8 +124,10 @@ router.get('/kpi-cards', async (req: Request, res: Response) => {
           COUNT(*)
             FILTER (WHERE DATE_TRUNC('month', le.login_timestamp)::date = dp.prev_month_start)
             AS previous_value
-        FROM login_events le, date_params dp
+        FROM login_events le
+        CROSS JOIN date_params dp
         WHERE le.login_timestamp >= dp.prev_month_start
+          AND ($7::int IS NULL OR le.user_id = $7)
       )
 
       SELECT
@@ -189,17 +197,19 @@ router.get('/kpi-cards', async (req: Request, res: Response) => {
  * Response: array of { domain_id, domain_name, weeks: [w1, w2, ..., w8] }
  *   week_1 = most recent week, week_8 = oldest
  */
-router.get('/domains-weeks', async (req: Request, res: Response) => {
+router.get('/domains-weeks', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { subject_id, teacher_id, kpi_id, section_id, grade_id } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
+    const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
       p(subject_id),  // $1
       p(teacher_id),  // $2
       p(kpi_id),      // $3
       p(section_id),  // $4
       p(grade_id),    // $5
+      ownerFilter,    // $6
     ];
 
     const sql = `
@@ -216,21 +226,23 @@ router.get('/domains-weeks', async (req: Request, res: Response) => {
         MAX(CASE WHEN week_num = 8 THEN avg_score END) AS week_8
       FROM (
         SELECT
-          domain_id,
-          domain_name,
-          week_start,
-          DENSE_RANK() OVER (ORDER BY week_start DESC) AS week_num,
-          ROUND(AVG(score)::numeric, 1) AS avg_score
-        FROM dashboard_fact_lectures
-        WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
-          AND week_start <= CURRENT_DATE::date
-          AND score IS NOT NULL
-          AND ($1::int IS NULL OR subject_id = $1)
-          AND ($2::int IS NULL OR teacher_id = $2)
-          AND ($3::int IS NULL OR kpi_id     = $3)
-          AND ($4::int IS NULL OR section_id = $4)
-          AND ($5::int IS NULL OR grade_id   = $5)
-        GROUP BY domain_id, domain_name, week_start
+          dfl.domain_id,
+          dfl.domain_name,
+          dfl.week_start,
+          DENSE_RANK() OVER (ORDER BY dfl.week_start DESC) AS week_num,
+          ROUND(AVG(dfl.score)::numeric, 1) AS avg_score
+        FROM dashboard_fact_lectures dfl
+        LEFT JOIN sound_files sf_owner ON dfl.file_id = sf_owner.file_id
+        WHERE dfl.week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
+          AND dfl.week_start <= CURRENT_DATE::date
+          AND dfl.score IS NOT NULL
+          AND ($1::int IS NULL OR dfl.subject_id = $1)
+          AND ($2::int IS NULL OR dfl.teacher_id = $2)
+          AND ($3::int IS NULL OR dfl.kpi_id     = $3)
+          AND ($4::int IS NULL OR dfl.section_id = $4)
+          AND ($5::int IS NULL OR dfl.grade_id   = $5)
+          AND ($6::int IS NULL OR sf_owner.user_id = $6)
+        GROUP BY dfl.domain_id, dfl.domain_name, dfl.week_start
       ) weekly_avg
       WHERE week_num <= 8
       GROUP BY domain_id, domain_name
@@ -286,16 +298,18 @@ router.get('/domains-weeks', async (req: Request, res: Response) => {
  *
  * Response: { subjects: [{id, name}], domains: [{domain_id, domain_name, scores: {subject_id: avg_score}}] }
  */
-router.get('/domains-subjects', async (req: Request, res: Response) => {
+router.get('/domains-subjects', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { teacher_id, domain_id, section_id, grade_id } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
+    const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
       p(teacher_id),  // $1
       p(domain_id),   // $2
       p(section_id),  // $3
       p(grade_id),    // $4
+      ownerFilter,    // $5
     ];
 
     const sql = `
@@ -308,19 +322,21 @@ router.get('/domains-subjects', async (req: Request, res: Response) => {
         ) AS subjects_data
       FROM (
         SELECT
-          domain_id,
-          domain_name,
-          subject_id,
-          subject_name,
-          ROUND(AVG(score)::numeric, 1) AS avg_score
-        FROM dashboard_fact_lectures
-        WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
-          AND score IS NOT NULL
-          AND ($1::int IS NULL OR teacher_id = $1)
-          AND ($2::int IS NULL OR domain_id  = $2)
-          AND ($3::int IS NULL OR section_id = $3)
-          AND ($4::int IS NULL OR grade_id   = $4)
-        GROUP BY domain_id, domain_name, subject_id, subject_name
+          dfl.domain_id,
+          dfl.domain_name,
+          dfl.subject_id,
+          dfl.subject_name,
+          ROUND(AVG(dfl.score)::numeric, 1) AS avg_score
+        FROM dashboard_fact_lectures dfl
+        LEFT JOIN sound_files sf_owner ON dfl.file_id = sf_owner.file_id
+        WHERE dfl.week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
+          AND dfl.score IS NOT NULL
+          AND ($1::int IS NULL OR dfl.teacher_id = $1)
+          AND ($2::int IS NULL OR dfl.domain_id  = $2)
+          AND ($3::int IS NULL OR dfl.section_id = $3)
+          AND ($4::int IS NULL OR dfl.grade_id   = $4)
+          AND ($5::int IS NULL OR sf_owner.user_id = $5)
+        GROUP BY dfl.domain_id, dfl.domain_name, dfl.subject_id, dfl.subject_name
       ) kpi_subject_scores
       GROUP BY domain_id, domain_name
       ORDER BY domain_id;
@@ -396,34 +412,38 @@ router.get('/domains-subjects', async (req: Request, res: Response) => {
  *
  * Response: { weeks: [ { week_start, week_label, avg_score, lecture_count } ] }
  */
-router.get('/teacher-performance', async (req: Request, res: Response) => {
+router.get('/teacher-performance', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { subject_id, kpi_id, domain_id, section_id, grade_id } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
+    const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
       p(subject_id),  // $1
       p(kpi_id),      // $2
       p(domain_id),   // $3
       p(section_id),  // $4
       p(grade_id),    // $5
+      ownerFilter,    // $6
     ];
 
     const sql = `
       SELECT
-        week_start,
-        ROUND(AVG(score)::numeric, 1) AS avg_score,
-        COUNT(DISTINCT lecture_id)     AS lecture_count
-      FROM dashboard_fact_lectures
-      WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
-        AND score IS NOT NULL
-        AND ($1::int IS NULL OR subject_id = $1)
-        AND ($2::int IS NULL OR kpi_id     = $2)
-        AND ($3::int IS NULL OR domain_id  = $3)
-        AND ($4::int IS NULL OR section_id = $4)
-        AND ($5::int IS NULL OR grade_id   = $5)
-      GROUP BY week_start
-      ORDER BY week_start;
+        dfl.week_start,
+        ROUND(AVG(dfl.score)::numeric, 1) AS avg_score,
+        COUNT(DISTINCT dfl.lecture_id)     AS lecture_count
+      FROM dashboard_fact_lectures dfl
+      LEFT JOIN sound_files sf_owner ON dfl.file_id = sf_owner.file_id
+      WHERE dfl.week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
+        AND dfl.score IS NOT NULL
+        AND ($1::int IS NULL OR dfl.subject_id = $1)
+        AND ($2::int IS NULL OR dfl.kpi_id     = $2)
+        AND ($3::int IS NULL OR dfl.domain_id  = $3)
+        AND ($4::int IS NULL OR dfl.section_id = $4)
+        AND ($5::int IS NULL OR dfl.grade_id   = $5)
+        AND ($6::int IS NULL OR sf_owner.user_id = $6)
+      GROUP BY dfl.week_start
+      ORDER BY dfl.week_start;
     `;
 
     const rows = await getMany(sql, params);
@@ -456,17 +476,19 @@ router.get('/teacher-performance', async (req: Request, res: Response) => {
  *
  * Response: { week_labels: ["W1",...], sections: [{ section_id, section_name, scores: [s1,...] }] }
  */
-router.get('/section-progress', async (req: Request, res: Response) => {
+router.get('/section-progress', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { subject_id, teacher_id, kpi_id, domain_id, grade_id } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
+    const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
       p(subject_id),  // $1
       p(teacher_id),  // $2
       p(kpi_id),      // $3
       p(domain_id),   // $4
       p(grade_id),    // $5
+      ownerFilter,    // $6
     ];
 
     const sql = `
@@ -478,6 +500,7 @@ router.get('/section-progress', async (req: Request, res: Response) => {
         COUNT(DISTINCT dfl.lecture_id)     AS lecture_count
       FROM dashboard_fact_lectures dfl
       JOIN sections sec ON dfl.section_id = sec.section_id
+      LEFT JOIN sound_files sf_owner ON dfl.file_id = sf_owner.file_id
       WHERE dfl.week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
         AND dfl.score IS NOT NULL
         AND ($1::int IS NULL OR dfl.subject_id = $1)
@@ -485,6 +508,7 @@ router.get('/section-progress', async (req: Request, res: Response) => {
         AND ($3::int IS NULL OR dfl.kpi_id     = $3)
         AND ($4::int IS NULL OR dfl.domain_id  = $4)
         AND ($5::int IS NULL OR dfl.grade_id   = $5)
+        AND ($6::int IS NULL OR sf_owner.user_id = $6)
       GROUP BY dfl.section_id, sec.section_name, dfl.week_start
       ORDER BY dfl.section_id, dfl.week_start;
     `;
@@ -537,11 +561,12 @@ router.get('/section-progress', async (req: Request, res: Response) => {
  *
  * Optional query filters: subject_id, teacher_id, kpi_id, domain_id, section_id, grade_id
  */
-router.get('/top-evidences', async (req: Request, res: Response) => {
+router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { subject_id, teacher_id, kpi_id, domain_id, section_id, grade_id } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
+    const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
       p(subject_id),  // $1
       p(teacher_id),  // $2
@@ -549,6 +574,7 @@ router.get('/top-evidences', async (req: Request, res: Response) => {
       p(domain_id),   // $4
       p(section_id),  // $5
       p(grade_id),    // $6
+      ownerFilter,    // $7
     ];
 
     const sql = `
@@ -588,6 +614,7 @@ router.get('/top-evidences', async (req: Request, res: Response) => {
           dfe.end_time,
           dfe.created_at
         FROM dashboard_fact_evidences dfe
+        LEFT JOIN sound_files sf_owner ON dfe.file_id = sf_owner.file_id
         WHERE dfe.week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
           AND dfe.confidence IS NOT NULL
           AND ($1::int IS NULL OR dfe.subject_id = $1)
@@ -596,6 +623,7 @@ router.get('/top-evidences', async (req: Request, res: Response) => {
           AND ($4::int IS NULL OR dfe.domain_id  = $4)
           AND ($5::int IS NULL OR dfe.section_id = $5)
           AND ($6::int IS NULL OR dfe.grade_id   = $6)
+          AND ($7::int IS NULL OR sf_owner.user_id = $7)
       ) ranked_evidences
       WHERE rank <= 10
       ORDER BY rank;

@@ -4,7 +4,7 @@ import WatermarkChart from './WatermarkChart';
 import MixedChart from './MixedChart';
 import ProtectedLayout from '../components/ProtectedLayout';
 import { useAuth } from '../context/AuthContext';
-import { getApiUrl } from '../config/apiConfig';
+import api from '../services/api';
 import './TeacherDashboard.css';
 
 const TeacherDashboard = () => {
@@ -53,21 +53,11 @@ const TeacherDashboard = () => {
         setLoading(true);
         console.log('📊 Fetching all KPI card stats from single endpoint...');
 
-        const url = getApiUrl('/api/dashboard/kpi-cards');
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-          credentials: 'include',
-        });
+        const url = '/api/dashboard/kpi-cards';
+        const response = await api.get(url);
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`KPI cards fetch failed: ${response.status} ${errorText}`);
-        }
-
-        const json = await response.json();
-        console.log('✅ KPI cards data:', json);
-        const cards = json.data || {};
+        console.log('✅ KPI cards data:', response.data);
+        const cards = response.data.data || {};
 
         // Helper: build stat object from a card entry
         const toStat = (entry) => {
@@ -104,21 +94,11 @@ const TeacherDashboard = () => {
     const fetchDomainsWeeks = async () => {
       try {
         console.log('📚 Fetching domains-weeks heatmap data...');
-        const response = await fetch(getApiUrl('/api/dashboard/domains-weeks'), {
-          method: 'GET',
-          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-          credentials: 'include',
-        });
+        const response = await api.get('/api/dashboard/domains-weeks');
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Domains-weeks fetch failed: ${response.status} ${errorText}`);
-        }
+        console.log('✅ Domains-weeks data:', response.data);
 
-        const json = await response.json();
-        console.log('✅ Domains-weeks data:', json);
-
-        const domainsWithWeeks = (json.data || []).map((d) => ({
+        const domainsWithWeeks = (response.data.data || []).map((d) => ({
           name: d.domain_name,
           domainCode: `D${d.domain_id}`,
           weeks: (d.weeks || []).map((v) => (v !== null ? v : 0)),
@@ -290,21 +270,11 @@ const TeacherDashboard = () => {
     const fetchDomainsSubjects = async () => {
       try {
         console.log('📖 Fetching domains-subjects heatmap data...');
-        const response = await fetch(getApiUrl('/api/dashboard/domains-subjects'), {
-          method: 'GET',
-          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-          credentials: 'include',
-        });
+        const response = await api.get('/api/dashboard/domains-subjects');
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Domains-subjects fetch failed: ${response.status} ${errorText}`);
-        }
+        console.log('✅ Domains-subjects data:', response.data);
 
-        const json = await response.json();
-        console.log('✅ Domains-subjects data:', json);
-
-        const { subjects: subList, domains: domList } = json.data || {};
+        const { subjects: subList, domains: domList } = response.data.data || {};
 
         setSubjects((subList || []).map((s) => ({ id: s.id, name: s.name })));
 
@@ -332,17 +302,10 @@ const TeacherDashboard = () => {
     const fetchTopEvidences = async () => {
       try {
         console.log('🏆 Fetching top evidences...');
-        const response = await fetch(getApiUrl('/api/dashboard/top-evidences'), {
-          method: 'GET',
-          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-          credentials: 'include',
-        });
+        const response = await api.get('/api/dashboard/top-evidences');
 
-        if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
-
-        const json = await response.json();
-        console.log('✅ Top evidences:', json);
-        setTopEvidences(json.data || []);
+        console.log('✅ Top evidences:', response.data);
+        setTopEvidences(response.data.data || []);
       } catch (error) {
         console.error('❌ Failed to fetch top evidences:', error);
         setTopEvidences([]);
@@ -410,7 +373,7 @@ const TeacherDashboard = () => {
 
   return (
     <ProtectedLayout>
-      <div className="mx-auto flex max-w-[1500px] flex-col gap-2">
+      <div className="flex flex-col gap-2">
         {/* Welcome Section */}
         <section className="welcome-section border border-[rgba(0,76,58,0.08)] rounded-2xl bg-white px-6 py-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
           <h2 className="font-headline mb-0 text-5xl font-bold text-[var(--dashboard-primary)]">

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
+import api from '../services/api';
 
 const AreaChart = () => {
   const svgRef = useRef();
@@ -21,13 +22,8 @@ const AreaChart = () => {
   useEffect(() => {
     const fetchSections = async () => {
       try {
-        const res = await fetch('/api/sections', {
-          method: 'GET',
-          headers: { 'Accept': 'application/json' },
-          credentials: 'include',
-        });
-        const data = await res.json();
-        const sectionList = (data.data || []).map(s => s.section_name);
+        const res = await api.get('/api/sections');
+        const sectionList = (res.data.data || []).map(s => s.section_name);
         setSections(sectionList);
         setSectionData(sectionList.map(() => weeks.map(() => Math.floor(Math.random() * 41) + 60)));
       } catch (e) {

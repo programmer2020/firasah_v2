@@ -4,11 +4,11 @@
 
 import { Router, Request, Response } from 'express';
 import { getAllGrades, getGradeById, createGrade, updateGrade, deleteGrade } from '../services/gradesService.js';
-import { errorHandler } from '../middleware/auth.js';
+import { authenticate, AuthRequest, getTenantFilter } from '../middleware/auth.js';
 
 const router = Router();
 
-router.get('/', errorHandler, async (req: Request, res: Response) => {
+router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const grades = await getAllGrades();
     res.status(200).json({ success: true, data: grades });
@@ -17,7 +17,7 @@ router.get('/', errorHandler, async (req: Request, res: Response) => {
   }
 });
 
-router.get('/:id', errorHandler, async (req: Request, res: Response) => {
+router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const grade = await getGradeById(Number(req.params.id));
     if (!grade) return res.status(404).json({ success: false, message: 'Grade not found' });
@@ -27,7 +27,7 @@ router.get('/:id', errorHandler, async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', errorHandler, async (req: Request, res: Response) => {
+router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     let { school_id, grade_name, grade_level } = req.body;
     
@@ -43,7 +43,7 @@ router.post('/', errorHandler, async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Grade level must be a valid number' });
     }
 
-    const grade = await createGrade({ school_id, grade_name, grade_level });
+    const grade = await createGrade({ school_id, grade_name, grade_level }, req.user?.id);
     res.status(201).json({ success: true, data: grade, message: 'Grade created successfully' });
   } catch (error: any) {
     // Handle duplicate key error
@@ -57,7 +57,7 @@ router.post('/', errorHandler, async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', errorHandler, async (req: Request, res: Response) => {
+router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const grade = await updateGrade(Number(req.params.id), req.body);
     res.status(200).json({ success: true, data: grade, message: 'Grade updated successfully' });
@@ -66,7 +66,7 @@ router.put('/:id', errorHandler, async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', errorHandler, async (req: Request, res: Response) => {
+router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     await deleteGrade(Number(req.params.id));
     res.status(200).json({ success: true, message: 'Grade deleted successfully' });

@@ -11,7 +11,11 @@ export interface Grade {
   grade_level: number;
 }
 
-export const getAllGrades = async () => {
+export const getAllGrades = async (userId?: number | null) => {
+  if (userId) {
+    const query = `SELECT grade_id, school_id, grade_name, grade_level FROM grades WHERE user_id = $1 ORDER BY grade_level`;
+    return await getMany(query, [userId]);
+  }
   const query = `SELECT grade_id, school_id, grade_name, grade_level FROM grades ORDER BY grade_level`;
   return await getMany(query);
 };
@@ -21,10 +25,10 @@ export const getGradeById = async (gradeId: number) => {
   return await getOne(query, [gradeId]);
 };
 
-export const createGrade = async (grade: Grade) => {
+export const createGrade = async (grade: Grade, userId?: number) => {
   const { school_id, grade_name, grade_level } = grade;
-  const query = `INSERT INTO grades (school_id, grade_name, grade_level) VALUES ($1, $2, $3) RETURNING *`;
-  const result = await executeQuery(query, [school_id, grade_name, parseInt(grade_level as any, 10)]);
+  const query = `INSERT INTO grades (school_id, grade_name, grade_level, user_id) VALUES ($1, $2, $3, $4) RETURNING *`;
+  const result = await executeQuery(query, [school_id, grade_name, parseInt(grade_level as any, 10), userId || null]);
   return result.rows[0];
 };
 

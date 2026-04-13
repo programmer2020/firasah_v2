@@ -10,6 +10,7 @@ export const Register = () => {
     password: '',
     confirmPassword: '',
     name: '',
+    role: 'user',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -53,6 +54,7 @@ export const Register = () => {
         email: formData.email,
         password: formData.password,
         name: formData.name,
+        role: formData.role,
       });
 
       // Redirect to login

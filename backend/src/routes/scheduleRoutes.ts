@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { authenticate, AuthRequest, getTenantFilter } from '../middleware/auth.js';
 import {
   getAllClasses,
   getAllTeachers,
@@ -15,7 +16,7 @@ const router = Router();
 
 // ── Lookups ─────────────────────────────────────────────
 
-router.get('/classes', async (_req: Request, res: Response) => {
+router.get('/classes', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const classes = await getAllClasses();
     res.json(classes);
@@ -24,7 +25,7 @@ router.get('/classes', async (_req: Request, res: Response) => {
   }
 });
 
-router.get('/teachers', async (_req: Request, res: Response) => {
+router.get('/teachers', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const teachers = await getAllTeachers();
     res.json(teachers);
@@ -33,7 +34,7 @@ router.get('/teachers', async (_req: Request, res: Response) => {
   }
 });
 
-router.get('/subjects', async (_req: Request, res: Response) => {
+router.get('/subjects', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const subjects = await getAllSubjects();
     res.json(subjects);
@@ -44,7 +45,7 @@ router.get('/subjects', async (_req: Request, res: Response) => {
 
 // ── Time Slots ──────────────────────────────────────────
 
-router.get('/time-slots/:classId', async (req: Request, res: Response) => {
+router.get('/time-slots/:classId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const classId = parseInt(req.params.classId as string, 10);
     const slots = await getTimeSlotsByClass(classId);
@@ -54,20 +55,20 @@ router.get('/time-slots/:classId', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/time-slots', async (req: Request, res: Response) => {
+router.post('/time-slots', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { class_id, day_of_week, start_time, end_time, subject_id } = req.body;
     if (!class_id || !day_of_week || !start_time || !end_time || !subject_id) {
       return res.status(400).json({ error: 'class_id, day_of_week, start_time, end_time, subject_id are required' });
     }
-    const slot = await createTimeSlot({ class_id, day_of_week, start_time, end_time, subject_id });
+    const slot = await createTimeSlot({ class_id, day_of_week, start_time, end_time, subject_id, user_id: req.user?.id });
     res.status(201).json(slot);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-router.delete('/time-slots/:id', async (req: Request, res: Response) => {
+router.delete('/time-slots/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(req.params.id as string, 10);
     const deleted = await deleteTimeSlot(id);
@@ -80,7 +81,7 @@ router.delete('/time-slots/:id', async (req: Request, res: Response) => {
 
 // ── Schedule Assignment ─────────────────────────────────
 
-router.get('/:classId', async (req: Request, res: Response) => {
+router.get('/:classId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const classId = parseInt(req.params.classId as string, 10);
     const schedule = await getFullSchedule(classId);
@@ -90,7 +91,7 @@ router.get('/:classId', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/assign', async (req: Request, res: Response) => {
+router.post('/assign', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { class_id, time_slot_id, subject_id, teacher_id } = req.body;
     if (!class_id || !time_slot_id || !subject_id || !teacher_id) {
@@ -103,7 +104,7 @@ router.post('/assign', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/assign/:timeSlotId', async (req: Request, res: Response) => {
+router.delete('/assign/:timeSlotId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const timeSlotId = parseInt(req.params.timeSlotId as string, 10);
     const deleted = await removeSchedule(timeSlotId);

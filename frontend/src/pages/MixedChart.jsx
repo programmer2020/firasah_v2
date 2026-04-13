@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';
-import { getApiUrl } from '../config/apiConfig';
+import api from '../services/api';
 
 const MixedChart = () => {
   const chartRef = useRef(null);
@@ -12,18 +12,10 @@ const MixedChart = () => {
     const fetchData = async () => {
       try {
         console.log('📊 Fetching teacher performance data...');
-        const response = await fetch(getApiUrl('/api/dashboard/teacher-performance'), {
-          method: 'GET',
-          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-          credentials: 'include',
-        });
+        const response = await api.get('/api/dashboard/teacher-performance');
+        console.log('✅ Teacher performance data:', response.data);
 
-        if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
-
-        const json = await response.json();
-        console.log('✅ Teacher performance data:', json);
-
-        const weeks = json.data?.weeks || [];
+        const weeks = response.data.data?.weeks || [];
         setChartData({
           labels: weeks.map((w) => w.week_label),
           scores: weeks.map((w) => w.avg_score),

@@ -85,7 +85,7 @@ export const Dashboard = () => {
 
   return (
     <ProtectedLayout>
-      <div className="mx-auto max-w-[1500px]">
+      <div>
         <section className="mb-12">
           <h2 className="font-headline mb-2 text-5xl font-bold tracking-[-0.08em] text-[var(--dashboard-primary)]">
             Welcome back, {user?.name || 'User'}

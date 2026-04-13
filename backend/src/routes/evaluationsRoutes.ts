@@ -4,6 +4,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { authenticate, AuthRequest, getTenantFilter } from '../middleware/auth.js';
 import {
   getAllEvaluations,
   getEvaluationByLectureAndKPI,
@@ -24,9 +25,10 @@ const router = Router();
  *       - Evaluations
  *     summary: Get all lecture_kpi records
  */
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const evaluations = await getAllEvaluations();
+    const { userId } = getTenantFilter(req);
+    const evaluations = await getAllEvaluations(userId);
     res.status(200).json({
       success: true,
       message: 'Evaluations retrieved successfully',
@@ -48,7 +50,7 @@ router.get('/', async (req: Request, res: Response) => {
  *       - Evaluations
  *     summary: Get lecture_kpi by lecture and KPI
  */
-router.get('/lecture/:lectureId/kpi/:kpiId', async (req: Request, res: Response) => {
+router.get('/lecture/:lectureId/kpi/:kpiId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { lectureId, kpiId } = req.params;
     const evaluation = await getEvaluationByLectureAndKPI(parseInt(lectureId as string), parseInt(kpiId as string));
@@ -99,7 +101,7 @@ router.get('/lecture/:lectureId/kpi/:kpiId', async (req: Request, res: Response)
  *               avg_confidence:
  *                 type: number
  */
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { lecture_id, kpi_id, evidence_count } = req.body;
 
@@ -133,7 +135,7 @@ router.post('/', async (req: Request, res: Response) => {
  *       - Evaluations
  *     summary: Update a lecture_kpi record
  */
-router.put('/lecture/:lectureId/kpi/:kpiId', async (req: Request, res: Response) => {
+router.put('/lecture/:lectureId/kpi/:kpiId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const lectureId = parseInt(req.params.lectureId as string);
     const kpiId = parseInt(req.params.kpiId as string);
@@ -170,7 +172,7 @@ router.put('/lecture/:lectureId/kpi/:kpiId', async (req: Request, res: Response)
  *       - Evaluations
  *     summary: Delete a lecture_kpi record
  */
-router.delete('/lecture/:lectureId/kpi/:kpiId', async (req: Request, res: Response) => {
+router.delete('/lecture/:lectureId/kpi/:kpiId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const lectureId = parseInt(req.params.lectureId as string);
     const kpiId = parseInt(req.params.kpiId as string);
@@ -206,7 +208,7 @@ router.delete('/lecture/:lectureId/kpi/:kpiId', async (req: Request, res: Respon
  *       - Evaluations
  *     summary: Get evaluations by KPI
  */
-router.get('/kpi/:kpiId', async (req: Request, res: Response) => {
+router.get('/kpi/:kpiId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const kpiId = req.params.kpiId as string;
     const evaluations = await getEvaluationsByKPI(parseInt(kpiId));
@@ -232,7 +234,7 @@ router.get('/kpi/:kpiId', async (req: Request, res: Response) => {
  *       - Evaluations
  *     summary: Get evaluations by lecture
  */
-router.get('/lecture/:lectureId', async (req: Request, res: Response) => {
+router.get('/lecture/:lectureId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const lectureId = req.params.lectureId as string;
     const evaluations = await getEvaluationsByLecture(parseInt(lectureId));

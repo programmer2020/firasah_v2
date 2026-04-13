@@ -19,9 +19,9 @@ interface Evidence {
 }
 
 /**
- * Get all evidences
+ * Get all evidences (optionally filtered by user_id via lecture → sound_files)
  */
-export const getAllEvidences = async () => {
+export const getAllEvidences = async (userId?: number | null) => {
   try {
     const query = `
       SELECT
@@ -39,9 +39,12 @@ export const getAllEvidences = async () => {
         k.kpi_name
       FROM evidences e
       LEFT JOIN kpis k ON e.kpi_id = k.kpi_id
+      ${userId ? `LEFT JOIN lecture l ON e.lecture_id = l.lecture_id
+      LEFT JOIN sound_files sf ON l.file_id = sf.file_id
+      WHERE sf.user_id = $1` : ''}
       ORDER BY e.created_at DESC
     `;
-    return await getMany(query);
+    return await getMany(query, userId ? [userId] : []);
   } catch (error) {
     console.error('Error fetching evidences:', error);
     throw error;

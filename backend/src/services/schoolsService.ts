@@ -17,10 +17,19 @@ export interface School {
 }
 
 /**
- * Get all schools
+ * Get all schools (optionally filtered by user_id)
  */
-export const getAllSchools = async () => {
+export const getAllSchools = async (userId?: number | null) => {
   try {
+    if (userId) {
+      const query = `
+        SELECT school_id, school_name, school_code, city, country, created_at
+        FROM schools
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+      `;
+      return await getMany(query, [userId]);
+    }
     const query = `
       SELECT school_id, school_name, school_code, city, country, created_at
       FROM schools
@@ -53,15 +62,15 @@ export const getSchoolById = async (schoolId: number) => {
 /**
  * Create a new school
  */
-export const createSchool = async (school: School) => {
+export const createSchool = async (school: School, userId?: number) => {
   try {
     const { school_name, school_code, city, country } = school;
     const query = `
-      INSERT INTO schools (school_name, school_code, city, country, created_at)
-      VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-      RETURNING school_id, school_name, school_code, city, country, created_at
+      INSERT INTO schools (school_name, school_code, city, country, user_id, created_at)
+      VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+      RETURNING school_id, school_name, school_code, city, country, user_id, created_at
     `;
-    const result = await executeQuery(query, [school_name, school_code, city, country]);
+    const result = await executeQuery(query, [school_name, school_code, city, country, userId || null]);
     return result.rows[0];
   } catch (error) {
     console.error('Error creating school:', error);

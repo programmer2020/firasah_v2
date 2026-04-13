@@ -53,9 +53,9 @@ function computeScore(avgConfidence: number, evidenceCount: number): number {
 }
 
 /**
- * Get all lecture_kpi records
+ * Get all lecture_kpi records (optionally filtered by user_id via sound_files)
  */
-export const getAllEvaluations = async () => {
+export const getAllEvaluations = async (userId?: number | null) => {
   try {
     const query = `
       SELECT
@@ -75,9 +75,10 @@ export const getAllEvaluations = async () => {
       LEFT JOIN kpis k ON lk.kpi_id = k.kpi_id
       LEFT JOIN lecture l ON lk.lecture_id = l.lecture_id
       LEFT JOIN sound_files s ON l.file_id = s.file_id
+      ${userId ? 'WHERE s.user_id = $1' : ''}
       ORDER BY lk.created_at DESC
     `;
-    return await getMany(query);
+    return await getMany(query, userId ? [userId] : []);
   } catch (error) {
     console.error('Error fetching evaluations:', error);
     throw error;

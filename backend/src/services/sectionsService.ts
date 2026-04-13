@@ -9,7 +9,11 @@ export interface Section {
   section_name: string;
 }
 
-export const getAllSections = async () => {
+export const getAllSections = async (userId?: number | null) => {
+  if (userId) {
+    const query = `SELECT section_id, section_name FROM sections WHERE user_id = $1 ORDER BY section_name`;
+    return await getMany(query, [userId]);
+  }
   const query = `SELECT section_id, section_name FROM sections ORDER BY section_name`;
   return await getMany(query);
 };
@@ -19,10 +23,10 @@ export const getSectionById = async (sectionId: number) => {
   return await getOne(query, [sectionId]);
 };
 
-export const createSection = async (section: Section) => {
+export const createSection = async (section: Section, userId?: number) => {
   const { section_name } = section;
-  const query = `INSERT INTO sections (section_name) VALUES ($1) RETURNING *`;
-  const result = await executeQuery(query, [section_name]);
+  const query = `INSERT INTO sections (section_name, user_id) VALUES ($1, $2) RETURNING *`;
+  const result = await executeQuery(query, [section_name, userId || null]);
   return result.rows[0];
 };
 

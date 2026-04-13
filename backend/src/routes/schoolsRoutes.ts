@@ -11,7 +11,7 @@ import {
   updateSchool,
   deleteSchool,
 } from '../services/schoolsService.js';
-import { errorHandler } from '../middleware/auth.js';
+import { authenticate, AuthRequest, getTenantFilter } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -27,7 +27,7 @@ const router = Router();
  *       200:
  *         description: List of schools
  */
-router.get('/', errorHandler, async (req: Request, res: Response) => {
+router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const schools = await getAllSchools();
     res.status(200).json({
@@ -65,7 +65,7 @@ router.get('/', errorHandler, async (req: Request, res: Response) => {
  *       404:
  *         description: School not found
  */
-router.get('/:id', errorHandler, async (req: Request, res: Response) => {
+router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const school = await getSchoolById(Number(id));
@@ -118,7 +118,7 @@ router.get('/:id', errorHandler, async (req: Request, res: Response) => {
  *       201:
  *         description: School created successfully
  */
-router.post('/', errorHandler, async (req: Request, res: Response) => {
+router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { school_name, school_code, city, country } = req.body;
 
@@ -134,7 +134,7 @@ router.post('/', errorHandler, async (req: Request, res: Response) => {
       school_code,
       city,
       country,
-    });
+    }, req.user?.id);
 
     res.status(201).json({
       success: true,
@@ -184,7 +184,7 @@ router.post('/', errorHandler, async (req: Request, res: Response) => {
  *       200:
  *         description: School updated successfully
  */
-router.put('/:id', errorHandler, async (req: Request, res: Response) => {
+router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { school_name, school_code, city, country } = req.body;
@@ -229,7 +229,7 @@ router.put('/:id', errorHandler, async (req: Request, res: Response) => {
  *       200:
  *         description: School deleted successfully
  */
-router.delete('/:id', errorHandler, async (req: Request, res: Response) => {
+router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     await deleteSchool(Number(id));

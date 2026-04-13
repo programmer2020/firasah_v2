@@ -4,7 +4,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireFileOwnership, AuthRequest } from '../middleware/auth.js';
 import { verifyToken } from '../services/authService.js';
 import multer from 'multer';
 import path from 'path';
@@ -152,6 +152,7 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
       note: (req.body as any).note || null,
       classId,
       dayOfWeek,
+      userId: req.user?.id,
     });
 
     // Log: file received and record created
@@ -249,7 +250,7 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
  * GET /api/sound-files/fragments/failed
  * Get all fragments with transcription_status = 'failed' (retry_count >= 3)
  */
-router.get('/fragments/failed', async (req: Request, res: Response) => {
+router.get('/fragments/failed', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const rows = await getMany(
       `SELECT f.fragment_id, f.file_id, f.fragment_order,
@@ -440,9 +441,12 @@ router.get('/:id/progress', (req: Request, res: Response) => {
  *                   items:
  *                     $ref: '#/components/schemas/SoundFile'
  */
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const soundFiles = await getAllSoundFiles();
+    // super_admin sees all files, regular users see only their own
+    const filter = req.user?.role === 'super_admin' ? undefined : req.user?.email;
+    const userId = req.user?.role === 'super_admin' ? undefined : req.user?.id;
+    const soundFiles = await getAllSoundFiles(filter, userId);
     res.status(200).json({
       success: true,
       message: 'Sound files retrieved successfully',
@@ -473,7 +477,7 @@ router.get('/', async (req: Request, res: Response) => {
  *       200:
  *         description: Evaluation report retrieved successfully
  */
-router.get('/:id/evaluation/report', async (req: Request, res: Response) => {
+router.get('/:id/evaluation/report', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
   try {
     const fileId = parseInt(req.params.id as string);
 
@@ -528,7 +532,7 @@ router.get('/:id/evaluation/report', async (req: Request, res: Response) => {
  *       200:
  *         description: Evaluation results retrieved successfully
  */
-router.get('/:id/evaluation', async (req: Request, res: Response) => {
+router.get('/:id/evaluation', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
   try {
     const fileId = parseInt(req.params.id as string);
 
@@ -574,7 +578,7 @@ router.get('/:id/evaluation', async (req: Request, res: Response) => {
  * GET /api/sound-files/:id/fragments
  * Get all fragments for a sound file
  */
-router.get('/:id/fragments', async (req: Request, res: Response) => {
+router.get('/:id/fragments', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
   try {
     const fileId = parseInt(req.params.id as string);
 
@@ -621,7 +625,7 @@ router.get('/:id/fragments', async (req: Request, res: Response) => {
  * GET /api/sound-files/:id/lectures
  * Get all lecture/speech records for a sound file
  */
-router.get('/:id/lectures', async (req: Request, res: Response) => {
+router.get('/:id/lectures', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
   try {
     const fileId = parseInt(req.params.id as string);
 
@@ -688,7 +692,7 @@ router.get('/:id/lectures', async (req: Request, res: Response) => {
  *       404:
  *         description: Sound file not found
  */
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     const soundFile = await getSoundFileById(parseInt(id));
@@ -743,7 +747,7 @@ router.get('/:id', async (req: Request, res: Response) => {
  *       201:
  *         description: Sound file created successfully
  */
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { filename, filepath, createdBy, note } = req.body;
 
@@ -797,7 +801,7 @@ router.post('/', async (req: Request, res: Response) => {
  *       200:
  *         description: Sound file updated successfully
  */
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     const data = req.body;
@@ -843,7 +847,7 @@ router.put('/:id', async (req: Request, res: Response) => {
  *       200:
  *         description: Sound file deleted successfully
  */
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
 
@@ -888,7 +892,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
  *       200:
  *         description: Sound files retrieved successfully
  */
-router.get('/creator/:createdBy', async (req: Request, res: Response) => {
+router.get('/creator/:createdBy', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const createdBy = req.params.createdBy as string;
     const soundFiles = await getSoundFilesByCreator(createdBy);
@@ -910,7 +914,7 @@ router.get('/creator/:createdBy', async (req: Request, res: Response) => {
  * POST /api/sound-files/:id/retranscribe
  * Re-transcribe a previously uploaded file (e.g., after a failed transcription)
  */
-router.post('/:id/retranscribe', async (req: Request, res: Response) => {
+router.post('/:id/retranscribe', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
   try {
     const fileId = parseInt(req.params.id as string);
     const soundFile = await getSoundFileById(fileId);
@@ -963,7 +967,7 @@ router.post('/:id/retranscribe', async (req: Request, res: Response) => {
  * POST /api/sound-files/:id/retranscribe-pending
  * Re-transcribe only [transcription_pending] fragments without touching successful ones
  */
-router.post('/:id/retranscribe-pending', async (req: Request, res: Response) => {
+router.post('/:id/retranscribe-pending', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
   try {
     const fileId = parseInt(req.params.id as string);
     const soundFile = await getSoundFileById(fileId);
@@ -1007,7 +1011,7 @@ router.post('/:id/retranscribe-pending', async (req: Request, res: Response) => 
  * POST /api/sound-files/test/evaluate
  * Test evaluation endpoint - evaluate any text directly
  */
-router.post('/test/evaluate', async (req: Request, res: Response) => {
+router.post('/test/evaluate', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { text, description } = req.body;
 
@@ -1037,7 +1041,7 @@ router.post('/test/evaluate', async (req: Request, res: Response) => {
  * GET /api/sound-files/evaluations/search
  * Get evaluations with filters and pagination
  */
-router.get('/evaluations/search', async (req: Request, res: Response) => {
+router.get('/evaluations/search', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
     const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;
@@ -1076,7 +1080,7 @@ router.get('/evaluations/search', async (req: Request, res: Response) => {
  * GET /api/sound-files/:id/evaluation/export
  * Export evaluation to JSON
  */
-router.get('/:id/evaluation/export', async (req: Request, res: Response) => {
+router.get('/:id/evaluation/export', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
   try {
     const fileId = parseInt(req.params.id as string);
 
@@ -1105,7 +1109,7 @@ router.get('/:id/evaluation/export', async (req: Request, res: Response) => {
  * GET /api/sound-files/:id/evaluation/report/comprehensive
  * Generate comprehensive evaluation report
  */
-router.get('/:id/evaluation/report/comprehensive', async (req: Request, res: Response) => {
+router.get('/:id/evaluation/report/comprehensive', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
   try {
     const fileId = parseInt(req.params.id as string);
 
@@ -1135,7 +1139,7 @@ router.get('/:id/evaluation/report/comprehensive', async (req: Request, res: Res
  * GET /api/sound-files/upload-hours/stats
  * Get total upload hours (duration of sound files) for a date range
  */
-router.get('/upload-hours/stats', async (req: Request, res: Response) => {
+router.get('/upload-hours/stats', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { startDate, endDate } = req.query;
 
@@ -1156,14 +1160,17 @@ router.get('/upload-hours/stats', async (req: Request, res: Response) => {
       });
     }
 
+    const ownerFilter = req.user?.role === 'super_admin' ? null : (req.user?.email || null);
+
     // Get total duration in seconds from fragments table, then convert to hours
     const result = await getOne(
       `SELECT COALESCE(SUM(CAST(duration AS DECIMAL)), 0) as total_seconds,
               COUNT(DISTINCT f.file_id) as file_count
        FROM fragments f
        INNER JOIN sound_files sf ON f.file_id = sf.file_id
-       WHERE sf.created_at >= $1 AND sf.created_at < $2`,
-      [start.toISOString(), end.toISOString()]
+       WHERE sf.created_at >= $1 AND sf.created_at < $2
+         AND ($3::text IS NULL OR sf."createdBy" = $3)`,
+      [start.toISOString(), end.toISOString(), ownerFilter]
     );
 
     const totalSeconds = parseFloat(result?.total_seconds || '0');

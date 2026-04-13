@@ -10,7 +10,7 @@ import {
   updateTeacher,
   deleteTeacher,
 } from '../services/teachersService.js';
-import { errorHandler } from '../middleware/auth.js';
+import { authenticate, AuthRequest, getTenantFilter } from '../middleware/auth.js';
 import { getMany } from '../helpers/database.js';
 
 const router = Router();
@@ -19,7 +19,7 @@ const router = Router();
  * GET /api/teachers/logins
  * Get teacher logins (account creations) for a date range
  */
-router.get('/logins/stats', async (req: Request, res: Response) => {
+router.get('/logins/stats', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { startDate, endDate } = req.query;
 
@@ -65,7 +65,7 @@ router.get('/logins/stats', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/', errorHandler, async (req: Request, res: Response) => {
+router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const teachers = await getAllTeachers();
     res.status(200).json({ success: true, data: teachers });
@@ -74,7 +74,7 @@ router.get('/', errorHandler, async (req: Request, res: Response) => {
   }
 });
 
-router.get('/:id', errorHandler, async (req: Request, res: Response) => {
+router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const teacher = await getTeacherById(Number(req.params.id));
     if (!teacher) return res.status(404).json({ success: false, message: 'Teacher not found' });
@@ -84,13 +84,13 @@ router.get('/:id', errorHandler, async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', errorHandler, async (req: Request, res: Response) => {
+router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { school_id, teacher_name, teacher_email, teacher_phone } = req.body;
     if (!school_id || !teacher_name) {
       return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
-    const teacher = await createTeacher({ school_id, teacher_name, teacher_email, teacher_phone });
+    const teacher = await createTeacher({ school_id, teacher_name, teacher_email, teacher_phone }, req.user?.id);
     res.status(201).json({ success: true, data: teacher, message: 'Teacher created successfully' });
   } catch (error: any) {
     // Handle duplicate key error
@@ -104,7 +104,7 @@ router.post('/', errorHandler, async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', errorHandler, async (req: Request, res: Response) => {
+router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { teacher_name, teacher_email, teacher_phone } = req.body;
     const teacher = await updateTeacher(Number(req.params.id), { teacher_id: Number(req.params.id), school_id: 0, teacher_name, teacher_email, teacher_phone });
@@ -114,7 +114,7 @@ router.put('/:id', errorHandler, async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', errorHandler, async (req: Request, res: Response) => {
+router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     await deleteTeacher(Number(req.params.id));
     res.status(200).json({ success: true, message: 'Teacher deleted successfully' });

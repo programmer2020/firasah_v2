@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';
-import { getApiUrl } from '../config/apiConfig';
+import api from '../services/api';
 
 // Color palette for multiple section lines
 const SECTION_COLORS = [
@@ -24,17 +24,10 @@ const WatermarkChart = () => {
     const fetchData = async () => {
       try {
         console.log('📈 Fetching section progress data...');
-        const response = await fetch(getApiUrl('/api/dashboard/section-progress'), {
-          method: 'GET',
-          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-          credentials: 'include',
-        });
+        const response = await api.get('/api/dashboard/section-progress');
 
-        if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
-
-        const json = await response.json();
-        console.log('✅ Section progress data:', json);
-        setChartData(json.data || { week_labels: [], sections: [] });
+        console.log('✅ Section progress data:', response.data);
+        setChartData(response.data.data || { week_labels: [], sections: [] });
       } catch (error) {
         console.error('❌ Failed to fetch section progress:', error);
         setChartData({ week_labels: [], sections: [] });

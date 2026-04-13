@@ -13,6 +13,7 @@ interface SoundFile {
   note?: string;
   classId?: number;
   dayOfWeek?: string;
+  userId?: number;
 }
 
 const syncSoundFilesIdSequence = async () => {
@@ -27,10 +28,28 @@ const syncSoundFilesIdSequence = async () => {
 
 /**
  * Get all sound files
+ * @param createdByFilter Filter by createdBy email (legacy)
+ * @param userId Filter by user_id (multi-tenant)
  * @returns Promise with array of sound files
  */
-export const getAllSoundFiles = async () => {
+export const getAllSoundFiles = async (createdByFilter?: string, userId?: number | null) => {
   try {
+    if (userId) {
+      const query = `
+        SELECT * FROM sound_files
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+      `;
+      return await getMany(query, [userId]);
+    }
+    if (createdByFilter) {
+      const query = `
+        SELECT * FROM sound_files
+        WHERE "createdBy" = $1
+        ORDER BY created_at DESC
+      `;
+      return await getMany(query, [createdByFilter]);
+    }
     const query = `
       SELECT * FROM sound_files
       ORDER BY created_at DESC
@@ -78,6 +97,7 @@ export const createSoundFile = async (data: SoundFile) => {
       note: data.note || null,
       ...(data.classId != null ? { class_id: data.classId } : {}),
       ...(data.dayOfWeek ? { day_of_week: data.dayOfWeek } : {}),
+      ...(data.userId != null ? { user_id: data.userId } : {}),
     });
 
     // Keep SERIAL sequence aligned with imported/migrated data before insert.

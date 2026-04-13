@@ -4,7 +4,7 @@
  */
 
 import express, { Request, Response } from 'express';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireFileOwnership, requireSuperAdmin, AuthRequest } from '../middleware/auth.js';
 import {
   getFragmentsByFileId,
   getFragmentsByLectureId,
@@ -25,7 +25,7 @@ const router = express.Router();
  * GET /api/fragments/file/:fileId
  * Get all fragments for a sound file
  */
-router.get('/file/:fileId', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/file/:fileId', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
   try {
     const fileId = parseInt(req.params.fileId as string);
     const fragments = await getFragmentsByFileId(fileId);
@@ -85,7 +85,7 @@ router.get('/timeslot/:timeSlotId', authenticate, async (req: AuthRequest, res: 
  * GET /api/fragments/stats/:fileId
  * Get fragment statistics for a file
  */
-router.get('/stats/:fileId', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/stats/:fileId', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
   try {
     const fileId = parseInt(req.params.fileId as string);
     const stats = await getFragmentStatistics(fileId);
@@ -105,7 +105,7 @@ router.get('/stats/:fileId', authenticate, async (req: AuthRequest, res: Respons
  * Process a sound file into fragments
  * Query params: lectureId (optional), timeSlotId (optional)
  */
-router.post('/process/:fileId', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/process/:fileId', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
   try {
     const fileId = parseInt(req.params.fileId as string);
     const { lectureId, timeSlotId } = req.query;
@@ -139,7 +139,7 @@ router.post('/process/:fileId', authenticate, async (req: AuthRequest, res: Resp
  * Process all sound files into fragments
  * This is an admin-only operation
  */
-router.post('/process-all', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/process-all', authenticate, requireSuperAdmin, async (req: AuthRequest, res: Response) => {
   try {
     console.log('[FragmentRoutes] Starting bulk fragment processing...');
 
@@ -220,7 +220,7 @@ router.post('/process-all', authenticate, async (req: AuthRequest, res: Response
  * DELETE /api/fragments/file/:fileId
  * Delete all fragments for a file
  */
-router.delete('/file/:fileId', authenticate, async (req: AuthRequest, res: Response) => {
+router.delete('/file/:fileId', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
   try {
     const fileId = parseInt(req.params.fileId as string);
     const deletedCount = await deleteFileFragments(fileId);
