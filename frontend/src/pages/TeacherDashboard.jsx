@@ -38,13 +38,45 @@ const TeacherDashboard = () => {
   const [loading, setLoading] = useState(true);
 
   const [filters, setFilters] = useState({
-    subject: 'All',
-    week: 'All',
-    grade: 'All',
-    kpi: 'All',
+    subject: '',
+    week: '',
+    grade: '',
+    kpiStatus: '',
   });
 
-  const [tempFilters, setTempFilters] = useState(filters);
+  // Filter dropdown options from DB
+  const [filterOptions, setFilterOptions] = useState({ subjects: [], grades: [], sections: [] });
+
+  // Fetch filter options on mount
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        const response = await api.get('/api/dashboard/filter-options');
+        setFilterOptions(response.data.data || { subjects: [], grades: [], sections: [] });
+      } catch (error) {
+        console.error('❌ Failed to fetch filter options:', error);
+      }
+    };
+    fetchFilterOptions();
+  }, []);
+
+  // Build query string from active filters
+  const buildFilterParams = (overrides = {}) => {
+    const active = { ...filters, ...overrides };
+    const params = new URLSearchParams();
+    if (active.subject) params.append('subject_id', active.subject);
+    if (active.grade) params.append('grade_id', active.grade);
+    if (active.week) {
+      const weekNum = parseInt(active.week.replace('Week ', ''), 10);
+      if (!isNaN(weekNum)) params.append('week_num', weekNum);
+    }
+    if (active.kpiStatus === 'high') {
+      params.append('min_score', '75');
+    } else if (active.kpiStatus === 'needs_improvement') {
+      params.append('max_score', '50');
+    }
+    return params.toString();
+  };
 
   // Fetch all 4 KPI card metrics in a single API call
   useEffect(() => {
@@ -53,7 +85,8 @@ const TeacherDashboard = () => {
         setLoading(true);
         console.log('📊 Fetching all KPI card stats from single endpoint...');
 
-        const url = '/api/dashboard/kpi-cards';
+        const qs = buildFilterParams();
+        const url = `/api/dashboard/kpi-cards${qs ? `?${qs}` : ''}`;
         const response = await api.get(url);
 
         console.log('✅ KPI cards data:', response.data);
@@ -87,14 +120,15 @@ const TeacherDashboard = () => {
     };
 
     fetchKpiCards();
-  }, []);
+  }, [filters]);
 
   // Fetch domains with real week scores from dashboard materialized view
   useEffect(() => {
     const fetchDomainsWeeks = async () => {
       try {
         console.log('📚 Fetching domains-weeks heatmap data...');
-        const response = await api.get('/api/dashboard/domains-weeks');
+        const qs = buildFilterParams();
+        const response = await api.get(`/api/dashboard/domains-weeks${qs ? `?${qs}` : ''}`);
 
         console.log('✅ Domains-weeks data:', response.data);
 
@@ -124,27 +158,19 @@ const TeacherDashboard = () => {
     };
 
     fetchDomainsWeeks();
-  }, []);
+  }, [filters]);
 
   const handleFilterChange = (key, value) => {
-    setTempFilters({ ...tempFilters, [key]: value });
-  };
-
-  const handleApplyFilters = () => {
-    setFilters(tempFilters);
-    setShowFilterPanel(false);
+    setFilters(prev => ({ ...prev, [key]: value }));
   };
 
   const handleResetFilters = () => {
-    const defaultFilters = {
-      subject: 'Math',
-      week: 'Week 8',
-      grade: 'Grade 10',
-      kpi: 'Active KPI',
-    };
-    setTempFilters(defaultFilters);
-    setFilters(defaultFilters);
-    setShowFilterPanel(false);
+    setFilters({
+      subject: '',
+      week: '',
+      grade: '',
+      kpiStatus: '',
+    });
   };
 
   console.log('🔄 TeacherDashboard rendering with lectureStats:', lectureStats);
@@ -270,7 +296,8 @@ const TeacherDashboard = () => {
     const fetchDomainsSubjects = async () => {
       try {
         console.log('📖 Fetching domains-subjects heatmap data...');
-        const response = await api.get('/api/dashboard/domains-subjects');
+        const qs = buildFilterParams();
+        const response = await api.get(`/api/dashboard/domains-subjects${qs ? `?${qs}` : ''}`);
 
         console.log('✅ Domains-subjects data:', response.data);
 
@@ -293,7 +320,7 @@ const TeacherDashboard = () => {
     };
 
     fetchDomainsSubjects();
-  }, []);
+  }, [filters]);
 
   // Top 10 high-confidence evidence samples from real data
   const [topEvidences, setTopEvidences] = useState([]);
@@ -302,7 +329,8 @@ const TeacherDashboard = () => {
     const fetchTopEvidences = async () => {
       try {
         console.log('🏆 Fetching top evidences...');
-        const response = await api.get('/api/dashboard/top-evidences');
+        const qs = buildFilterParams();
+        const response = await api.get(`/api/dashboard/top-evidences${qs ? `?${qs}` : ''}`);
 
         console.log('✅ Top evidences:', response.data);
         setTopEvidences(response.data.data || []);
@@ -313,7 +341,7 @@ const TeacherDashboard = () => {
     };
 
     fetchTopEvidences();
-  }, []);
+  }, [filters]);
 
   const heatmapDomains = domains;
   const heatmapWeekLabels = (heatmapDomains[0]?.weeks || Array.from({ length: 8 }, () => 0)).map((_, index) => `W${index + 1}`);
@@ -321,6 +349,17 @@ const TeacherDashboard = () => {
   const subjectHeatmapMatrix = domainSubjectMatrix;
   const heatmapCellSize = 120;
   const heatmapLabelColumnWidth = 360;
+
+  // Parse selected week index (0-based) from filters.week like "Week 3" -> 2
+  const selectedWeekIdx = filters.week ? parseInt(filters.week.replace('Week ', ''), 10) - 1 : null;
+
+  // Filter evidences by KPI status (client-side score threshold filter)
+  const filteredEvidences = topEvidences.filter((ev) => {
+    if (!filters.kpiStatus) return true;
+    if (filters.kpiStatus === 'high') return ev.confidence >= 75;
+    if (filters.kpiStatus === 'needs_improvement') return ev.confidence < 50;
+    return true;
+  });
 
   const getHeatmapTone = (value) => {
     if (value >= 90) {
@@ -385,48 +424,40 @@ const TeacherDashboard = () => {
         <section className="shrink-0 border border-[rgba(0,76,58,0.08)] rounded-2xl bg-white shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
           <div className="dashboard-panel dashboard-ghost-top h-auto px-8 py-7">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <p className="font-dashboard-mono text-[10px] uppercase tracking-[0.28em] text-[#7e8f89]">
-                  Dashboard Filters
-                </p>
-              </div>
-
               <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowFilterPanel(!showFilterPanel)}
+                  className="inline-flex items-center gap-2 rounded-full bg-[var(--dashboard-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                >
+                  <span>🔍</span>
+                  <span>{showFilterPanel ? 'Hide Filters' : 'Filters'}</span>
+                </button>
                 <button
                   onClick={handleResetFilters}
                   className="rounded-xl border border-[rgba(0,76,58,0.16)] px-4 py-2 text-sm font-semibold text-[#24433b] transition hover:bg-[rgba(238,243,239,0.88)]"
                 >
                   Reset
                 </button>
-                <button
-                  onClick={handleApplyFilters}
-                  className="rounded-xl bg-[var(--dashboard-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-                >
-                  Apply
-                </button>
-                <button
-                  onClick={() => setShowFilterPanel(!showFilterPanel)}
-                  className="inline-flex items-center gap-2 self-start rounded-full bg-[var(--dashboard-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-                >
-                  <span>🔍</span>
-                  <span>{showFilterPanel ? 'Hide Filters' : 'Filters'}</span>
-                </button>
               </div>
+
+              <p className="font-dashboard-mono text-[10px] uppercase tracking-[0.28em] text-[#7e8f89]">
+                Dashboard Filters
+              </p>
             </div>
 
             {!showFilterPanel && (
               <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-[rgba(0,76,58,0.08)] pt-5">
                 <span className="rounded-full bg-[rgba(238,243,239,0.88)] px-3 py-1.5 text-xs font-medium text-[#24433b]">
-                  Subject: {filters.subject}
+                  Subject: {filters.subject ? filterOptions.subjects.find(s => String(s.id) === filters.subject)?.name || filters.subject : 'All'}
                 </span>
                 <span className="rounded-full bg-[rgba(238,243,239,0.88)] px-3 py-1.5 text-xs font-medium text-[#24433b]">
-                  {filters.week}
+                  Week: {filters.week || 'All'}
                 </span>
                 <span className="rounded-full bg-[rgba(238,243,239,0.88)] px-3 py-1.5 text-xs font-medium text-[#24433b]">
-                  {filters.grade}
+                  Grade: {filters.grade ? filterOptions.grades.find(g => String(g.id) === filters.grade)?.name || filters.grade : 'All'}
                 </span>
                 <span className="rounded-full bg-[rgba(238,243,239,0.88)] px-3 py-1.5 text-xs font-medium text-[#24433b]">
-                  {filters.kpi}
+                  KPI Status: {filters.kpiStatus || 'All'}
                 </span>
               </div>
             )}
@@ -439,15 +470,14 @@ const TeacherDashboard = () => {
                       Subject
                     </label>
                     <select
-                      value={tempFilters.subject}
+                      value={filters.subject}
                       onChange={(e) => handleFilterChange('subject', e.target.value)}
                       className="w-full rounded-xl border border-[rgba(0,76,58,0.12)] bg-white px-3 py-2 text-sm text-[#172b26] outline-none transition focus:border-[var(--dashboard-primary)] focus:ring-2 focus:ring-[rgba(0,96,73,0.12)]"
                     >
-                      <option>All</option>
-                      <option>Math</option>
-                      <option>Science</option>
-                      <option>English</option>
-                      <option>History</option>
+                      <option value="">All</option>
+                      {filterOptions.subjects.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -456,19 +486,14 @@ const TeacherDashboard = () => {
                       Week
                     </label>
                     <select
-                      value={tempFilters.week}
+                      value={filters.week}
                       onChange={(e) => handleFilterChange('week', e.target.value)}
                       className="w-full rounded-xl border border-[rgba(0,76,58,0.12)] bg-white px-3 py-2 text-sm text-[#172b26] outline-none transition focus:border-[var(--dashboard-primary)] focus:ring-2 focus:ring-[rgba(0,96,73,0.12)]"
                     >
-                      <option>All</option>
-                      <option>Week 1</option>
-                      <option>Week 2</option>
-                      <option>Week 3</option>
-                      <option>Week 4</option>
-                      <option>Week 5</option>
-                      <option>Week 6</option>
-                      <option>Week 7</option>
-                      <option>Week 8</option>
+                      <option value="">All</option>
+                      {Array.from({ length: 8 }, (_, i) => (
+                        <option key={i + 1} value={`Week ${i + 1}`}>Week {i + 1}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -477,16 +502,14 @@ const TeacherDashboard = () => {
                       Grade
                     </label>
                     <select
-                      value={tempFilters.grade}
+                      value={filters.grade}
                       onChange={(e) => handleFilterChange('grade', e.target.value)}
                       className="w-full rounded-xl border border-[rgba(0,76,58,0.12)] bg-white px-3 py-2 text-sm text-[#172b26] outline-none transition focus:border-[var(--dashboard-primary)] focus:ring-2 focus:ring-[rgba(0,96,73,0.12)]"
                     >
-                      <option>All</option>
-                      <option>Grade 8</option>
-                      <option>Grade 9</option>
-                      <option>Grade 10</option>
-                      <option>Grade 11</option>
-                      <option>Grade 12</option>
+                      <option value="">All</option>
+                      {filterOptions.grades.map((g) => (
+                        <option key={g.id} value={g.id}>{g.name}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -495,15 +518,13 @@ const TeacherDashboard = () => {
                       KPI Status
                     </label>
                     <select
-                      value={tempFilters.kpi}
-                      onChange={(e) => handleFilterChange('kpi', e.target.value)}
+                      value={filters.kpiStatus}
+                      onChange={(e) => handleFilterChange('kpiStatus', e.target.value)}
                       className="w-full rounded-xl border border-[rgba(0,76,58,0.12)] bg-white px-3 py-2 text-sm text-[#172b26] outline-none transition focus:border-[var(--dashboard-primary)] focus:ring-2 focus:ring-[rgba(0,96,73,0.12)]"
                     >
-                      <option>All</option>
-                      <option>Active KPI</option>
-                      <option>All KPIs</option>
-                      <option>High Performers</option>
-                      <option>Needs Improvement</option>
+                      <option value="">All</option>
+                      <option value="high">High Performers (75+)</option>
+                      <option value="needs_improvement">Needs Improvement (&lt;50)</option>
                     </select>
                   </div>
                 </div>
@@ -558,10 +579,10 @@ const TeacherDashboard = () => {
                 style={{ gridTemplateColumns: `${heatmapLabelColumnWidth}px repeat(${heatmapWeekLabels.length}, ${heatmapCellSize}px)` }}
               >
                 <div />
-                {heatmapWeekLabels.map((label) => (
+                {heatmapWeekLabels.map((label, idx) => (
                   <span
                     key={label}
-                    className="text-center font-dashboard-mono text-[10px] font-bold uppercase tracking-[0.22em] text-[#6c7a71]"
+                    className={`text-center font-dashboard-mono text-[10px] font-bold uppercase tracking-[0.22em] ${selectedWeekIdx !== null && selectedWeekIdx !== idx ? 'text-[#c0c8c4]' : 'text-[#6c7a71]'}`}
                   >
                     {label}
                   </span>
@@ -580,11 +601,12 @@ const TeacherDashboard = () => {
 
                     {domain.weeks.map((value, weekIdx) => {
                       const tone = getHeatmapTone(value);
+                      const isDimmed = selectedWeekIdx !== null && selectedWeekIdx !== weekIdx;
 
                       return (
                         <div
                           key={`${domain.domainCode || domain.name}-week-${weekIdx}`}
-                          className="aspect-square rounded-xl border transition-transform duration-200 hover:scale-[1.03]"
+                          className={`aspect-square rounded-xl border transition-all duration-200 hover:scale-[1.03] ${isDimmed ? 'opacity-25' : ''}`}
                           style={{
                             backgroundColor: tone.bg,
                             borderColor: tone.border,
@@ -725,9 +747,9 @@ const TeacherDashboard = () => {
       {/* Charts Section — side by side */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         {/* Teacher Performance Metrics */}
-        <MixedChart />
+        <MixedChart filters={filters} />
         {/* Class Performance */}
-        <WatermarkChart />
+        <WatermarkChart filters={filters} />
       </section>
 
       {/* Evidence Samples Table */}
@@ -759,12 +781,12 @@ const TeacherDashboard = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {topEvidences.length === 0 && (
+                {filteredEvidences.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-6 py-8 text-center text-gray-400">No evidence data available yet</td>
                   </tr>
                 )}
-                {topEvidences.map((evidence, idx) => (
+                {filteredEvidences.map((evidence, idx) => (
                   <tr
                     key={evidence.evidence_id || idx}
                     className={`${idx % 2 === 0 ? 'bg-white' : 'bg-[#f3f5f4]'} transition-colors hover:bg-gray-50`}
