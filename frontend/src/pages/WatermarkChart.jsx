@@ -60,10 +60,11 @@ const WatermarkChart = ({ filters = {} }) => {
       chartInstanceRef.current = echarts.init(chartRef.current);
     }
 
-    const { week_labels, classes } = chartData;
+    const week_labels = chartData.week_labels || [];
+    const classes = chartData.classes || chartData.sections || [];
 
     const series = classes.map((cls, idx) => ({
-      name: cls.class_name,
+      name: cls.class_name || cls.section_name || `Class ${idx + 1}`,
       type: 'line',
       smooth: true,
       data: cls.scores.map((s) => (s !== null ? s : 0)),
@@ -101,7 +102,7 @@ const WatermarkChart = ({ filters = {} }) => {
       legend: {
         top: 20,
         right: 20,
-        data: classes.map((cls) => cls.class_name),
+        data: classes.map((cls, idx) => cls.class_name || cls.section_name || `Class ${idx + 1}`),
         textStyle: { color: '#666', fontSize: 12 },
       },
       grid: {
