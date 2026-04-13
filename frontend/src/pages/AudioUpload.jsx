@@ -18,6 +18,7 @@ export const AudioUpload = () => {
   // Pipeline progress state
   const [pipelineProgress, setPipelineProgress] = useState(null);
   const [processing, setProcessing] = useState(false);
+  const [processingStartTime, setProcessingStartTime] = useState(null);
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -109,6 +110,7 @@ export const AudioUpload = () => {
   // Start polling for pipeline progress
   const startPipelineProgress = (fileId) => {
     setProcessing(true);
+    setProcessingStartTime(Date.now());
     setPipelineProgress({ status: 'uploading', message: 'File uploaded. Starting processing pipeline...', percent: 5 });
 
     const pollInterval = setInterval(async () => {
@@ -128,6 +130,7 @@ export const AudioUpload = () => {
             setTimeout(() => {
               setProcessing(false);
               setPipelineProgress(null);
+              setProcessingStartTime(null);
             }, 4000);
           }
         }
@@ -141,6 +144,7 @@ export const AudioUpload = () => {
       clearInterval(pollInterval);
       setProcessing(false);
       setPipelineProgress(null);
+      setProcessingStartTime(null);
     }, 30 * 60 * 1000);
   };
 
@@ -316,6 +320,19 @@ export const AudioUpload = () => {
     return statusMap[status] || statusMap['pending'];
   };
 
+  const getEstimatedTime = () => {
+    if (!processingStartTime || !pipelineProgress?.percent) return null;
+    const percent = pipelineProgress.percent;
+    if (percent <= 0 || percent >= 100) return null;
+    const elapsed = (Date.now() - processingStartTime) / 1000; // seconds
+    const totalEstimated = (elapsed / percent) * 100;
+    const remaining = Math.max(0, Math.round(totalEstimated - elapsed));
+    if (remaining < 60) return `~${remaining} ثانية`;
+    const mins = Math.floor(remaining / 60);
+    const secs = remaining % 60;
+    return `~${mins} دقيقة${secs > 0 ? ` و ${secs} ثانية` : ''}`;
+  };
+
   return (
     <ProtectedLayout>
       <div>
@@ -380,100 +397,76 @@ export const AudioUpload = () => {
               </div>
             </div>
 
-            {/* Progress Bar (shown during upload) */}
+            {/* Upload Status (shown during upload) */}
             {uploading && (
               <div className="mb-6">
-                <div className="rounded-xl p-4 border" style={{background: '#f0fdf4', borderColor: '#a7f3d0'}}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium" style={{color: '#005239'}}>
-                      Uploading file...
-                    </span>
-                    <span className="text-sm font-bold" style={{color: '#006d4a'}}>
-                      {uploadProgress}%
-                    </span>
-                  </div>
-                  <div className="w-full rounded-full h-2.5" style={{background: '#d1fae5'}}>
-                    <div
-                      className="h-2.5 rounded-full transition-all duration-300"
-                      style={{ width: `${uploadProgress}%`, background: 'linear-gradient(90deg, #006d4a, #34d399)' }}
-                    ></div>
-                  </div>
+                <div className="rounded-xl p-4 border flex items-center gap-3" style={{background: '#f0fdf4', borderColor: '#a7f3d0'}}>
+                  <svg className="h-5 w-5 animate-spin shrink-0" style={{color: '#006d4a'}} fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                  </svg>
+                  <span className="text-sm font-semibold" style={{color: '#005239'}}>
+                    جاري رفع الملف...
+                  </span>
                 </div>
               </div>
             )}
 
-            {/* Pipeline Progress (shown during processing) */}
+            {/* Pipeline Status (shown during processing) */}
             {processing && pipelineProgress && (
               <div className="mb-6">
-                  <div className={`rounded-lg p-5 border ${
+                <div className={`rounded-xl p-4 border ${
                   pipelineProgress.status === 'completed'
-                    ? 'bg-success-50 dark:bg-success-900/30 border-success-200 dark:border-success-700'
+                    ? 'border-green-200 bg-green-50'
                     : pipelineProgress.status === 'partial'
-                    ? 'bg-orange-50 dark:bg-orange-900/30 border-orange-200 dark:border-orange-700'
+                    ? 'border-orange-200 bg-orange-50'
                     : pipelineProgress.status === 'failed'
-                    ? 'bg-error-50 dark:bg-error-900/30 border-error-200 dark:border-error-700'
-                    : 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700'
+                    ? 'border-red-200 bg-red-50'
+                    : 'border-blue-200 bg-blue-50'
                 }`}>
-                  {/* Header */}
-                  <div className="flex items-center justify-between mb-3" dir="rtl">
-                    <div className="flex items-center gap-2">
-                      {pipelineProgress.status === 'completed' ? (
-                        <svg className="h-5 w-5 text-success-600 dark:text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      ) : pipelineProgress.status === 'partial' ? (
-                        <svg className="h-5 w-5 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      ) : pipelineProgress.status === 'failed' ? (
-                        <svg className="h-5 w-5 text-error-600 dark:text-error-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      ) : (
-                        <svg className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-spin" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                        </svg>
-                      )}
+                  <div className="flex items-center gap-3">
+                    {pipelineProgress.status === 'completed' ? (
+                      <svg className="h-5 w-5 text-green-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    ) : pipelineProgress.status === 'failed' ? (
+                      <svg className="h-5 w-5 text-red-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    ) : pipelineProgress.status === 'partial' ? (
+                      <svg className="h-5 w-5 text-orange-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    ) : (
+                      <svg className="h-5 w-5 text-blue-600 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                      </svg>
+                    )}
+                    <div dir="rtl" className="flex-1 text-right">
                       <span className={`text-sm font-semibold ${
-                        pipelineProgress.status === 'completed' ? 'text-success-700 dark:text-success-300'
-                          : pipelineProgress.status === 'partial' ? 'text-orange-700 dark:text-orange-300'
-                          : pipelineProgress.status === 'failed' ? 'text-error-700 dark:text-error-300'
-                          : 'text-blue-700 dark:text-blue-300'
+                        pipelineProgress.status === 'completed' ? 'text-green-700'
+                          : pipelineProgress.status === 'failed' ? 'text-red-700'
+                          : pipelineProgress.status === 'partial' ? 'text-orange-700'
+                          : 'text-blue-700'
                       }`}>
-                        Processing File
+                        {pipelineProgress.status === 'completed' ? 'تم الانتهاء بنجاح!'
+                          : pipelineProgress.status === 'failed' ? 'فشلت المعالجة'
+                          : pipelineProgress.status === 'partial' ? 'تم بشكل جزئي'
+                          : 'جاري تحليل الملف...'}
                       </span>
+                      {/* ETA - show only while actively processing */}
+                      {!['completed', 'failed', 'partial'].includes(pipelineProgress.status) && getEstimatedTime() && (
+                        <p className="text-xs text-blue-600 mt-1">
+                          الوقت المتوقع للانتهاء: {getEstimatedTime()}
+                        </p>
+                      )}
                     </div>
-                    <span className={`text-sm font-bold ${
-                      pipelineProgress.status === 'completed' ? 'text-success-600 dark:text-success-400'
-                        : pipelineProgress.status === 'partial' ? 'text-orange-600 dark:text-orange-400'
-                        : pipelineProgress.status === 'failed' ? 'text-error-600 dark:text-error-400'
-                        : 'text-blue-600 dark:text-blue-400'
-                    }`}>
-                      {pipelineProgress.percent}%
-                    </span>
                   </div>
 
-                  {/* Progress Bar */}
-                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5 mb-3">
-                    <div
-                      className={`h-2.5 rounded-full transition-all duration-500 ${
-                        pipelineProgress.status === 'completed' ? 'bg-success-500'
-                          : pipelineProgress.status === 'partial' ? 'bg-orange-500'
-                          : pipelineProgress.status === 'failed' ? 'bg-error-500'
-                          : 'bg-blue-500'
-                      }`}
-                      style={{ width: `${pipelineProgress.percent}%` }}
-                    ></div>
-                  </div>
-
-                  {/* Status Message */}
-                  <p className="text-sm text-gray-700 dark:text-gray-300 text-right" dir="rtl">
-                    {pipelineProgress.message}
-                  </p>
-
+                  {/* Retry button for failed */}
                   {pipelineProgress.status === 'failed' && uploadedFile?.file_id && (
-                    <div className="mt-3">
+                    <div className="mt-3 flex justify-end">
                       <button
                         onClick={() => retryPipeline(uploadedFile.file_id)}
                         disabled={retryingFileId === uploadedFile.file_id}
@@ -483,41 +476,35 @@ export const AudioUpload = () => {
                         {retryingFileId === uploadedFile.file_id ? (
                           <>
                             <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
-                            Retrying...
+                            جاري إعادة المحاولة...
                           </>
                         ) : (
                           <>
                             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                            Retry Pipeline
+                            إعادة المحاولة
                           </>
                         )}
                       </button>
                     </div>
                   )}
 
+                  {/* Partial: retry + failed fragments link */}
                   {pipelineProgress.status === 'partial' && uploadedFile?.file_id && (
-                    <div className="mt-3 flex gap-2">
+                    <div className="mt-3 flex gap-2 justify-end">
                       <Link
                         to={`/failed-fragments?fileId=${uploadedFile.file_id}`}
                         className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-700"
                       >
-                        Open Failed Fragments Page
+                        عرض الأجزاء الفاشلة
                       </Link>
                       <button
                         onClick={() => retryPipeline(uploadedFile.file_id)}
                         disabled={retryingFileId === uploadedFile.file_id}
                         className="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-white px-4 py-2 text-sm font-semibold text-orange-700 transition-colors hover:bg-orange-50"
                       >
-                        {retryingFileId === uploadedFile.file_id ? 'Retrying...' : 'Retry All'}
+                        {retryingFileId === uploadedFile.file_id ? 'جاري إعادة المحاولة...' : 'إعادة المحاولة'}
                       </button>
                     </div>
-                  )}
-
-                  {/* Slot info */}
-                  {pipelineProgress.currentSlot && pipelineProgress.totalSlots && pipelineProgress.status !== 'completed' && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Slot {pipelineProgress.currentSlot} of {pipelineProgress.totalSlots}
-                    </p>
                   )}
                 </div>
               </div>

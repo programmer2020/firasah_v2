@@ -25,7 +25,7 @@ const ProtectedLayout = ({ children }) => {
             <Header onOpenSidebar={() => setSidebarOpen(true)} />
           </div>
 
-          <main className={`px-4 pb-10 pt-[30px] transition-all duration-300 sm:px-6 lg:px-10 ${contentMargin}`}>
+          <main className={`px-4 pb-10 pt-[30px] transition-all duration-300 sm:px-6 lg:pr-10 lg:pl-2 ${contentMargin}`}>
             {children}
           </main>
         </div>
