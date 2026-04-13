@@ -347,8 +347,7 @@ const TeacherDashboard = () => {
   const heatmapWeekLabels = (heatmapDomains[0]?.weeks || Array.from({ length: 8 }, () => 0)).map((_, index) => `W${index + 1}`);
   const heatmapSubjects = subjects;
   const subjectHeatmapMatrix = domainSubjectMatrix;
-  const heatmapCellSize = 120;
-  const heatmapLabelColumnWidth = 360;
+  const heatmapLabelColumnWidth = 220;
 
   // Parse selected week index (0-based) from filters.week like "Week 3" -> 2
   const selectedWeekIdx = filters.week ? parseInt(filters.week.replace('Week ', ''), 10) - 1 : null;
@@ -572,11 +571,10 @@ const TeacherDashboard = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto pb-4">
-            <div className="w-max min-w-full">
+          <div className="pb-4">
               <div
-                className="grid items-center gap-3"
-                style={{ gridTemplateColumns: `${heatmapLabelColumnWidth}px repeat(${heatmapWeekLabels.length}, ${heatmapCellSize}px)` }}
+                className="grid items-center gap-2"
+                style={{ gridTemplateColumns: `${heatmapLabelColumnWidth}px repeat(${heatmapWeekLabels.length}, 1fr)` }}
               >
                 <div />
                 {heatmapWeekLabels.map((label, idx) => (
@@ -590,9 +588,9 @@ const TeacherDashboard = () => {
 
                 {heatmapDomains.map((domain) => (
                   <React.Fragment key={domain.domainCode || domain.name}>
-                    <div className="pr-4">
+                    <div className="pr-3">
                       <p
-                        className="whitespace-nowrap text-sm font-semibold leading-5 text-[#191c1e]"
+                        className="text-xs font-semibold leading-4 text-[#191c1e]"
                         title={domain.name}
                       >
                         {domain.name}
@@ -606,7 +604,7 @@ const TeacherDashboard = () => {
                       return (
                         <div
                           key={`${domain.domainCode || domain.name}-week-${weekIdx}`}
-                          className={`aspect-square rounded-xl border transition-all duration-200 hover:scale-[1.03] ${isDimmed ? 'opacity-25' : ''}`}
+                          className={`rounded-xl border py-4 transition-all duration-200 hover:scale-[1.03] ${isDimmed ? 'opacity-25' : ''}`}
                           style={{
                             backgroundColor: tone.bg,
                             borderColor: tone.border,
@@ -614,8 +612,8 @@ const TeacherDashboard = () => {
                           }}
                           title={`${domain.name} - Week ${weekIdx + 1}: ${value}%`}
                         >
-                          <div className="flex h-full items-center justify-center">
-                            <span className="font-headline text-base font-bold">{value}%</span>
+                          <div className="flex items-center justify-center">
+                            <span className="font-headline text-sm font-bold">{value}%</span>
                           </div>
                         </div>
                       );
@@ -623,7 +621,6 @@ const TeacherDashboard = () => {
                   </React.Fragment>
                 ))}
               </div>
-            </div>
           </div>
 
           <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-[rgba(187,202,191,0.3)] pt-6">
@@ -667,17 +664,16 @@ const TeacherDashboard = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto pb-4">
-            <div className="w-max min-w-full">
+          <div className="pb-4">
               <div
-                className="grid items-center gap-3"
-                style={{ gridTemplateColumns: `${heatmapLabelColumnWidth}px repeat(${heatmapSubjects.length}, ${heatmapCellSize}px)` }}
+                className="grid items-center gap-2"
+                style={{ gridTemplateColumns: `${heatmapLabelColumnWidth}px repeat(${heatmapSubjects.length}, 1fr)` }}
               >
                 <div />
                 {heatmapSubjects.map((subject) => (
                   <span
                     key={subject.id || subject.name}
-                    className="whitespace-nowrap px-1 text-center font-dashboard-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#6c7a71]"
+                    className="px-1 text-center font-dashboard-mono text-[9px] font-bold uppercase tracking-[0.08em] text-[#6c7a71] leading-3"
                   >
                     {subject.name}
                   </span>
@@ -685,9 +681,9 @@ const TeacherDashboard = () => {
 
                 {heatmapDomains.map((domain, domainIdx) => (
                   <React.Fragment key={`${domain.domainCode || domain.name}-subject-row`}>
-                    <div className="pr-4">
+                    <div className="pr-3">
                       <p
-                        className="whitespace-nowrap text-sm font-semibold leading-5 text-[#191c1e]"
+                        className="text-xs font-semibold leading-4 text-[#191c1e]"
                         title={domain.name}
                       >
                         {domain.name}
@@ -700,7 +696,7 @@ const TeacherDashboard = () => {
                       return (
                         <div
                           key={`${domain.domainCode || domain.name}-subject-${subjectIdx}`}
-                          className="aspect-square rounded-xl border transition-transform duration-200 hover:scale-[1.03]"
+                          className="rounded-xl border py-3 transition-transform duration-200 hover:scale-[1.03]"
                           style={{
                             backgroundColor: tone.bg,
                             borderColor: tone.border,
@@ -708,9 +704,9 @@ const TeacherDashboard = () => {
                           }}
                           title={`${domain.name} - ${heatmapSubjects[subjectIdx]?.name}: ${value}%`}
                         >
-                          <div className="flex h-full flex-col items-center justify-center text-center">
-                            <span className="font-headline text-sm font-bold leading-none">{value}%</span>
-                            <span className="mt-0.5 text-[8px] font-semibold uppercase leading-none tracking-[0.08em] opacity-80">
+                          <div className="flex flex-col items-center justify-center text-center">
+                            <span className="font-headline text-xs font-bold leading-none">{value}%</span>
+                            <span className="mt-0.5 text-[7px] font-semibold uppercase leading-none tracking-[0.08em] opacity-80">
                               {tone.label}
                             </span>
                           </div>
@@ -720,7 +716,6 @@ const TeacherDashboard = () => {
                   </React.Fragment>
                 ))}
               </div>
-            </div>
           </div>
 
           <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-[rgba(187,202,191,0.3)] pt-6">
