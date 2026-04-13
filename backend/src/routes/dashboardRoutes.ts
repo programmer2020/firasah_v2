@@ -33,10 +33,14 @@ router.get('/kpi-cards', authenticate, async (req: AuthRequest, res: Response) =
       domain_id,
       section_id,
       grade_id,
+      week_num,
+      min_score,
+      max_score,
     } = req.query;
 
     // Convert to int or null
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
+    const pf = (v: any) => (v ? parseFloat(String(v)) : null);
     const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
       p(subject_id),  // $1
@@ -46,6 +50,9 @@ router.get('/kpi-cards', authenticate, async (req: AuthRequest, res: Response) =
       p(section_id),  // $5
       p(grade_id),    // $6
       ownerFilter,    // $7
+      p(week_num),    // $8
+      pf(min_score),  // $9
+      pf(max_score),  // $10
     ];
 
     const sql = `
@@ -53,6 +60,18 @@ router.get('/kpi-cards', authenticate, async (req: AuthRequest, res: Response) =
         SELECT
           DATE_TRUNC('month', CURRENT_DATE)::date   AS current_month_start,
           DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')::date AS prev_month_start
+      ),
+
+      -- Resolve week_num to an actual week_start date
+      target_week AS (
+        SELECT week_start AS ws FROM (
+          SELECT DISTINCT week_start,
+                 DENSE_RANK() OVER (ORDER BY week_start DESC) AS rn
+          FROM dashboard_fact_lectures
+          WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
+            AND week_start <= CURRENT_DATE
+        ) w WHERE rn = $8::int
+        LIMIT 1
       ),
 
       -- 1) Lectures: count distinct lecture_id from materialized view
@@ -75,6 +94,9 @@ router.get('/kpi-cards', authenticate, async (req: AuthRequest, res: Response) =
           AND ($5::int IS NULL OR dfl.section_id  = $5)
           AND ($6::int IS NULL OR dfl.grade_id    = $6)
           AND ($7::int IS NULL OR sf_owner.user_id = $7)
+          AND ($8::int IS NULL OR dfl.week_start = (SELECT ws FROM target_week))
+          AND ($9::float IS NULL OR dfl.score >= $9)
+          AND ($10::float IS NULL OR dfl.score <= $10)
       ),
 
       -- 2) Teachers: count distinct teachers from user's files only
@@ -86,6 +108,9 @@ router.get('/kpi-cards', authenticate, async (req: AuthRequest, res: Response) =
         FROM dashboard_fact_lectures dfl
         LEFT JOIN sound_files sf_owner ON dfl.file_id = sf_owner.file_id
         WHERE ($7::int IS NULL OR sf_owner.user_id = $7)
+          AND ($1::int IS NULL OR dfl.subject_id = $1)
+          AND ($6::int IS NULL OR dfl.grade_id   = $6)
+          AND ($8::int IS NULL OR dfl.week_start = (SELECT ws FROM target_week))
       ),
 
       -- 3) Upload Hours: SUM(fragments.duration) joined through sound_files
@@ -199,9 +224,10 @@ router.get('/kpi-cards', authenticate, async (req: AuthRequest, res: Response) =
  */
 router.get('/domains-weeks', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { subject_id, teacher_id, kpi_id, section_id, grade_id } = req.query;
+    const { subject_id, teacher_id, kpi_id, section_id, grade_id, week_num, min_score, max_score } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
+    const pf = (v: any) => (v ? parseFloat(String(v)) : null);
     const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
       p(subject_id),  // $1
@@ -210,9 +236,22 @@ router.get('/domains-weeks', authenticate, async (req: AuthRequest, res: Respons
       p(section_id),  // $4
       p(grade_id),    // $5
       ownerFilter,    // $6
+      p(week_num),    // $7
+      pf(min_score),  // $8
+      pf(max_score),  // $9
     ];
 
     const sql = `
+      WITH target_week AS (
+        SELECT week_start AS ws FROM (
+          SELECT DISTINCT week_start,
+                 DENSE_RANK() OVER (ORDER BY week_start DESC) AS rn
+          FROM dashboard_fact_lectures
+          WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
+            AND week_start <= CURRENT_DATE
+        ) w WHERE rn = $7::int
+        LIMIT 1
+      )
       SELECT
         domain_id,
         domain_name,
@@ -242,6 +281,9 @@ router.get('/domains-weeks', authenticate, async (req: AuthRequest, res: Respons
           AND ($4::int IS NULL OR dfl.section_id = $4)
           AND ($5::int IS NULL OR dfl.grade_id   = $5)
           AND ($6::int IS NULL OR sf_owner.user_id = $6)
+          AND ($7::int IS NULL OR dfl.week_start = (SELECT ws FROM target_week))
+          AND ($8::float IS NULL OR dfl.score >= $8)
+          AND ($9::float IS NULL OR dfl.score <= $9)
         GROUP BY dfl.domain_id, dfl.domain_name, dfl.week_start
       ) weekly_avg
       WHERE week_num <= 8
@@ -300,9 +342,10 @@ router.get('/domains-weeks', authenticate, async (req: AuthRequest, res: Respons
  */
 router.get('/domains-subjects', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { teacher_id, domain_id, section_id, grade_id } = req.query;
+    const { teacher_id, domain_id, section_id, grade_id, week_num, min_score, max_score } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
+    const pf = (v: any) => (v ? parseFloat(String(v)) : null);
     const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
       p(teacher_id),  // $1
@@ -310,9 +353,22 @@ router.get('/domains-subjects', authenticate, async (req: AuthRequest, res: Resp
       p(section_id),  // $3
       p(grade_id),    // $4
       ownerFilter,    // $5
+      p(week_num),    // $6
+      pf(min_score),  // $7
+      pf(max_score),  // $8
     ];
 
     const sql = `
+      WITH target_week AS (
+        SELECT week_start AS ws FROM (
+          SELECT DISTINCT week_start,
+                 DENSE_RANK() OVER (ORDER BY week_start DESC) AS rn
+          FROM dashboard_fact_lectures
+          WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
+            AND week_start <= CURRENT_DATE
+        ) w WHERE rn = $6::int
+        LIMIT 1
+      )
       SELECT
         domain_id,
         domain_name,
@@ -336,6 +392,9 @@ router.get('/domains-subjects', authenticate, async (req: AuthRequest, res: Resp
           AND ($3::int IS NULL OR dfl.section_id = $3)
           AND ($4::int IS NULL OR dfl.grade_id   = $4)
           AND ($5::int IS NULL OR sf_owner.user_id = $5)
+          AND ($6::int IS NULL OR dfl.week_start = (SELECT ws FROM target_week))
+          AND ($7::float IS NULL OR dfl.score >= $7)
+          AND ($8::float IS NULL OR dfl.score <= $8)
         GROUP BY dfl.domain_id, dfl.domain_name, dfl.subject_id, dfl.subject_name
       ) kpi_subject_scores
       GROUP BY domain_id, domain_name
@@ -414,9 +473,10 @@ router.get('/domains-subjects', authenticate, async (req: AuthRequest, res: Resp
  */
 router.get('/teacher-performance', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { subject_id, kpi_id, domain_id, section_id, grade_id } = req.query;
+    const { subject_id, kpi_id, domain_id, section_id, grade_id, week_num, min_score, max_score } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
+    const pf = (v: any) => (v ? parseFloat(String(v)) : null);
     const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
       p(subject_id),  // $1
@@ -425,9 +485,22 @@ router.get('/teacher-performance', authenticate, async (req: AuthRequest, res: R
       p(section_id),  // $4
       p(grade_id),    // $5
       ownerFilter,    // $6
+      p(week_num),    // $7
+      pf(min_score),  // $8
+      pf(max_score),  // $9
     ];
 
     const sql = `
+      WITH target_week AS (
+        SELECT week_start AS ws FROM (
+          SELECT DISTINCT week_start,
+                 DENSE_RANK() OVER (ORDER BY week_start DESC) AS rn
+          FROM dashboard_fact_lectures
+          WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
+            AND week_start <= CURRENT_DATE
+        ) w WHERE rn = $7::int
+        LIMIT 1
+      )
       SELECT
         dfl.week_start,
         ROUND(AVG(dfl.score)::numeric, 1) AS avg_score,
@@ -442,6 +515,9 @@ router.get('/teacher-performance', authenticate, async (req: AuthRequest, res: R
         AND ($4::int IS NULL OR dfl.section_id = $4)
         AND ($5::int IS NULL OR dfl.grade_id   = $5)
         AND ($6::int IS NULL OR sf_owner.user_id = $6)
+        AND ($7::int IS NULL OR dfl.week_start = (SELECT ws FROM target_week))
+        AND ($8::float IS NULL OR dfl.score >= $8)
+        AND ($9::float IS NULL OR dfl.score <= $9)
       GROUP BY dfl.week_start
       ORDER BY dfl.week_start;
     `;
@@ -478,9 +554,10 @@ router.get('/teacher-performance', authenticate, async (req: AuthRequest, res: R
  */
 router.get('/section-progress', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { subject_id, teacher_id, kpi_id, domain_id, grade_id } = req.query;
+    const { subject_id, teacher_id, kpi_id, domain_id, grade_id, week_num, min_score, max_score } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
+    const pf = (v: any) => (v ? parseFloat(String(v)) : null);
     const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
       p(subject_id),  // $1
@@ -489,17 +566,30 @@ router.get('/section-progress', authenticate, async (req: AuthRequest, res: Resp
       p(domain_id),   // $4
       p(grade_id),    // $5
       ownerFilter,    // $6
+      p(week_num),    // $7
+      pf(min_score),  // $8
+      pf(max_score),  // $9
     ];
 
     const sql = `
+      WITH target_week AS (
+        SELECT week_start AS ws FROM (
+          SELECT DISTINCT week_start,
+                 DENSE_RANK() OVER (ORDER BY week_start DESC) AS rn
+          FROM dashboard_fact_lectures
+          WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
+            AND week_start <= CURRENT_DATE
+        ) w WHERE rn = $7::int
+        LIMIT 1
+      )
       SELECT
-        dfl.section_id,
-        sec.section_name,
+        dfl.class_id,
+        cls.class_name,
         dfl.week_start,
         ROUND(AVG(dfl.score)::numeric, 1) AS avg_score,
         COUNT(DISTINCT dfl.lecture_id)     AS lecture_count
       FROM dashboard_fact_lectures dfl
-      JOIN sections sec ON dfl.section_id = sec.section_id
+      JOIN classes cls ON dfl.class_id = cls.class_id
       LEFT JOIN sound_files sf_owner ON dfl.file_id = sf_owner.file_id
       WHERE dfl.week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
         AND dfl.score IS NOT NULL
@@ -509,8 +599,11 @@ router.get('/section-progress', authenticate, async (req: AuthRequest, res: Resp
         AND ($4::int IS NULL OR dfl.domain_id  = $4)
         AND ($5::int IS NULL OR dfl.grade_id   = $5)
         AND ($6::int IS NULL OR sf_owner.user_id = $6)
-      GROUP BY dfl.section_id, sec.section_name, dfl.week_start
-      ORDER BY dfl.section_id, dfl.week_start;
+        AND ($7::int IS NULL OR dfl.week_start = (SELECT ws FROM target_week))
+        AND ($8::float IS NULL OR dfl.score >= $8)
+        AND ($9::float IS NULL OR dfl.score <= $9)
+      GROUP BY dfl.class_id, cls.class_name, dfl.week_start
+      ORDER BY dfl.class_id, dfl.week_start;
     `;
 
     const rows = await getMany(sql, params);
@@ -523,26 +616,26 @@ router.get('/section-progress', authenticate, async (req: AuthRequest, res: Resp
     const weekStarts = Array.from(weekSet).sort();
     const weekLabels = weekStarts.map((_, i) => `W${i + 1}`);
 
-    // Group by section
-    const sectionMap: Record<number, { section_name: string; scoresByWeek: Record<string, number> }> = {};
+    // Group by class
+    const classMap: Record<number, { class_name: string; scoresByWeek: Record<string, number> }> = {};
     for (const row of rows) {
-      const sid = row.section_id;
-      if (!sectionMap[sid]) {
-        sectionMap[sid] = { section_name: row.section_name, scoresByWeek: {} };
+      const cid = row.class_id;
+      if (!classMap[cid]) {
+        classMap[cid] = { class_name: row.class_name, scoresByWeek: {} };
       }
-      sectionMap[sid].scoresByWeek[String(row.week_start)] = Number(row.avg_score);
+      classMap[cid].scoresByWeek[String(row.week_start)] = Number(row.avg_score);
     }
 
-    // Build sections array with scores aligned to weekStarts
-    const sections = Object.entries(sectionMap).map(([sid, info]) => ({
-      section_id: Number(sid),
-      section_name: info.section_name,
+    // Build classes array with scores aligned to weekStarts
+    const classes = Object.entries(classMap).map(([cid, info]) => ({
+      class_id: Number(cid),
+      class_name: info.class_name,
       scores: weekStarts.map((ws) => info.scoresByWeek[ws] ?? null),
     }));
 
     res.status(200).json({
       success: true,
-      data: { week_labels: weekLabels, sections },
+      data: { week_labels: weekLabels, classes },
     });
   } catch (error: any) {
     console.error('Dashboard Section-Progress Error:', error);
@@ -563,9 +656,10 @@ router.get('/section-progress', authenticate, async (req: AuthRequest, res: Resp
  */
 router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { subject_id, teacher_id, kpi_id, domain_id, section_id, grade_id } = req.query;
+    const { subject_id, teacher_id, kpi_id, domain_id, section_id, grade_id, week_num, min_score, max_score } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
+    const pf = (v: any) => (v ? parseFloat(String(v)) : null);
     const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
       p(subject_id),  // $1
@@ -575,9 +669,22 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
       p(section_id),  // $5
       p(grade_id),    // $6
       ownerFilter,    // $7
+      p(week_num),    // $8
+      pf(min_score),  // $9
+      pf(max_score),  // $10
     ];
 
     const sql = `
+      WITH target_week AS (
+        SELECT week_start AS ws FROM (
+          SELECT DISTINCT week_start,
+                 DENSE_RANK() OVER (ORDER BY week_start DESC) AS rn
+          FROM dashboard_fact_lectures
+          WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
+            AND week_start <= CURRENT_DATE
+        ) w WHERE rn = $8::int
+        LIMIT 1
+      )
       SELECT
         rank,
         kpi_id,
@@ -624,6 +731,9 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
           AND ($5::int IS NULL OR dfe.section_id = $5)
           AND ($6::int IS NULL OR dfe.grade_id   = $6)
           AND ($7::int IS NULL OR sf_owner.user_id = $7)
+          AND ($8::int IS NULL OR dfe.week_start = (SELECT ws FROM target_week))
+          AND ($9::float IS NULL OR dfe.score >= $9)
+          AND ($10::float IS NULL OR dfe.score <= $10)
       ) ranked_evidences
       WHERE rank <= 10
       ORDER BY rank;
@@ -653,6 +763,37 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
     res.status(500).json({
       success: false,
       message: 'Failed to fetch top evidences',
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/dashboard/filter-options
+ * Returns available filter options for the dashboard dropdowns.
+ * Response: { subjects: [{id, name}], grades: [{id, name}], sections: [{id, name}] }
+ */
+router.get('/filter-options', authenticate, async (_req: AuthRequest, res: Response) => {
+  try {
+    const [subjectRows, gradeRows, sectionRows] = await Promise.all([
+      getMany('SELECT subject_id AS id, subject_name AS name FROM subjects ORDER BY subject_id'),
+      getMany('SELECT grade_id AS id, grade_name AS name FROM grades ORDER BY grade_id'),
+      getMany('SELECT section_id AS id, section_name AS name FROM sections ORDER BY section_id'),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        subjects: subjectRows,
+        grades: gradeRows,
+        sections: sectionRows,
+      },
+    });
+  } catch (error: any) {
+    console.error('Dashboard Filter-Options Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch filter options',
       error: error.message,
     });
   }
