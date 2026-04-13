@@ -2,17 +2,35 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';
 import api from '../services/api';
 
-const MixedChart = () => {
+const MixedChart = ({ filters = {} }) => {
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
   const [chartData, setChartData] = useState({ labels: [], scores: [], lectureCounts: [] });
+
+  // Build query string from filters
+  const buildFilterParams = () => {
+    const params = new URLSearchParams();
+    if (filters.subject) params.append('subject_id', filters.subject);
+    if (filters.grade) params.append('grade_id', filters.grade);
+    if (filters.week) {
+      const weekNum = parseInt(filters.week.replace('Week ', ''), 10);
+      if (!isNaN(weekNum)) params.append('week_num', weekNum);
+    }
+    if (filters.kpiStatus === 'high') {
+      params.append('min_score', '75');
+    } else if (filters.kpiStatus === 'needs_improvement') {
+      params.append('max_score', '50');
+    }
+    return params.toString();
+  };
 
   // Fetch real data from dashboard endpoint
   useEffect(() => {
     const fetchData = async () => {
       try {
         console.log('📊 Fetching teacher performance data...');
-        const response = await api.get('/api/dashboard/teacher-performance');
+        const qs = buildFilterParams();
+        const response = await api.get(`/api/dashboard/teacher-performance${qs ? `?${qs}` : ''}`);
         console.log('✅ Teacher performance data:', response.data);
 
         const weeks = response.data.data?.weeks || [];
@@ -29,7 +47,7 @@ const MixedChart = () => {
     };
 
     fetchData();
-  }, []);
+  }, [filters]);
 
   // Render chart when data changes
   useEffect(() => {

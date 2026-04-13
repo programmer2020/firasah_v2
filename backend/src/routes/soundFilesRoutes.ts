@@ -155,22 +155,28 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
       userId: req.user?.id,
     });
 
+    const uploadStartTime = Date.now();
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || '';
+
     // Log: file received and record created
     await logUpload(soundFile.file_id, 'upload_received', 'info',
       `File received: "${decodedFilename}" (${fileSizeKB} KB, ${fileType})`,
-      { filename: decodedFilename, size_kb: fileSizeKB, mimetype: req.file.mimetype, file_type: fileType, class_id: classId ?? null, uploader: userId }
+      { filename: decodedFilename, size_kb: fileSizeKB, mimetype: req.file.mimetype, file_type: fileType, class_id: classId ?? null, uploader: userId },
+      { stageName: 'upload', fileSizeBytes: req.file.size, userId: req.user?.id, ipAddress: clientIp }
     );
 
     if (isVideo) {
       await logUpload(soundFile.file_id, 'video_conversion_completed', 'success',
         `Video converted to audio successfully`,
-        { original: req.file.originalname, audio_path: path.basename(audioPath) }
+        { original: req.file.originalname, audio_path: path.basename(audioPath) },
+        { stageName: 'video_conversion', userId: req.user?.id }
       );
     }
 
     await logUpload(soundFile.file_id, 'sound_file_created', 'success',
       `Sound file record created in database (file_id=${soundFile.file_id})`,
-      { file_id: soundFile.file_id, filepath: relativePath }
+      { file_id: soundFile.file_id, filepath: relativePath },
+      { stageName: 'db_record', durationMs: Date.now() - uploadStartTime, userId: req.user?.id }
     );
 
     if (isText) {
@@ -184,7 +190,8 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
 
       await logUpload(soundFile.file_id, 'pipeline_completed', 'success',
         `Text file content saved to fragments`,
-        { chars: textContent.length }
+        { chars: textContent.length },
+        { stageName: 'text_processing', durationMs: Date.now() - uploadStartTime, userId: req.user?.id, fileSizeBytes: req.file.size }
       );
 
       res.status(201).json({
@@ -198,10 +205,12 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
 
       await logUpload(soundFile.file_id, 'pipeline_started', 'info',
         `Audio transcription pipeline started in background`,
-        { should_denoise: shouldDenoise, class_id: classId ?? null, day_of_week: dayOfWeek ?? null }
+        { should_denoise: shouldDenoise, class_id: classId ?? null, day_of_week: dayOfWeek ?? null },
+        { stageName: 'pipeline', userId: req.user?.id, fileSizeBytes: req.file.size }
       );
 
       // Transcribe audio in background
+      const pipelineStartTime = Date.now();
       transcribeAndSave(soundFile.file_id, audioPath, classId, dayOfWeek, shouldDenoise)
         .then((speeches) => {
           console.log(`[Upload] ✅ Transcription completed for file ${soundFile.file_id}: ${speeches.length} segment(s)`);
@@ -217,7 +226,8 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
           });
           logUpload(soundFile.file_id, 'pipeline_failed', 'error',
             `Pipeline failed: ${err.message}`,
-            { error: err.message }
+            { error: err.message },
+            { stageName: 'pipeline', durationMs: Date.now() - pipelineStartTime, errorDetails: err.stack || err.message, userId: req.user?.id }
           );
         });
 

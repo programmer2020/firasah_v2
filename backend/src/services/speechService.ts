@@ -582,18 +582,21 @@ export const transcribeAndSave = async (
   let denoisedPath = absolutePath;
   let denoisedCleanup = false;
 
+  const pipelineStart = Date.now();
+
   if (shouldDenoise) {
     console.log(`[Speech] Denoising audio before transcription (file_id=${fileId})...`);
     updateProgress(fileId, { status: 'denoising', message: 'جاري تنقية الصوت من الضوضاء...', percent: 10 });
-    await logUpload(fileId, 'denoising_started', 'info', 'Audio denoising started');
+    const denoiseStart = Date.now();
+    await logUpload(fileId, 'denoising_started', 'info', 'Audio denoising started', undefined, { stageName: 'denoising' });
     denoisedPath = await denoiseAudio(absolutePath, fileId);
     denoisedCleanup = denoisedPath !== absolutePath;
     await logUpload(fileId, 'denoising_completed', 'success', 'Audio denoising completed',
-      { denoised: denoisedCleanup });
+      { denoised: denoisedCleanup }, { stageName: 'denoising', durationMs: Date.now() - denoiseStart });
   } else {
     console.log(`[Speech] Skipping denoise - user chose to process as-is (file_id=${fileId})...`);
     updateProgress(fileId, { status: 'analyzing', message: 'جاري تحليل الملف...', percent: 15 });
-    await logUpload(fileId, 'denoising_skipped', 'info', 'Denoising skipped by user choice');
+    await logUpload(fileId, 'denoising_skipped', 'info', 'Denoising skipped by user choice', undefined, { stageName: 'denoising' });
   }
 
   try {
@@ -602,7 +605,8 @@ export const transcribeAndSave = async (
   console.log(`[Speech] Total audio duration: ${totalDuration}s`);
   await logUpload(fileId, 'duration_analyzed', 'info',
     `Audio duration: ${totalDuration.toFixed(1)}s`,
-    { duration_seconds: totalDuration }
+    { duration_seconds: totalDuration },
+    { stageName: 'duration_analysis' }
   );
 
   // Create lecture rows upfront — one per 45-min (2700s) period, up to 7
@@ -659,7 +663,8 @@ export const transcribeAndSave = async (
 
   await logUpload(fileId, 'lectures_created', 'success',
     `Created ${lectureMap.size} lecture record(s) for ${totalLectures} period(s)`,
-    { total_lectures: totalLectures, lecture_ids: Array.from(lectureMap.values()), slot_map: Object.fromEntries(slotMap) }
+    { total_lectures: totalLectures, lecture_ids: Array.from(lectureMap.values()), slot_map: Object.fromEntries(slotMap) },
+    { stageName: 'lecture_creation' }
   );
 
   // Calculate 15-minute fragments
@@ -668,25 +673,30 @@ export const transcribeAndSave = async (
   updateProgress(fileId, { status: 'analyzing', message: `جاري تقسيم الملف إلى ${totalFragments} مقطع...`, percent: 20, totalSlots: totalFragments });
   await logUpload(fileId, 'fragment_splitting_started', 'info',
     `Splitting into ${totalFragments} fragment(s) of 15 min each`,
-    { total_fragments: totalFragments, duration_seconds: totalDuration }
+    { total_fragments: totalFragments, duration_seconds: totalDuration },
+    { stageName: 'fragment_splitting', totalFragments }
   );
 
   // If file is shorter than 15 min, transcribe as single fragment
   if (totalDuration <= FRAGMENT_DURATION_SEC) {
     console.log(`[Speech] File is short (${totalDuration}s) — transcribing as single fragment`);
     updateProgress(fileId, { status: 'transcribing', message: 'جاري تحويل الصوت إلى نص...', percent: 30 });
-    await logUpload(fileId, 'fragment_transcribing', 'info', 'Transcribing single fragment (file < 15 min)');
+    await logUpload(fileId, 'fragment_transcribing', 'info', 'Transcribing single fragment (file < 15 min)', undefined,
+      { stageName: 'transcription', fragmentIndex: 1, totalFragments: 1 });
+    const singleTransStart = Date.now();
     const result = await transcribeAudio(denoisedPath, fileId);
     await logUpload(fileId, 'fragment_transcribed', 'success',
       `Fragment transcribed: ${result.text.length} chars, language=${result.language}`,
-      { chars: result.text.length, language: result.language, fragment: 1, total: 1 }
+      { chars: result.text.length, language: result.language, fragment: 1, total: 1 },
+      { stageName: 'transcription', durationMs: Date.now() - singleTransStart, fragmentIndex: 1, totalFragments: 1 }
     );
     updateProgress(fileId, { status: 'saving', message: 'جاري حفظ النص...', percent: 90 });
     const singleLectureId = lectureMap.get(1) ?? null;
     const fragment = await saveFragment(fileId, result.text, result.language, totalDuration, 0, totalDuration, 1, denoisedPath, singleLectureId);
     await logUpload(fileId, 'fragment_saved', 'success',
       `Fragment saved to database (fragment_id=${fragment.fragment_id ?? fragment.id})`,
-      { fragment_id: fragment.fragment_id ?? fragment.id, order: 1 }
+      { fragment_id: fragment.fragment_id ?? fragment.id, order: 1 },
+      { stageName: 'fragment_saving', fragmentIndex: 1, totalFragments: 1 }
     );
 
     // Update lecture with transcript
@@ -694,14 +704,16 @@ export const transcribeAndSave = async (
       await executeQuery('UPDATE lecture SET transcript = $1, language = $2, updated_at = NOW() WHERE lecture_id = $3', [result.text, result.language, singleLectureId]);
       await logUpload(fileId, 'lecture_updated', 'success',
         `Lecture transcript updated (lecture_id=${singleLectureId})`,
-        { lecture_id: singleLectureId, transcript_length: result.text.length }
+        { lecture_id: singleLectureId, transcript_length: result.text.length },
+        { stageName: 'lecture_update' }
       );
     }
 
     updateProgress(fileId, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
     await logUpload(fileId, 'pipeline_completed', 'success',
       `Pipeline completed: 1/1 fragment processed`,
-      { fragments_ok: 1, fragments_total: 1 }
+      { fragments_ok: 1, fragments_total: 1 },
+      { stageName: 'pipeline', durationMs: Date.now() - pipelineStart, totalFragments: 1 }
     );
     return [fragment];
   }
@@ -754,7 +766,8 @@ export const transcribeAndSave = async (
       console.log(`[Speech] ✂️ Fragment split: ${path.basename(segmentFile)} (size: ${segmentSize}KB)`);
       await logUpload(fileId, 'fragment_split', 'info',
         `Fragment ${slotOrder}/${totalFragments} split (${segmentSize} KB, ${startSec.toFixed(0)}s–${endSec.toFixed(0)}s)`,
-        { fragment: slotOrder, total: totalFragments, size_kb: parseFloat(segmentSize), start_sec: startSec, end_sec: endSec }
+        { fragment: slotOrder, total: totalFragments, size_kb: parseFloat(segmentSize), start_sec: startSec, end_sec: endSec },
+        { stageName: 'fragment_splitting', fragmentIndex: slotOrder, totalFragments, fileSizeBytes: fs.statSync(segmentFile).size }
       );
 
       // Transcribe segment
@@ -767,11 +780,13 @@ export const transcribeAndSave = async (
       });
 
       console.log(`[Speech] 🗣️ Transcribing fragment ${slotOrder}...`);
+      const fragTransStart = Date.now();
       const result = await transcribeAudio(segmentFile, fileId, { current: slotOrder, total: totalFragments });
       console.log(`[Speech] ✅ Fragment ${slotOrder} transcribed: ${result.text.length} chars`);
       await logUpload(fileId, 'fragment_transcribed', 'success',
         `Fragment ${slotOrder}/${totalFragments} transcribed: ${result.text.length} chars`,
-        { fragment: slotOrder, total: totalFragments, chars: result.text.length, language: result.language }
+        { fragment: slotOrder, total: totalFragments, chars: result.text.length, language: result.language },
+        { stageName: 'transcription', durationMs: Date.now() - fragTransStart, fragmentIndex: slotOrder, totalFragments }
       );
 
       // Save to DB
@@ -802,14 +817,16 @@ export const transcribeAndSave = async (
       console.log(`[Speech] ✅ Fragment ${slotOrder} saved: id=${fragment.id}, lecture_order=${fragLectureOrder}, lecture_id=${fragLectureId}`);
       await logUpload(fileId, 'fragment_saved', 'success',
         `Fragment ${slotOrder}/${totalFragments} saved to database (lecture_order=${fragLectureOrder})`,
-        { fragment: slotOrder, total: totalFragments, fragment_id: fragment.fragment_id ?? fragment.id, lecture_order: fragLectureOrder, lecture_id: fragLectureId }
+        { fragment: slotOrder, total: totalFragments, fragment_id: fragment.fragment_id ?? fragment.id, lecture_order: fragLectureOrder, lecture_id: fragLectureId },
+        { stageName: 'fragment_saving', fragmentIndex: slotOrder, totalFragments }
       );
       results.push(fragment);
     } catch (err) {
       console.error(`[Speech] ❌ Error processing fragment ${slotOrder}:`, err);
       await logUpload(fileId, 'fragment_failed', 'error',
         `Fragment ${slotOrder}/${totalFragments} failed: ${(err as Error).message}`,
-        { fragment: slotOrder, total: totalFragments, error: (err as Error).message }
+        { fragment: slotOrder, total: totalFragments, error: (err as Error).message },
+        { stageName: 'transcription', fragmentIndex: slotOrder, totalFragments, errorDetails: (err as Error).stack || (err as Error).message }
       );
       // Save a placeholder
       try {
@@ -829,7 +846,8 @@ export const transcribeAndSave = async (
         console.log(`[Speech] ⚠️ Fragment ${slotOrder} saved as pending: id=${fragment.id}`);
         await logUpload(fileId, 'fragment_saved_pending', 'warning',
           `Fragment ${slotOrder}/${totalFragments} saved as [transcription_pending]`,
-          { fragment: slotOrder, fragment_id: fragment.fragment_id ?? fragment.id }
+          { fragment: slotOrder, fragment_id: fragment.fragment_id ?? fragment.id },
+          { stageName: 'fragment_saving', fragmentIndex: slotOrder, totalFragments }
         );
         results.push(fragment);
       } catch (saveErr) {
@@ -865,7 +883,8 @@ export const transcribeAndSave = async (
       console.log(`[Speech] ✅ Lecture ${lo} transcript updated: lecture_id=${lid}, length=${fullTranscript.length}, fragments=${lectureFragments.length}`);
       await logUpload(fileId, 'lecture_updated', 'success',
         `Lecture ${lo} transcript assembled from ${lectureFragments.length} fragment(s)`,
-        { lecture_order: lo, lecture_id: lid, transcript_length: fullTranscript.length, fragments: lectureFragments.length }
+        { lecture_order: lo, lecture_id: lid, transcript_length: fullTranscript.length, fragments: lectureFragments.length },
+        { stageName: 'lecture_update' }
       );
 
       // Run KPI evaluation per fragment — each evidence gets the fragment's specific time
@@ -903,7 +922,8 @@ export const transcribeAndSave = async (
   updateProgress(fileId, { status: 'completed', message: `تم الانتهاء! تم معالجة ${results.length} من ${totalFragments} مقطع.`, percent: 100 });
   await logUpload(fileId, 'pipeline_completed', failedCount > 0 ? 'warning' : 'success',
     `Pipeline completed: ${results.length - failedCount}/${totalFragments} fragments OK, ${failedCount} pending`,
-    { fragments_ok: results.length - failedCount, fragments_pending: failedCount, fragments_total: totalFragments }
+    { fragments_ok: results.length - failedCount, fragments_pending: failedCount, fragments_total: totalFragments },
+    { stageName: 'pipeline', durationMs: Date.now() - pipelineStart, totalFragments }
   );
   return results;
   } finally {
