@@ -480,8 +480,14 @@ export const evaluateSpeechAgainstKPIs = async (
       return `${kpi.kpi_code}: ${kpi.kpi_name}\n   التفاصيل: ${kpi.kpi_description}`;
     }).join('\n\n');
 
+    const fragmentDurationSec = (fragmentEndSeconds != null && fragmentStartSeconds != null)
+      ? fragmentEndSeconds - fragmentStartSeconds
+      : null;
+
     const userPrompt = `**نص الحوار الصفي المراد تقييمه:**
 "${speechText}"
+
+${fragmentDurationSec ? `**مدة هذا المقطع الصوتي:** ${fragmentDurationSec} ثانية (من الثانية 0 إلى الثانية ${fragmentDurationSec})` : ''}
 
 ---
 
@@ -501,10 +507,12 @@ ${kpiReference}
   "Status": "Strong" أو "Emerging" أو "Limited" أو "Insufficient",
   "Confidence": عدد من 0-100,
   "Evidence Count": عدد الأدلة (0-3),
-  "Facts": "وصف موضوعي من النص",
+  "Facts": "اقتبس الجملة أو الجمل الفعلية من النص التي تمثل الدليل",
   "Interpretation": "المعنى (إذا Status لم يكن Insufficient)",
   "Limitations": "قيود التقييم (اختياري)",
-  "Justification": "الشرح الكامل بالعربية"
+  "Justification": "الشرح الكامل بالعربية"${fragmentDurationSec ? `,
+  "evidence_start_sec": رقم تقريبي (من 0 إلى ${fragmentDurationSec}) للثانية التي يبدأ عندها الدليل في المقطع الصوتي بناءً على موضع النص في الحوار,
+  "evidence_end_sec": رقم تقريبي (من 0 إلى ${fragmentDurationSec}) للثانية التي ينتهي عندها الدليل` : ''}
 }`;
 
     console.log(`[Evaluation] Sending to OpenAI with model: gpt-4o`);
@@ -595,6 +603,35 @@ ${kpiReference}
           try {
             console.log(`[Evaluation] Storing evidence for KPI ${kpiCode} (status: ${determinedStatus}, confidence: ${confidence}%)`);
 
+            // Calculate precise evidence time from AI-returned offsets
+            let evidenceStartTime = slotStartTime;
+            let evidenceEndTime = slotEndTime;
+
+            const aiStartSec = evaluation.evidence_start_sec;
+            const aiEndSec = evaluation.evidence_end_sec;
+
+            if (aiStartSec != null && aiEndSec != null && fragmentStartSeconds != null) {
+              // Get the base schedule start time
+              try {
+                const baseQuery = `
+                  SELECT ts.start_time
+                  FROM lecture l
+                  LEFT JOIN section_time_slots ts ON l.time_slot_id = ts.time_slot_id
+                  WHERE l.lecture_id = $1
+                  LIMIT 1
+                `;
+                const baseRecord = await getOne(baseQuery, [lectureId]);
+                if (baseRecord?.start_time) {
+                  const baseStart = baseRecord.start_time;
+                  const clampedStart = Math.max(0, Number(aiStartSec) || 0);
+                  const clampedEnd = Math.max(clampedStart, Number(aiEndSec) || 0);
+                  evidenceStartTime = addSecondsToTime(baseStart, fragmentStartSeconds + clampedStart);
+                  evidenceEndTime = addSecondsToTime(baseStart, fragmentStartSeconds + clampedEnd);
+                  console.log(`[Evaluation] Precise evidence time: ${evidenceStartTime} - ${evidenceEndTime} (offset ${clampedStart}s-${clampedEnd}s in fragment)`);
+                }
+              } catch (_) {}
+            }
+
             const evidence = await insert('evidences', {
               kpi_id: kpiRecord.kpi_id,
               lecture_id: lectureId,
@@ -603,8 +640,8 @@ ${kpiReference}
               interpretation: interpretation || null,
               limitations: limitations || null,
               confidence: Math.min(100, Math.max(0, Number(confidence) || 0)),
-              start_time: slotStartTime,
-              end_time: slotEndTime,
+              start_time: evidenceStartTime,
+              end_time: evidenceEndTime,
               created_at: now,
               updated_at: now,
             });

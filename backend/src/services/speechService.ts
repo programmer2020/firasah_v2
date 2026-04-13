@@ -314,11 +314,13 @@ export const transcribeAudio = async (filePath: string, fileId?: number, slotInf
           
           // gpt-4o returns only text in json mode; whisper-1 verbose_json includes language & duration
           const detectedLang = (transcription as any).language || null;
-          console.log(`[Speech] Detected language: ${detectedLang}`);
+          const segments = (transcription as any).segments || null;
+          console.log(`[Speech] Detected language: ${detectedLang}, segments: ${segments ? segments.length : 0}`);
           return {
             text: transcription.text,
             language: detectedLang || 'auto',
             duration: (transcription as any).duration || null,
+            segments: segments,
           };
         } catch (err: any) {
           const isTimeout = err.code === 'ETIMEDOUT' || err.message?.includes('timeout') || err.message?.includes('ENOTFOUND');

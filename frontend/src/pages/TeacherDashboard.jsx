@@ -324,6 +324,7 @@ const TeacherDashboard = () => {
 
   // Top 10 high-confidence evidence samples from real data
   const [topEvidences, setTopEvidences] = useState([]);
+  const [expandedEvidence, setExpandedEvidence] = useState(null);
 
   useEffect(() => {
     const fetchTopEvidences = async () => {
@@ -758,6 +759,7 @@ const TeacherDashboard = () => {
             <table className="w-full text-left text-sm">
               <thead style={{ background: 'linear-gradient(135deg, #006d4a 0%, #005239 100%)' }}>
                 <tr>
+                  <th className="w-10 px-3 py-4"></th>
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-emerald-100">
                     Rank
                   </th>
@@ -778,14 +780,25 @@ const TeacherDashboard = () => {
               <tbody className="divide-y divide-gray-100">
                 {filteredEvidences.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-gray-400">No evidence data available yet</td>
+                    <td colSpan={6} className="px-6 py-8 text-center text-gray-400">No evidence data available yet</td>
                   </tr>
                 )}
-                {filteredEvidences.map((evidence, idx) => (
+                {filteredEvidences.map((evidence, idx) => {
+                  const isExpanded = expandedEvidence === (evidence.evidence_id || idx);
+                  const hasDetails = evidence.facts || evidence.interpretation || evidence.limitations;
+                  return (
+                  <React.Fragment key={evidence.evidence_id || idx}>
                   <tr
-                    key={evidence.evidence_id || idx}
-                    className={`${idx % 2 === 0 ? 'bg-white' : 'bg-[#f3f5f4]'} transition-colors hover:bg-gray-50`}
+                    className={`${idx % 2 === 0 ? 'bg-white' : 'bg-[#f3f5f4]'} transition-colors hover:bg-gray-50 ${hasDetails ? 'cursor-pointer' : ''}`}
+                    onClick={() => hasDetails && setExpandedEvidence(isExpanded ? null : (evidence.evidence_id || idx))}
                   >
+                    <td className="px-3 py-5 text-center">
+                      {hasDetails && (
+                        <span className={`inline-block transition-transform duration-200 text-gray-500 ${isExpanded ? 'rotate-90' : ''}`}>
+                          ▶
+                        </span>
+                      )}
+                    </td>
                     <td className="px-6 py-5 font-headline font-bold text-gray-900">#{String(evidence.rank).padStart(2, '0')}</td>
                     <td className="px-6 py-5">
                       <div className="flex flex-col">
@@ -805,7 +818,35 @@ const TeacherDashboard = () => {
                       </span>
                     </td>
                   </tr>
-                ))}
+                  {isExpanded && (
+                    <tr className={idx % 2 === 0 ? 'bg-white' : 'bg-[#f3f5f4]'}>
+                      <td colSpan={6} className="px-6 pb-5">
+                        <div className="ml-10 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4 space-y-3">
+                          {evidence.facts && (
+                            <div>
+                              <h4 className="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-1">Facts</h4>
+                              <p className="text-sm text-gray-700 leading-relaxed">{evidence.facts}</p>
+                            </div>
+                          )}
+                          {evidence.interpretation && (
+                            <div>
+                              <h4 className="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-1">Interpretation</h4>
+                              <p className="text-sm text-gray-700 leading-relaxed">{evidence.interpretation}</p>
+                            </div>
+                          )}
+                          {evidence.limitations && (
+                            <div>
+                              <h4 className="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-1">Limitations</h4>
+                              <p className="text-sm text-gray-700 leading-relaxed">{evidence.limitations}</p>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -7,7 +7,8 @@
 
 import { Router, Request, Response } from 'express';
 import { authenticate, AuthRequest, getTenantFilter } from '../middleware/auth.js';
-import { getMany, getOne } from '../helpers/database.js';
+import { getMany, getOne, executeQuery } from '../helpers/database.js';
+import { evaluateSpeechAgainstKPIs } from '../services/evaluationsService.js';
 
 const router = Router();
 
@@ -701,7 +702,10 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
         filename,
         start_time,
         end_time,
-        created_at
+        created_at,
+        facts,
+        interpretation,
+        limitations
       FROM (
         SELECT
           ROW_NUMBER() OVER (ORDER BY dfe.confidence DESC NULLS LAST) AS rank,
@@ -719,8 +723,12 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
           dfe.filename,
           dfe.start_time,
           dfe.end_time,
-          dfe.created_at
+          dfe.created_at,
+          ev.facts,
+          ev.interpretation,
+          ev.limitations
         FROM dashboard_fact_evidences dfe
+        LEFT JOIN evidences ev ON dfe.evidence_id = ev.evidence_id
         LEFT JOIN sound_files sf_owner ON dfe.file_id = sf_owner.file_id
         WHERE dfe.week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
           AND dfe.confidence IS NOT NULL
@@ -755,6 +763,9 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
       filename: r.filename,
       start_time: r.start_time,
       end_time: r.end_time,
+      facts: r.facts || null,
+      interpretation: r.interpretation || null,
+      limitations: r.limitations || null,
     }));
 
     res.status(200).json({ success: true, data });
@@ -796,6 +807,56 @@ router.get('/filter-options', authenticate, async (_req: AuthRequest, res: Respo
       message: 'Failed to fetch filter options',
       error: error.message,
     });
+  }
+});
+
+/**
+ * POST /api/dashboard/re-evaluate
+ * Re-runs KPI evaluation on all existing fragments to update evidence times.
+ */
+router.post('/re-evaluate', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    // Delete old evidences
+    await executeQuery('DELETE FROM evidences', []);
+    console.log('[Re-evaluate] Cleared old evidences');
+
+    // Get all fragments with transcripts
+    const frags = await getMany(
+      `SELECT f.fragment_id, f.lecture_id, f.transcript, f.start_time, f.end_time
+       FROM fragments f
+       WHERE f.transcript IS NOT NULL AND f.transcript != '[transcription_pending]'
+       ORDER BY f.lecture_id, f.fragment_order`,
+      []
+    );
+
+    let totalEvidences = 0;
+    for (const frag of frags) {
+      const fragStart = Number(frag.start_time ?? 0);
+      const fragEnd = Number(frag.end_time ?? 0);
+      if (!frag.transcript?.trim() || !frag.lecture_id) continue;
+
+      console.log(`[Re-evaluate] Evaluating lecture_id=${frag.lecture_id}, fragment ${fragStart}s-${fragEnd}s...`);
+      const evals = await evaluateSpeechAgainstKPIs(
+        frag.transcript, frag.lecture_id,
+        undefined, undefined,
+        fragStart, fragEnd
+      );
+      const created = evals.filter(e => e.status !== 'Insufficient').length;
+      totalEvidences += created;
+      console.log(`[Re-evaluate] lecture_id=${frag.lecture_id} [${fragStart}s-${fragEnd}s]: ${created} evidence(s)`);
+    }
+
+    // Refresh MVs
+    await executeQuery('REFRESH MATERIALIZED VIEW dashboard_fact_evidences', []);
+    await executeQuery('REFRESH MATERIALIZED VIEW dashboard_fact_lectures', []);
+
+    res.status(200).json({
+      success: true,
+      message: `Re-evaluation complete: ${frags.length} fragments processed, ${totalEvidences} evidences created`,
+    });
+  } catch (error: any) {
+    console.error('Re-evaluate Error:', error);
+    res.status(500).json({ success: false, message: 'Re-evaluation failed', error: error.message });
   }
 });
 
