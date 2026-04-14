@@ -327,10 +327,10 @@ export const AudioUpload = () => {
     const elapsed = (Date.now() - processingStartTime) / 1000; // seconds
     const totalEstimated = (elapsed / percent) * 100;
     const remaining = Math.max(0, Math.round(totalEstimated - elapsed));
-    if (remaining < 60) return `~${remaining} ثانية`;
+    if (remaining < 60) return `~${remaining} seconds`;
     const mins = Math.floor(remaining / 60);
     const secs = remaining % 60;
-    return `~${mins} دقيقة${secs > 0 ? ` و ${secs} ثانية` : ''}`;
+    return `~${mins} min${secs > 0 ? ` ${secs} sec` : ''}`;
   };
 
   return (
@@ -400,13 +400,13 @@ export const AudioUpload = () => {
             {/* Upload Status (shown during upload) */}
             {uploading && (
               <div className="mb-6">
-                <div className="rounded-xl p-4 border flex flex-row-reverse items-center gap-3" style={{background: '#f0fdf4', borderColor: '#a7f3d0'}}>
+                <div className="rounded-xl p-4 border flex items-center gap-3" style={{background: '#f0fdf4', borderColor: '#a7f3d0'}}>
                   <svg className="h-5 w-5 animate-spin shrink-0" style={{color: '#006d4a'}} fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                   </svg>
-                  <span className="text-sm font-semibold flex-1 text-right" style={{color: '#005239'}}>
-                    جاري رفع الملف...
+                  <span className="text-sm font-semibold flex-1 text-left" style={{color: '#005239'}}>
+                    Uploading file...
                   </span>
                 </div>
               </div>
@@ -422,9 +422,9 @@ export const AudioUpload = () => {
                     ? 'border-orange-200 bg-orange-50'
                     : pipelineProgress.status === 'failed'
                     ? 'border-red-200 bg-red-50'
-                    : 'border-blue-200 bg-blue-50'
+                    : 'border-green-200 bg-green-50'
                 }`}>
-                  <div className="flex flex-row-reverse items-center gap-3">
+                  <div className="flex items-center gap-3">
                     {pipelineProgress.status === 'completed' ? (
                       <svg className="h-5 w-5 text-green-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -438,27 +438,27 @@ export const AudioUpload = () => {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     ) : (
-                      <svg className="h-5 w-5 text-blue-600 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                      <svg className="h-5 w-5 text-green-600 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                       </svg>
                     )}
-                    <div className="flex-1 text-right">
+                    <div className="flex-1 text-left">
                       <span className={`text-sm font-semibold ${
                         pipelineProgress.status === 'completed' ? 'text-green-700'
                           : pipelineProgress.status === 'failed' ? 'text-red-700'
                           : pipelineProgress.status === 'partial' ? 'text-orange-700'
-                          : 'text-blue-700'
+                          : 'text-green-700'
                       }`}>
-                        {pipelineProgress.status === 'completed' ? 'تم الانتهاء بنجاح!'
-                          : pipelineProgress.status === 'failed' ? 'فشلت المعالجة'
-                          : pipelineProgress.status === 'partial' ? 'تم بشكل جزئي'
-                          : 'جاري تحليل الملف...'}
+                        {pipelineProgress.status === 'completed' ? 'Completed successfully!'
+                          : pipelineProgress.status === 'failed' ? 'Processing failed'
+                          : pipelineProgress.status === 'partial' ? 'Partially completed'
+                          : 'Analyzing file...'}
                       </span>
                       {/* ETA - show only while actively processing */}
                       {!['completed', 'failed', 'partial'].includes(pipelineProgress.status) && getEstimatedTime() && (
-                        <p className="text-xs text-blue-600 mt-1">
-                          الوقت المتوقع للانتهاء: {getEstimatedTime()}
+                        <p className="text-xs text-green-600 mt-1">
+                          Estimated time: {getEstimatedTime()}
                         </p>
                       )}
                     </div>

@@ -181,11 +181,11 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
 
     if (isText) {
       // For text files, read content directly and save to fragments table
-      updateProgress(soundFile.file_id, { status: 'saving', message: 'جاري حفظ النص...', percent: 50 });
+      updateProgress(soundFile.file_id, { status: 'saving', message: 'Saving text...', percent: 50 });
       const textContent = fs.readFileSync(req.file.path, 'utf-8');
       const { saveFragment } = await import('../services/speechService.js');
       await saveFragment(soundFile.file_id, textContent, 'ar', null, 0, 0, 1);
-      updateProgress(soundFile.file_id, { status: 'completed', message: 'تم الانتهاء بنجاح!', percent: 100 });
+      updateProgress(soundFile.file_id, { status: 'completed', message: 'Completed successfully!', percent: 100 });
       console.log(`[Upload] Text file saved to fragments table for file ${soundFile.file_id}`);
 
       await logUpload(soundFile.file_id, 'pipeline_completed', 'success',
@@ -201,7 +201,7 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
       });
     } else {
       // Initialize progress for audio pipeline
-      updateProgress(soundFile.file_id, { status: 'uploading', message: 'تم التحميل. جاري بدء المعالجة...', percent: 5 });
+      updateProgress(soundFile.file_id, { status: 'uploading', message: 'Uploaded. Starting processing...', percent: 5 });
 
       await logUpload(soundFile.file_id, 'pipeline_started', 'info',
         `Audio transcription pipeline started in background`,
@@ -211,7 +211,7 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
 
       // Transcribe audio in background
       const pipelineStartTime = Date.now();
-      transcribeAndSave(soundFile.file_id, audioPath, classId, dayOfWeek, shouldDenoise)
+      transcribeAndSave(soundFile.file_id, audioPath, classId, dayOfWeek, shouldDenoise, req.user?.email)
         .then((speeches) => {
           console.log(`[Upload] ✅ Transcription completed for file ${soundFile.file_id}: ${speeches.length} segment(s)`);
         })
@@ -220,7 +220,7 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
           console.error(`[Upload] Error stack:`, err.stack);
           updateProgress(soundFile.file_id, {
             status: 'failed',
-            message: `❌ فشلت المعالجة: ${err.message}`,
+            message: `❌ Processing failed: ${err.message}`,
             percent: 0,
             error: err.message
           });

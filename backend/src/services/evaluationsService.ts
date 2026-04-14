@@ -5,7 +5,7 @@
  */
 
 import OpenAI from 'openai';
-import { getOne, getMany, insert, update, deleteRecord } from '../helpers/database.js';
+import { getOne, getMany, insert, update, deleteRecord, executeQuery } from '../helpers/database.js';
 
 /* Lazy initialization of OpenAI client */
 let openai: OpenAI | null = null;
@@ -524,14 +524,24 @@ ${kpiReference}
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.2,
-      max_tokens: 4000,
+      max_tokens: 8000, // Raised from 4000: 29 KPIs × ~500 tokens per eval was truncating responses mid-JSON
       response_format: { type: 'json_object' },
     });
 
     console.log(`[Evaluation] OpenAI response received`);
 
     const responseText = response.choices[0]?.message?.content?.trim() || '';
-    console.log(`[Evaluation] Response length: ${responseText.length} chars`);
+    const finishReason = response.choices[0]?.finish_reason;
+    console.log(`[Evaluation] Response length: ${responseText.length} chars, finish_reason=${finishReason}`);
+
+    // If OpenAI hit the token ceiling, the JSON will be truncated. Surface this as a
+    // retriable error so the caller's retry loop can make another attempt (non-deterministic
+    // output usually fits on the next try) instead of silently returning 0 evaluations.
+    if (finishReason === 'length') {
+      const err: any = new Error(`OpenAI response truncated (finish_reason=length, ${responseText.length} chars)`);
+      err.status = 500; // mark as retriable
+      throw err;
+    }
 
     let evaluations: any[] = [];
     try {
@@ -545,8 +555,13 @@ ${kpiReference}
         evaluations = arrayKey ? parsed[arrayKey] : [];
       }
     } catch (e) {
+      // Throw instead of returning [] so the caller's retry loop can retry. Parse errors
+      // are almost always caused by truncation or transient OpenAI formatting glitches that
+      // resolve on a fresh call.
       console.error(`[Evaluation] Failed to parse JSON response:`, (e as any).message);
-      return [];
+      const err: any = new Error(`OpenAI JSON parse failed: ${(e as any).message}`);
+      err.status = 500; // mark as retriable
+      throw err;
     }
 
     if (!Array.isArray(evaluations) || evaluations.length === 0) {
@@ -659,6 +674,33 @@ ${kpiReference}
     }
 
     console.log(`[Evaluation] Evaluation complete: ${results.length} KPIs processed, ${results.filter(r => r.status !== 'Insufficient').length} evidence records created`);
+
+    // Aggregate evidences into lecture_kpi
+    try {
+      const aggregated = await getMany(
+        `SELECT kpi_id, COUNT(*) as evidence_count, ROUND(AVG(confidence)::numeric, 2) as avg_confidence
+         FROM evidences WHERE lecture_id = $1 AND status != 'Insufficient'
+         GROUP BY kpi_id`,
+        [lectureId]
+      );
+      for (const row of aggregated) {
+        const evCount = Number(row.evidence_count) || 0;
+        const avgConf = Number(row.avg_confidence) || 0;
+        const score = computeScore(avgConf, evCount);
+        const mark = computeMark(evCount);
+        await executeQuery(
+          `INSERT INTO lecture_kpi (lecture_id, kpi_id, evidence_count, avg_confidence, score, mark, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+           ON CONFLICT (lecture_id, kpi_id)
+           DO UPDATE SET evidence_count = $3, avg_confidence = $4, score = $5, mark = $6, updated_at = NOW()`,
+          [lectureId, row.kpi_id, evCount, avgConf, score, mark]
+        );
+      }
+      console.log(`[Evaluation] lecture_kpi updated: ${aggregated.length} KPI(s) for lecture_id=${lectureId}`);
+    } catch (aggErr) {
+      console.error(`[Evaluation] Failed to aggregate lecture_kpi:`, aggErr);
+    }
+
     return results;
   } catch (err) {
     console.error(`[Evaluation] Fatal evaluation error:`, err);
