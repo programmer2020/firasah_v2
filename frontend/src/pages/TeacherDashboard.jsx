@@ -789,8 +789,9 @@ const TeacherDashboard = () => {
                   return (
                   <React.Fragment key={evidence.evidence_id || idx}>
                   <tr
-                    className={`${idx % 2 === 0 ? 'bg-white' : 'bg-[#f3f5f4]'} transition-colors hover:bg-gray-50 ${hasDetails ? 'cursor-pointer' : ''}`}
+                    className={`group relative ${idx % 2 === 0 ? 'bg-white' : 'bg-[#f3f5f4]'} transition-colors hover:bg-gray-50 ${hasDetails ? 'cursor-pointer' : ''}`}
                     onClick={() => hasDetails && setExpandedEvidence(isExpanded ? null : (evidence.evidence_id || idx))}
+                    title={evidence.facts || ''}
                   >
                     <td className="px-3 py-5 text-center">
                       {hasDetails && (
@@ -805,6 +806,21 @@ const TeacherDashboard = () => {
                         <span className="font-semibold text-gray-900">{evidence.kpi_name}</span>
                         <span className="text-xs text-gray-600">Section {evidence.section_name}</span>
                       </div>
+                      {evidence.facts && (
+                        <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 hidden group-hover:block w-[90%] max-w-[600px]">
+                          <div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-xl text-right" dir="rtl">
+                            <p className="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-1">Evidence</p>
+                            <p className="text-sm text-gray-700 leading-relaxed">{evidence.facts}</p>
+                            {evidence.interpretation && (
+                              <>
+                                <p className="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-1 mt-2">Interpretation</p>
+                                <p className="text-sm text-gray-700 leading-relaxed">{evidence.interpretation}</p>
+                              </>
+                            )}
+                          </div>
+                          <div className="mx-auto h-2 w-2 rotate-45 border-b border-r border-emerald-200 bg-white -mt-1"></div>
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-5 font-medium text-gray-700">{evidence.teacher_name}</td>
                     <td className="px-6 py-5">
