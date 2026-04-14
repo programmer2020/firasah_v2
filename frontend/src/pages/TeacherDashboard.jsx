@@ -798,7 +798,7 @@ const TeacherDashboard = () => {
                       if (evidence.facts) {
                         const rect = e.currentTarget.getBoundingClientRect();
                         setTooltipPos({ x: rect.left + rect.width / 2, y: rect.bottom });
-                        hoverTimerRef.current = setTimeout(() => setHoveredEvidence(evidence.evidence_id || idx), 3000);
+                        hoverTimerRef.current = setTimeout(() => setHoveredEvidence(idx), 3000);
                       }
                     }}
                     onMouseLeave={() => {
@@ -817,7 +817,7 @@ const TeacherDashboard = () => {
                     <td className="px-6 py-5">
                       <div className="flex flex-col">
                         <span className="font-semibold text-gray-900">{evidence.kpi_name}</span>
-                        <span className="text-xs text-gray-600">Section {evidence.section_name}</span>
+                        <span className="text-xs text-gray-600">{evidence.class_name || evidence.section_name}</span>
                       </div>
                     </td>
                     <td className="px-6 py-5 font-medium text-gray-700">{evidence.teacher_name}</td>
@@ -870,7 +870,7 @@ const TeacherDashboard = () => {
 
       {/* Evidence Tooltip - rendered outside table to avoid overflow clipping */}
       {hoveredEvidence !== null && (() => {
-        const ev = filteredEvidences.find((e, i) => (e.evidence_id || i) === hoveredEvidence);
+        const ev = filteredEvidences[hoveredEvidence];
         if (!ev || !ev.facts) return null;
         return (
           <div

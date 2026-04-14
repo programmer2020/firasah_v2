@@ -694,6 +694,7 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
         teacher_name,
         section_id,
         section_name,
+        class_name,
         ROUND(score::numeric, 1) AS kpi_score,
         confidence,
         evidence_id,
@@ -715,6 +716,7 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
           dfe.teacher_name,
           dfe.section_id,
           dfe.section_name,
+          cls.class_name,
           dfe.score,
           dfe.confidence,
           dfe.evidence_id,
@@ -729,6 +731,7 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
           ev.limitations
         FROM dashboard_fact_evidences dfe
         LEFT JOIN evidences ev ON dfe.evidence_id = ev.evidence_id
+        LEFT JOIN classes cls ON dfe.section_id = cls.section_id AND dfe.grade_id = cls.grade_id
         LEFT JOIN sound_files sf_owner ON dfe.file_id = sf_owner.file_id
         WHERE dfe.week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
           AND dfe.confidence IS NOT NULL
@@ -755,6 +758,7 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
       kpi_name: r.kpi_name,
       teacher_name: r.teacher_name,
       section_name: r.section_name,
+      class_name: r.class_name || r.section_name,
       confidence: Number(r.confidence),
       kpi_score: r.kpi_score !== null ? Number(r.kpi_score) : null,
       evidence_id: r.evidence_id,
