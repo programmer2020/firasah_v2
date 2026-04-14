@@ -148,18 +148,19 @@ router.get('/kpi-cards', authenticate, async (req: AuthRequest, res: Response) =
         WHERE ($7::int IS NULL OR fd.user_id = $7)
       ),
 
-      -- User Sessions: distinct users who logged in this month (from login_events).
+      -- User Sessions: count login events for the current user this month.
       user_count AS (
         SELECT
           'User Sessions' AS metric,
-          COUNT(DISTINCT le.user_id)
+          COUNT(*)
             FILTER (WHERE DATE_TRUNC('month', le.login_timestamp)::date = dp.current_month_start)
             ::numeric AS current_value,
-          COUNT(DISTINCT le.user_id)
+          COUNT(*)
             FILTER (WHERE DATE_TRUNC('month', le.login_timestamp)::date = dp.prev_month_start)
             ::numeric AS previous_value
         FROM login_events le
         CROSS JOIN date_params dp
+        WHERE ($7::int IS NULL OR le.user_id = $7)
       )
 
       SELECT
