@@ -6,9 +6,16 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { spawn } from 'child_process';
+import path from 'path';
+import fs from 'fs';
+import ffmpegStatic from 'ffmpeg-static';
 import { authenticate, AuthRequest, getTenantFilter } from '../middleware/auth.js';
 import { getMany, getOne, executeQuery } from '../helpers/database.js';
 import { evaluateSpeechAgainstKPIs } from '../services/evaluationsService.js';
+
+// Resolve the bundled ffmpeg binary path (falls back to PATH if static is missing)
+const FFMPEG_PATH: string = (ffmpegStatic as unknown as string) || 'ffmpeg';
 
 const router = Router();
 
@@ -657,22 +664,23 @@ router.get('/section-progress', authenticate, async (req: AuthRequest, res: Resp
  */
 router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { subject_id, teacher_id, kpi_id, domain_id, section_id, grade_id, week_num, min_score, max_score } = req.query;
+    const { subject_id, teacher_id, kpi_id, domain_id, section_id, grade_id, week_num, min_score, max_score, min_confidence } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
     const pf = (v: any) => (v ? parseFloat(String(v)) : null);
     const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
-      p(subject_id),  // $1
-      p(teacher_id),  // $2
-      p(kpi_id),      // $3
-      p(domain_id),   // $4
-      p(section_id),  // $5
-      p(grade_id),    // $6
-      ownerFilter,    // $7
-      p(week_num),    // $8
-      pf(min_score),  // $9
-      pf(max_score),  // $10
+      p(subject_id),      // $1
+      p(teacher_id),      // $2
+      p(kpi_id),          // $3
+      p(domain_id),       // $4
+      p(section_id),      // $5
+      p(grade_id),        // $6
+      ownerFilter,        // $7
+      p(week_num),        // $8
+      pf(min_score),      // $9
+      pf(max_score),      // $10
+      pf(min_confidence), // $11
     ];
 
     const sql = `
@@ -745,6 +753,7 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
           AND ($8::int IS NULL OR dfe.week_start = (SELECT ws FROM target_week))
           AND ($9::float IS NULL OR dfe.score >= $9)
           AND ($10::float IS NULL OR dfe.score <= $10)
+          AND ($11::float IS NULL OR dfe.confidence > $11)
       ) ranked_evidences
       WHERE rank <= 10
       ORDER BY rank;
@@ -767,6 +776,7 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
       filename: r.filename,
       start_time: r.start_time,
       end_time: r.end_time,
+      created_at: r.created_at || null,
       facts: r.facts || null,
       interpretation: r.interpretation || null,
       limitations: r.limitations || null,
@@ -861,6 +871,148 @@ router.post('/re-evaluate', authenticate, async (req: AuthRequest, res: Response
   } catch (error: any) {
     console.error('Re-evaluate Error:', error);
     res.status(500).json({ success: false, message: 'Re-evaluation failed', error: error.message });
+  }
+});
+
+/**
+ * GET /api/dashboard/evidences/:evidence_id/clip
+ * Streams a short audio clip (only the segment from start_time to end_time)
+ * for the given evidence. Uses ffmpeg to extract the slice on the fly.
+ */
+router.get('/evidences/:evidence_id/clip', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const evidenceId = parseInt(String(req.params.evidence_id), 10);
+    if (!evidenceId || Number.isNaN(evidenceId)) {
+      return res.status(400).json({ success: false, message: 'Invalid evidence_id' });
+    }
+
+    const sql = `
+      SELECT
+        e.start_time AS ev_start,
+        e.end_time   AS ev_end,
+        ts.start_time AS slot_start,
+        sf.filepath,
+        sf.filename
+      FROM evidences e
+      JOIN lecture l ON e.lecture_id = l.lecture_id
+      LEFT JOIN section_time_slots ts ON l.time_slot_id = ts.time_slot_id
+      LEFT JOIN sound_files sf ON l.file_id = sf.file_id
+      WHERE e.evidence_id = $1
+      LIMIT 1
+    `;
+    const row = await getOne(sql, [evidenceId]);
+    if (!row) {
+      return res.status(404).json({ success: false, message: 'Evidence not found' });
+    }
+    if (!row.filepath) {
+      return res.status(404).json({ success: false, message: 'Audio file not linked to evidence' });
+    }
+    if (!row.ev_start || !row.ev_end) {
+      return res.status(400).json({ success: false, message: 'Evidence has no time range' });
+    }
+
+    const toSec = (t: string): number => {
+      const [h, m, s] = String(t).split(':').map(Number);
+      return (h || 0) * 3600 + (m || 0) * 60 + (s || 0);
+    };
+    const slotStart = row.slot_start ? toSec(row.slot_start) : 0;
+    const evStart = toSec(row.ev_start);
+    const evEnd = toSec(row.ev_end);
+    let offsetSec = evStart - slotStart;
+    if (offsetSec < 0) offsetSec += 24 * 3600; // wrap across midnight
+    let durationSec = evEnd - evStart;
+    if (durationSec <= 0) durationSec += 24 * 3600;
+    durationSec = Math.max(1, Math.min(durationSec, 600)); // cap at 10 min
+
+    // Resolve absolute audio path. filepath is stored with OS-specific separators
+    // (e.g. "uploads\\audio\\foo.mp3"). Normalize before joining.
+    const normalizedRelative = String(row.filepath).replace(/\\/g, path.sep).replace(/\//g, path.sep);
+    let audioPath = path.isAbsolute(normalizedRelative)
+      ? normalizedRelative
+      : path.join(process.cwd(), normalizedRelative);
+
+    // If the audio file is missing at the resolved path, try the original cwd
+    // (the upload may have been created by a different worktree/process).
+    if (!fs.existsSync(audioPath)) {
+      const alt = path.join(process.cwd(), 'uploads', 'audio', path.basename(normalizedRelative));
+      if (fs.existsSync(alt)) {
+        audioPath = alt;
+      } else {
+        console.error(`[evidence-clip ${evidenceId}] Audio missing: ${audioPath}`);
+        return res.status(404).json({ success: false, message: 'Audio file missing on disk' });
+      }
+    }
+
+    // If this is a video container, prefer the pre-converted mp3 sibling (if any).
+    const videoExts = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
+    if (videoExts.includes(path.extname(audioPath).toLowerCase())) {
+      const mp3Sibling = audioPath.replace(path.extname(audioPath), '.mp3');
+      if (fs.existsSync(mp3Sibling)) audioPath = mp3Sibling;
+    }
+
+    // Ensure we have a runnable ffmpeg binary.
+    if (!FFMPEG_PATH || (FFMPEG_PATH !== 'ffmpeg' && !fs.existsSync(FFMPEG_PATH))) {
+      console.error(`[evidence-clip ${evidenceId}] ffmpeg binary not found at: ${FFMPEG_PATH}`);
+      return res.status(500).json({ success: false, message: 'ffmpeg binary not available on server' });
+    }
+
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Accept-Ranges', 'none');
+
+    const ffArgs = [
+      '-ss', String(offsetSec),
+      '-t', String(durationSec),
+      '-i', audioPath,
+      '-vn',
+      '-f', 'mp3',
+      '-acodec', 'libmp3lame',
+      '-ab', '128k',
+      '-ar', '44100',
+      '-ac', '2',
+      '-loglevel', 'error',
+      'pipe:1',
+    ];
+
+    const ff = spawn(FFMPEG_PATH, ffArgs, { windowsHide: true });
+    let stderrBuf = '';
+    let responded = false;
+
+    ff.stdout.pipe(res, { end: false });
+    ff.stderr.on('data', (chunk) => {
+      stderrBuf += chunk.toString();
+    });
+    ff.on('error', (err) => {
+      console.error(`[evidence-clip ${evidenceId}] ffmpeg spawn error:`, err, 'binary:', FFMPEG_PATH);
+      if (!res.headersSent) {
+        responded = true;
+        res.status(500).json({ success: false, message: 'Failed to start ffmpeg', error: err.message });
+      } else if (!responded) {
+        responded = true;
+        res.end();
+      }
+    });
+    ff.on('close', (code) => {
+      if (code !== 0 && !res.headersSent) {
+        responded = true;
+        console.error(`[evidence-clip ${evidenceId}] ffmpeg exited with code ${code}. stderr: ${stderrBuf}`);
+        return res.status(500).json({ success: false, message: 'ffmpeg exited with error', code, stderr: stderrBuf.slice(-400) });
+      }
+      if (!responded) {
+        responded = true;
+        res.end();
+      }
+    });
+    req.on('close', () => {
+      try { ff.kill('SIGKILL'); } catch {}
+    });
+  } catch (error: any) {
+    console.error('Evidence Clip Error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Failed to generate clip', error: error.message });
+    } else {
+      res.end();
+    }
   }
 });
 

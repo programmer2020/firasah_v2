@@ -327,14 +327,97 @@ const TeacherDashboard = () => {
   const [expandedEvidence, setExpandedEvidence] = useState(null);
   const [hoveredEvidence, setHoveredEvidence] = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [minConfidence, setMinConfidence] = useState(75);
+  const [playingEvidenceId, setPlayingEvidenceId] = useState(null);
+  const [loadingEvidenceId, setLoadingEvidenceId] = useState(null);
   const hoverTimerRef = React.useRef(null);
+  const audioRef = React.useRef(null);
+  const audioUrlRef = React.useRef(null);
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+        audioUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  const handlePlayEvidence = async (evidenceId) => {
+    // Toggle off if already playing this evidence
+    if (playingEvidenceId === evidenceId) {
+      audioRef.current?.pause();
+      setPlayingEvidenceId(null);
+      return;
+    }
+
+    // Stop previous playback
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+    }
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
+
+    setLoadingEvidenceId(evidenceId);
+    try {
+      const token = localStorage.getItem('authToken');
+      const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/^[\s=]+/, '') ||
+        (import.meta.env.DEV ? 'http://localhost:5000' : '');
+      const resp = await fetch(`${baseUrl}/api/dashboard/evidences/${evidenceId}/clip`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!resp.ok) {
+        let msg = `HTTP ${resp.status}`;
+        try {
+          const body = await resp.json();
+          if (body?.message) msg = body.message;
+        } catch {
+          const txt = await resp.text().catch(() => '');
+          if (txt) msg = txt.slice(0, 200);
+        }
+        throw new Error(msg);
+      }
+      const blob = await resp.blob();
+      if (!blob || blob.size === 0) {
+        throw new Error('المقطع الصوتي فارغ. تحقق من توفر الملف الأصلي.');
+      }
+      const url = URL.createObjectURL(blob);
+      audioUrlRef.current = url;
+
+      if (!audioRef.current) audioRef.current = new Audio();
+      audioRef.current.src = url;
+      audioRef.current.onended = () => setPlayingEvidenceId(null);
+      audioRef.current.onerror = () => {
+        console.error('Audio playback error');
+        setPlayingEvidenceId(null);
+      };
+      await audioRef.current.play();
+      setPlayingEvidenceId(evidenceId);
+    } catch (err) {
+      console.error('❌ Failed to play evidence clip:', err);
+      setPlayingEvidenceId(null);
+      alert(`تعذر تشغيل المقطع الصوتي: ${err?.message || 'حدث خطأ غير متوقع'}`);
+    } finally {
+      setLoadingEvidenceId(null);
+    }
+  };
 
   useEffect(() => {
     const fetchTopEvidences = async () => {
       try {
         console.log('🏆 Fetching top evidences...');
         const qs = buildFilterParams();
-        const response = await api.get(`/api/dashboard/top-evidences${qs ? `?${qs}` : ''}`);
+        const params = new URLSearchParams(qs);
+        params.append('min_confidence', String(minConfidence));
+        const response = await api.get(`/api/dashboard/top-evidences?${params.toString()}`);
 
         console.log('✅ Top evidences:', response.data);
         setTopEvidences(response.data.data || []);
@@ -345,7 +428,7 @@ const TeacherDashboard = () => {
     };
 
     fetchTopEvidences();
-  }, [filters]);
+  }, [filters, minConfidence]);
 
   const heatmapDomains = domains;
   const heatmapWeekLabels = (heatmapDomains[0]?.weeks || Array.from({ length: 8 }, () => 0)).map((_, index) => `W${index + 1}`);
@@ -753,9 +836,28 @@ const TeacherDashboard = () => {
 
       {/* Evidence Samples Table */}
       <section className="border border-[rgba(0,76,58,0.08)] rounded-2xl bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-        <div className="mb-3">
-          <h2 className="font-headline text-xl font-bold" style={{color: '#005239'}}>High-Confidence KPI Samples</h2>
-          <p className="text-sm" style={{color: '#006d4a'}}>Top 10 AI-verified performance highlights</p>
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="font-headline text-xl font-bold" style={{color: '#005239'}}>High-Confidence KPI Samples</h2>
+            <p className="text-sm" style={{color: '#006d4a'}}>
+              Top 10 AI-verified performance highlights (confidence &gt; {minConfidence}%)
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="min-confidence-filter" className="text-xs font-semibold uppercase tracking-wide" style={{color: '#006d4a'}}>
+              Min Confidence
+            </label>
+            <select
+              id="min-confidence-filter"
+              value={minConfidence}
+              onChange={(e) => setMinConfidence(Number(e.target.value))}
+              className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-emerald-800 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            >
+              {[10, 20, 30, 40, 50, 60, 70, 75, 80, 90, 100].map((v) => (
+                <option key={v} value={v}>{`> ${v}%`}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
@@ -778,12 +880,15 @@ const TeacherDashboard = () => {
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-emerald-100">
                     Time
                   </th>
+                  <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-widest text-emerald-100">
+                    Play
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filteredEvidences.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-gray-400">No evidence data available yet</td>
+                    <td colSpan={7} className="px-6 py-8 text-center text-gray-400">No evidence data available yet</td>
                   </tr>
                 )}
                 {filteredEvidences.map((evidence, idx) => {
@@ -818,6 +923,7 @@ const TeacherDashboard = () => {
                       <div className="flex flex-col">
                         <span className="font-semibold text-gray-900">{evidence.kpi_name}</span>
                         <span className="text-xs text-gray-600">{evidence.class_name || evidence.section_name}</span>
+                        {evidence.created_at && <span className="text-xs text-gray-400">{new Date(evidence.created_at).toLocaleDateString('en-GB')}</span>}
                       </div>
                     </td>
                     <td className="px-6 py-5 font-medium text-gray-700">{evidence.teacher_name}</td>
@@ -831,10 +937,42 @@ const TeacherDashboard = () => {
                         {evidence.start_time} - {evidence.end_time}
                       </span>
                     </td>
+                    <td className="px-6 py-5 text-center">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (evidence.evidence_id) handlePlayEvidence(evidence.evidence_id);
+                        }}
+                        disabled={!evidence.evidence_id || loadingEvidenceId === evidence.evidence_id}
+                        title={playingEvidenceId === evidence.evidence_id ? 'إيقاف' : 'تشغيل المقطع'}
+                        className={`inline-flex h-9 w-9 items-center justify-center rounded-full transition-all ${
+                          playingEvidenceId === evidence.evidence_id
+                            ? 'bg-emerald-600 text-white shadow-md hover:bg-emerald-700'
+                            : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                        } disabled:cursor-not-allowed disabled:opacity-50`}
+                      >
+                        {loadingEvidenceId === evidence.evidence_id ? (
+                          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+                            <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                          </svg>
+                        ) : playingEvidenceId === evidence.evidence_id ? (
+                          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                            <rect x="6" y="5" width="4" height="14" rx="1" />
+                            <rect x="14" y="5" width="4" height="14" rx="1" />
+                          </svg>
+                        ) : (
+                          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M8 5v14l11-7z" />
+                          </svg>
+                        )}
+                      </button>
+                    </td>
                   </tr>
                   {isExpanded && (
                     <tr className={idx % 2 === 0 ? 'bg-white' : 'bg-[#f3f5f4]'}>
-                      <td colSpan={6} className="px-6 pb-5">
+                      <td colSpan={7} className="px-6 pb-5">
                         <div className="ml-10 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4 space-y-3">
                           {evidence.facts && (
                             <div>

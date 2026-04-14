@@ -1,0 +1,19 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Backend Server",
+			"type": "shell",
+			"command": "cd backend && npx tsx src/index.ts",
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "Backend",
+			"type": "shell",
+			"command": "cd backend && npx tsx src/index.ts",
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}

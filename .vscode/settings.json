@@ -1,4 +1,5 @@
 {
   "git.autoRepositoryDetection": false,
-  "git.repositoryScanIgnoredFolders": [".claude/worktrees"]
+  "git.repositoryScanIgnoredFolders": [".claude/worktrees"],
+  "terminal.integrated.defaultProfile.windows": "Command Prompt"
 }
