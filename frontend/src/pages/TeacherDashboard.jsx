@@ -325,6 +325,8 @@ const TeacherDashboard = () => {
   // Top 10 high-confidence evidence samples from real data
   const [topEvidences, setTopEvidences] = useState([]);
   const [expandedEvidence, setExpandedEvidence] = useState(null);
+  const [hoveredEvidence, setHoveredEvidence] = useState(null);
+  const hoverTimerRef = React.useRef(null);
 
   useEffect(() => {
     const fetchTopEvidences = async () => {
@@ -789,9 +791,17 @@ const TeacherDashboard = () => {
                   return (
                   <React.Fragment key={evidence.evidence_id || idx}>
                   <tr
-                    className={`group relative ${idx % 2 === 0 ? 'bg-white' : 'bg-[#f3f5f4]'} transition-colors hover:bg-gray-50 ${hasDetails ? 'cursor-pointer' : ''}`}
+                    className={`relative ${idx % 2 === 0 ? 'bg-white' : 'bg-[#f3f5f4]'} transition-colors hover:bg-gray-50 ${hasDetails ? 'cursor-pointer' : ''}`}
                     onClick={() => hasDetails && setExpandedEvidence(isExpanded ? null : (evidence.evidence_id || idx))}
-                    title={evidence.facts || ''}
+                    onMouseEnter={() => {
+                      if (evidence.facts) {
+                        hoverTimerRef.current = setTimeout(() => setHoveredEvidence(evidence.evidence_id || idx), 3000);
+                      }
+                    }}
+                    onMouseLeave={() => {
+                      clearTimeout(hoverTimerRef.current);
+                      setHoveredEvidence(null);
+                    }}
                   >
                     <td className="px-3 py-5 text-center">
                       {hasDetails && (
@@ -806,8 +816,9 @@ const TeacherDashboard = () => {
                         <span className="font-semibold text-gray-900">{evidence.kpi_name}</span>
                         <span className="text-xs text-gray-600">Section {evidence.section_name}</span>
                       </div>
-                      {evidence.facts && (
-                        <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 hidden group-hover:block w-[90%] max-w-[600px]">
+                      {evidence.facts && hoveredEvidence === (evidence.evidence_id || idx) && (
+                        <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-2 z-50 w-[90%] max-w-[600px]">
+                          <div className="mx-auto h-2 w-2 rotate-45 border-t border-l border-emerald-200 bg-white -mb-1 relative z-10"></div>
                           <div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-xl text-right" dir="rtl">
                             <p className="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-1">Evidence</p>
                             <p className="text-sm text-gray-700 leading-relaxed">{evidence.facts}</p>
@@ -818,7 +829,6 @@ const TeacherDashboard = () => {
                               </>
                             )}
                           </div>
-                          <div className="mx-auto h-2 w-2 rotate-45 border-b border-r border-emerald-200 bg-white -mt-1"></div>
                         </div>
                       )}
                     </td>
