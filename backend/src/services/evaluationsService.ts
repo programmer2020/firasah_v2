@@ -697,6 +697,15 @@ ${kpiReference}
         );
       }
       console.log(`[Evaluation] lecture_kpi updated: ${aggregated.length} KPI(s) for lecture_id=${lectureId}`);
+
+      // Refresh materialized views so dashboard heatmaps/charts reflect new data
+      try {
+        await executeQuery('REFRESH MATERIALIZED VIEW dashboard_fact_lectures');
+        await executeQuery('REFRESH MATERIALIZED VIEW dashboard_fact_evidences');
+        console.log(`[Evaluation] Materialized views refreshed`);
+      } catch (mvErr) {
+        console.error(`[Evaluation] Failed to refresh materialized views:`, mvErr);
+      }
     } catch (aggErr) {
       console.error(`[Evaluation] Failed to aggregate lecture_kpi:`, aggErr);
     }
