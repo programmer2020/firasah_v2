@@ -3,9 +3,14 @@
  * Single optimized endpoint for dashboard KPI cards
  * Uses materialized views for lecture/teacher/upload metrics
  * and login_events for user sessions
+ * 
+ * Data Isolation:
+ * - For regular users: only data related to their uploaded files
+ * - For super_admin users: all data across the system
  */
 
 import { Router, Request, Response } from 'express';
+import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { getMany, getOne } from '../helpers/database.js';
 
 const router = Router();
@@ -22,9 +27,18 @@ const router = Router();
  *   subject_id, teacher_id, kpi_id, domain_id, section_id, grade_id
  *
  * Each metric returns current_value, previous_value, mom_percent_change
+ * 
+ * Data Isolation:
+ * - Regular users: only data from their uploaded files
+ * - Super admin: all data
  */
-router.get('/kpi-cards', async (req: Request, res: Response) => {
+router.get('/kpi-cards', authenticate, async (req: AuthRequest, res: Response) => {
   try {
+    // Check user role
+    const user = await getOne('SELECT * FROM users WHERE email = $1', [req.user?.email]);
+    const isSuperAdmin = user?.role === 'super_admin';
+    const userEmail = req.user?.email;
+
     const {
       subject_id,
       teacher_id,
@@ -43,7 +57,12 @@ router.get('/kpi-cards', async (req: Request, res: Response) => {
       p(domain_id),   // $4
       p(section_id),  // $5
       p(grade_id),    // $6
+      isSuperAdmin ? null : userEmail,  // $7 - for user filtering
     ];
+
+    // For regular users, add WHERE clause to filter only their data
+    const userFilter = isSuperAdmin ? '' : `AND dfl.created_by = $7`;
+    const uploadFilter = isSuperAdmin ? '' : `AND sf.createdBy = $7`;
 
     const sql = `
       WITH date_params AS (
@@ -69,6 +88,7 @@ router.get('/kpi-cards', async (req: Request, res: Response) => {
           AND ($4::int IS NULL OR dfl.domain_id   = $4)
           AND ($5::int IS NULL OR dfl.section_id  = $5)
           AND ($6::int IS NULL OR dfl.grade_id    = $6)
+          ${userFilter}
       ),
 
       -- 2) Teachers: total count from teachers table (all registered teachers)
@@ -105,6 +125,7 @@ router.get('/kpi-cards', async (req: Request, res: Response) => {
         FROM fragments f
         INNER JOIN sound_files sf ON f.file_id = sf.file_id,
         date_params dp
+        WHERE 1=1 ${uploadFilter}
       ),
 
       -- 4) User Sessions: count login events (each login = 1 session)
@@ -120,6 +141,7 @@ router.get('/kpi-cards', async (req: Request, res: Response) => {
             AS previous_value
         FROM login_events le, date_params dp
         WHERE le.login_timestamp >= dp.prev_month_start
+          ${isSuperAdmin ? '' : 'AND le.email = $7'}
       )
 
       SELECT
@@ -188,9 +210,18 @@ router.get('/kpi-cards', async (req: Request, res: Response) => {
  *
  * Response: array of { domain_id, domain_name, weeks: [w1, w2, ..., w8] }
  *   week_1 = most recent week, week_8 = oldest
+ * 
+ * Data Isolation:
+ * - Regular users: only data from their uploaded files
+ * - Super admin: all data
  */
-router.get('/domains-weeks', async (req: Request, res: Response) => {
+router.get('/domains-weeks', authenticate, async (req: AuthRequest, res: Response) => {
   try {
+    // Check user role
+    const user = await getOne('SELECT * FROM users WHERE email = $1', [req.user?.email]);
+    const isSuperAdmin = user?.role === 'super_admin';
+    const userEmail = req.user?.email;
+
     const { subject_id, teacher_id, kpi_id, section_id, grade_id } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
@@ -200,7 +231,10 @@ router.get('/domains-weeks', async (req: Request, res: Response) => {
       p(kpi_id),      // $3
       p(section_id),  // $4
       p(grade_id),    // $5
+      isSuperAdmin ? null : userEmail,  // $6 - for user filtering
     ];
+
+    const userFilter = isSuperAdmin ? '' : `AND dfl.created_by = $6`;
 
     const sql = `
       SELECT
@@ -221,15 +255,16 @@ router.get('/domains-weeks', async (req: Request, res: Response) => {
           week_start,
           DENSE_RANK() OVER (ORDER BY week_start DESC) AS week_num,
           ROUND(AVG(score)::numeric, 1) AS avg_score
-        FROM dashboard_fact_lectures
+        FROM dashboard_fact_lectures dfl
         WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
           AND week_start <= CURRENT_DATE::date
           AND score IS NOT NULL
-          AND ($1::int IS NULL OR subject_id = $1)
-          AND ($2::int IS NULL OR teacher_id = $2)
-          AND ($3::int IS NULL OR kpi_id     = $3)
-          AND ($4::int IS NULL OR section_id = $4)
-          AND ($5::int IS NULL OR grade_id   = $5)
+          AND ($1::int IS NULL OR dfl.subject_id = $1)
+          AND ($2::int IS NULL OR dfl.teacher_id = $2)
+          AND ($3::int IS NULL OR dfl.kpi_id     = $3)
+          AND ($4::int IS NULL OR dfl.section_id = $4)
+          AND ($5::int IS NULL OR dfl.grade_id   = $5)
+          ${userFilter}
         GROUP BY domain_id, domain_name, week_start
       ) weekly_avg
       WHERE week_num <= 8
@@ -285,9 +320,18 @@ router.get('/domains-weeks', async (req: Request, res: Response) => {
  *   teacher_id, domain_id, section_id, grade_id
  *
  * Response: { subjects: [{id, name}], domains: [{domain_id, domain_name, scores: {subject_id: avg_score}}] }
+ * 
+ * Data Isolation:
+ * - Regular users: only data from their uploaded files
+ * - Super admin: all data
  */
-router.get('/domains-subjects', async (req: Request, res: Response) => {
+router.get('/domains-subjects', authenticate, async (req: AuthRequest, res: Response) => {
   try {
+    // Check user role
+    const user = await getOne('SELECT * FROM users WHERE email = $1', [req.user?.email]);
+    const isSuperAdmin = user?.role === 'super_admin';
+    const userEmail = req.user?.email;
+
     const { teacher_id, domain_id, section_id, grade_id } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
@@ -296,7 +340,10 @@ router.get('/domains-subjects', async (req: Request, res: Response) => {
       p(domain_id),   // $2
       p(section_id),  // $3
       p(grade_id),    // $4
+      isSuperAdmin ? null : userEmail,  // $5 - for user filtering
     ];
+
+    const userFilter = isSuperAdmin ? '' : `AND dfl.created_by = $5`;
 
     const sql = `
       SELECT
@@ -313,13 +360,14 @@ router.get('/domains-subjects', async (req: Request, res: Response) => {
           subject_id,
           subject_name,
           ROUND(AVG(score)::numeric, 1) AS avg_score
-        FROM dashboard_fact_lectures
+        FROM dashboard_fact_lectures dfl
         WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
           AND score IS NOT NULL
-          AND ($1::int IS NULL OR teacher_id = $1)
-          AND ($2::int IS NULL OR domain_id  = $2)
-          AND ($3::int IS NULL OR section_id = $3)
-          AND ($4::int IS NULL OR grade_id   = $4)
+          AND ($1::int IS NULL OR dfl.teacher_id = $1)
+          AND ($2::int IS NULL OR dfl.domain_id  = $2)
+          AND ($3::int IS NULL OR dfl.section_id = $3)
+          AND ($4::int IS NULL OR dfl.grade_id   = $4)
+          ${userFilter}
         GROUP BY domain_id, domain_name, subject_id, subject_name
       ) kpi_subject_scores
       GROUP BY domain_id, domain_name
@@ -395,9 +443,18 @@ router.get('/domains-subjects', async (req: Request, res: Response) => {
  * Optional query filters: subject_id, kpi_id, domain_id, section_id, grade_id
  *
  * Response: { weeks: [ { week_start, week_label, avg_score, lecture_count } ] }
+ * 
+ * Data Isolation:
+ * - Regular users: only data from their uploaded files
+ * - Super admin: all data
  */
-router.get('/teacher-performance', async (req: Request, res: Response) => {
+router.get('/teacher-performance', authenticate, async (req: AuthRequest, res: Response) => {
   try {
+    // Check user role
+    const user = await getOne('SELECT * FROM users WHERE email = $1', [req.user?.email]);
+    const isSuperAdmin = user?.role === 'super_admin';
+    const userEmail = req.user?.email;
+
     const { subject_id, kpi_id, domain_id, section_id, grade_id } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
@@ -407,21 +464,25 @@ router.get('/teacher-performance', async (req: Request, res: Response) => {
       p(domain_id),   // $3
       p(section_id),  // $4
       p(grade_id),    // $5
+      isSuperAdmin ? null : userEmail,  // $6 - for user filtering
     ];
+
+    const userFilter = isSuperAdmin ? '' : `AND dfl.created_by = $6`;
 
     const sql = `
       SELECT
         week_start,
         ROUND(AVG(score)::numeric, 1) AS avg_score,
         COUNT(DISTINCT lecture_id)     AS lecture_count
-      FROM dashboard_fact_lectures
+      FROM dashboard_fact_lectures dfl
       WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
         AND score IS NOT NULL
-        AND ($1::int IS NULL OR subject_id = $1)
-        AND ($2::int IS NULL OR kpi_id     = $2)
-        AND ($3::int IS NULL OR domain_id  = $3)
-        AND ($4::int IS NULL OR section_id = $4)
-        AND ($5::int IS NULL OR grade_id   = $5)
+        AND ($1::int IS NULL OR dfl.subject_id = $1)
+        AND ($2::int IS NULL OR dfl.kpi_id     = $2)
+        AND ($3::int IS NULL OR dfl.domain_id  = $3)
+        AND ($4::int IS NULL OR dfl.section_id = $4)
+        AND ($5::int IS NULL OR dfl.grade_id   = $5)
+        ${userFilter}
       GROUP BY week_start
       ORDER BY week_start;
     `;
@@ -455,9 +516,18 @@ router.get('/teacher-performance', async (req: Request, res: Response) => {
  * Optional query filters: subject_id, teacher_id, kpi_id, domain_id, grade_id
  *
  * Response: { week_labels: ["W1",...], sections: [{ section_id, section_name, scores: [s1,...] }] }
+ * 
+ * Data Isolation:
+ * - Regular users: only data from their uploaded files
+ * - Super admin: all data
  */
-router.get('/section-progress', async (req: Request, res: Response) => {
+router.get('/section-progress', authenticate, async (req: AuthRequest, res: Response) => {
   try {
+    // Check user role
+    const user = await getOne('SELECT * FROM users WHERE email = $1', [req.user?.email]);
+    const isSuperAdmin = user?.role === 'super_admin';
+    const userEmail = req.user?.email;
+
     const { subject_id, teacher_id, kpi_id, domain_id, grade_id } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
@@ -467,7 +537,10 @@ router.get('/section-progress', async (req: Request, res: Response) => {
       p(kpi_id),      // $3
       p(domain_id),   // $4
       p(grade_id),    // $5
+      isSuperAdmin ? null : userEmail,  // $6 - for user filtering
     ];
+
+    const userFilter = isSuperAdmin ? '' : `AND dfl.created_by = $6`;
 
     const sql = `
       SELECT
@@ -485,6 +558,7 @@ router.get('/section-progress', async (req: Request, res: Response) => {
         AND ($3::int IS NULL OR dfl.kpi_id     = $3)
         AND ($4::int IS NULL OR dfl.domain_id  = $4)
         AND ($5::int IS NULL OR dfl.grade_id   = $5)
+        ${userFilter}
       GROUP BY dfl.section_id, sec.section_name, dfl.week_start
       ORDER BY dfl.section_id, dfl.week_start;
     `;
@@ -536,9 +610,18 @@ router.get('/section-progress', async (req: Request, res: Response) => {
  * Uses dashboard_fact_evidences MV.
  *
  * Optional query filters: subject_id, teacher_id, kpi_id, domain_id, section_id, grade_id
+ * 
+ * Data Isolation:
+ * - Regular users: only data from their uploaded files
+ * - Super admin: all data
  */
-router.get('/top-evidences', async (req: Request, res: Response) => {
+router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Response) => {
   try {
+    // Check user role
+    const user = await getOne('SELECT * FROM users WHERE email = $1', [req.user?.email]);
+    const isSuperAdmin = user?.role === 'super_admin';
+    const userEmail = req.user?.email;
+
     const { subject_id, teacher_id, kpi_id, domain_id, section_id, grade_id } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
@@ -549,7 +632,10 @@ router.get('/top-evidences', async (req: Request, res: Response) => {
       p(domain_id),   // $4
       p(section_id),  // $5
       p(grade_id),    // $6
+      isSuperAdmin ? null : userEmail,  // $7 - for user filtering
     ];
+
+    const userFilter = isSuperAdmin ? '' : `AND dfe.created_by = $7`;
 
     const sql = `
       SELECT
@@ -596,6 +682,7 @@ router.get('/top-evidences', async (req: Request, res: Response) => {
           AND ($4::int IS NULL OR dfe.domain_id  = $4)
           AND ($5::int IS NULL OR dfe.section_id = $5)
           AND ($6::int IS NULL OR dfe.grade_id   = $6)
+          ${userFilter}
       ) ranked_evidences
       WHERE rank <= 10
       ORDER BY rank;

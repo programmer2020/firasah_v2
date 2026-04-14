@@ -43,6 +43,35 @@ export const getAllSoundFiles = async () => {
 };
 
 /**
+ * Get all sound files for a specific user
+ * Super admins see all files, regular users see only their own
+ * @param email User email
+ * @param userRole User role (user or super_admin)
+ * @returns Promise with array of sound files
+ */
+export const getUserSoundFiles = async (email: string, userRole: string = 'user') => {
+  try {
+    let query = `SELECT * FROM sound_files`;
+    
+    // If not super admin, only return files created by this user
+    if (userRole !== 'super_admin') {
+      query += ` WHERE createdBy = $1`;
+    }
+    
+    query += ` ORDER BY created_at DESC`;
+
+    if (userRole !== 'super_admin') {
+      return await getMany(query, [email]);
+    } else {
+      return await getMany(query);
+    }
+  } catch (error) {
+    console.error('Error fetching user sound files:', error);
+    throw error;
+  }
+};
+
+/**
  * Get sound file by ID
  * @param fileId Sound file ID
  * @returns Promise with single sound file
