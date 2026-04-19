@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import '../styles/EvaluationDashboard.css';
 import ProtectedLayout from '../components/ProtectedLayout';
 import useAutoHideMessage from '../hooks/useAutoHideMessage';
+import api from '../services/api';
 
 const EvaluationDashboard = () => {
   const [fileId, setFileId] = useState('45'); // Default test file ID
@@ -31,14 +32,9 @@ const EvaluationDashboard = () => {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`http://localhost:5000/api/sound-files/${id}/evaluation/report/comprehensive`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const response = await api.get(`/api/sound-files/${id}/evaluation/report/comprehensive`);
 
-      if (!response.ok) throw new Error('Failed to fetch report');
-
-      const data = await response.json();
+      const data = response.data;
       setReport(data.data.domainReport);
       setStatistics(data.data.statistics);
       setEvaluations(data.data.detailedEvaluations);
@@ -62,13 +58,11 @@ const EvaluationDashboard = () => {
     if (!fileId) return;
 
     try {
-      const response = await fetch(`http://localhost:5000/api/sound-files/${fileId}/evaluation/export`, {
-        method: 'GET',
+      const response = await api.get(`/api/sound-files/${fileId}/evaluation/export`, {
+        responseType: 'blob',
       });
 
-      if (!response.ok) throw new Error('Failed to export');
-
-      const blob = await response.blob();
+      const blob = new Blob([response.data]);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;

@@ -9,7 +9,11 @@ export interface Subject {
   subject_name: string;
 }
 
-export const getAllSubjects = async () => {
+export const getAllSubjects = async (userId?: number | null) => {
+  if (userId) {
+    const query = `SELECT subject_id, subject_name, created_at FROM subjects WHERE user_id = $1 ORDER BY subject_name`;
+    return await getMany(query, [userId]);
+  }
   const query = `SELECT subject_id, subject_name, created_at FROM subjects ORDER BY subject_name`;
   return await getMany(query);
 };
@@ -19,10 +23,10 @@ export const getSubjectById = async (subjectId: number) => {
   return await getOne(query, [subjectId]);
 };
 
-export const createSubject = async (subject: Subject) => {
+export const createSubject = async (subject: Subject, userId?: number) => {
   const { subject_name } = subject;
-  const query = `INSERT INTO subjects (subject_name, created_at) VALUES ($1, CURRENT_TIMESTAMP) RETURNING *`;
-  const result = await executeQuery(query, [subject_name]);
+  const query = `INSERT INTO subjects (subject_name, user_id, created_at) VALUES ($1, $2, CURRENT_TIMESTAMP) RETURNING *`;
+  const result = await executeQuery(query, [subject_name, userId || null]);
   return result.rows[0];
 };
 

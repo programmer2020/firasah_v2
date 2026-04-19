@@ -4,6 +4,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { authenticate, AuthRequest } from '../middleware/auth.js';
 import {
   getAllKPIs,
   getKPIById,
@@ -31,7 +32,7 @@ const router = Router();
  *       200:
  *         description: List of KPI domains retrieved successfully
  */
-router.get('/domains/all', async (req: Request, res: Response) => {
+router.get('/domains/all', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const domains = await getAllKPIDomains();
     res.status(200).json({
@@ -64,7 +65,7 @@ router.get('/domains/all', async (req: Request, res: Response) => {
  *       200:
  *         description: KPI domain retrieved successfully
  */
-router.get('/domains/:id', async (req: Request, res: Response) => {
+router.get('/domains/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     const domain = await getKPIDomainById(parseInt(id));
@@ -101,7 +102,7 @@ router.get('/domains/:id', async (req: Request, res: Response) => {
  *       200:
  *         description: KPIs grouped by domain retrieved successfully
  */
-router.get('/domains-grouped', async (req: Request, res: Response) => {
+router.get('/domains-grouped', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const data = await getKPIsGroupedByDomain();
     res.status(200).json({
@@ -134,7 +135,7 @@ router.get('/domains-grouped', async (req: Request, res: Response) => {
  *       200:
  *         description: KPIs for domain retrieved successfully
  */
-router.get('/by-domain/:domainId', async (req: Request, res: Response) => {
+router.get('/by-domain/:domainId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const domainId = req.params.domainId as string;
     const kpis = await getKPIsByDomain(parseInt(domainId));
@@ -177,7 +178,7 @@ router.get('/by-domain/:domainId', async (req: Request, res: Response) => {
  *                   items:
  *                     $ref: '#/components/schemas/KPI'
  */
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const kpis = await getAllKPIs();
     res.status(200).json({
@@ -212,7 +213,7 @@ router.get('/', async (req: Request, res: Response) => {
  *       404:
  *         description: KPI not found
  */
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     const kpi = await getKPIById(parseInt(id));
@@ -264,7 +265,7 @@ router.get('/:id', async (req: Request, res: Response) => {
  *       201:
  *         description: KPI created successfully
  */
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { kpi_name, createdBy, note } = req.body;
 
@@ -317,7 +318,7 @@ router.post('/', async (req: Request, res: Response) => {
  *       200:
  *         description: KPI updated successfully
  */
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     const data = req.body;
@@ -363,7 +364,7 @@ router.put('/:id', async (req: Request, res: Response) => {
  *       200:
  *         description: KPI deleted successfully
  */
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
 
@@ -408,7 +409,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
  *       200:
  *         description: KPIs retrieved successfully
  */
-router.get('/creator/:createdBy', async (req: Request, res: Response) => {
+router.get('/creator/:createdBy', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const createdBy = req.params.createdBy as string;
     const kpis = await getKPIsByCreator(createdBy);

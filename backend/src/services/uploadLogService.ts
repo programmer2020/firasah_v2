@@ -17,6 +17,23 @@ import { executeQuery, getMany, getOne } from '../helpers/database.js';
 
 export type LogLevel = 'info' | 'success' | 'warning' | 'error';
 
+/** Pipeline stage names for structured logging */
+export type StageName =
+  | 'upload'
+  | 'video_conversion'
+  | 'db_record'
+  | 'denoising'
+  | 'duration_analysis'
+  | 'lecture_creation'
+  | 'fragment_splitting'
+  | 'transcription'
+  | 'fragment_saving'
+  | 'lecture_update'
+  | 'evaluation'
+  | 'pipeline'
+  | 'text_processing'
+  | 'retry';
+
 export interface UploadLogEntry {
   log_id: number;
   file_id: number | null;
@@ -24,7 +41,26 @@ export interface UploadLogEntry {
   level: LogLevel;
   message: string | null;
   metadata: Record<string, any> | null;
+  stage_name: StageName | null;
+  duration_ms: number | null;
+  user_id: number | null;
+  file_size_bytes: number | null;
+  fragment_index: number | null;
+  total_fragments: number | null;
+  error_details: string | null;
+  ip_address: string | null;
   created_at: string;
+}
+
+export interface LogExtra {
+  stageName?: StageName;
+  durationMs?: number;
+  userId?: number;
+  fileSizeBytes?: number;
+  fragmentIndex?: number;
+  totalFragments?: number;
+  errorDetails?: string;
+  ipAddress?: string;
 }
 
 /**
@@ -35,18 +71,29 @@ export const logUpload = async (
   event: string,
   level: LogLevel,
   message: string,
-  metadata?: Record<string, any>
+  metadata?: Record<string, any>,
+  extra?: LogExtra
 ): Promise<void> => {
   try {
     await executeQuery(
-      `INSERT INTO upload_logs (file_id, event, level, message, metadata)
-       VALUES ($1, $2, $3, $4, $5)`,
+      `INSERT INTO upload_logs (file_id, event, level, message, metadata,
+        stage_name, duration_ms, user_id, file_size_bytes,
+        fragment_index, total_fragments, error_details, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
       [
         fileId ?? null,
         event,
         level,
         message,
         metadata ? JSON.stringify(metadata) : null,
+        extra?.stageName ?? null,
+        extra?.durationMs ?? null,
+        extra?.userId ?? null,
+        extra?.fileSizeBytes ?? null,
+        extra?.fragmentIndex ?? null,
+        extra?.totalFragments ?? null,
+        extra?.errorDetails ?? null,
+        extra?.ipAddress ?? null,
       ]
     );
   } catch (err) {
@@ -60,7 +107,9 @@ export const logUpload = async (
  */
 export const getLogsForFile = async (fileId: number): Promise<UploadLogEntry[]> => {
   return await getMany(
-    `SELECT log_id, file_id, event, level, message, metadata, created_at
+    `SELECT log_id, file_id, event, level, message, metadata,
+            stage_name, duration_ms, user_id, file_size_bytes,
+            fragment_index, total_fragments, error_details, ip_address, created_at
      FROM upload_logs
      WHERE file_id = $1
      ORDER BY created_at ASC, log_id ASC`,
@@ -74,7 +123,9 @@ export const getLogsForFile = async (fileId: number): Promise<UploadLogEntry[]> 
 export const getRecentLogs = async (limit = 100): Promise<UploadLogEntry[]> => {
   return await getMany(
     `SELECT ul.log_id, ul.file_id, ul.event, ul.level, ul.message,
-            ul.metadata, ul.created_at,
+            ul.metadata, ul.stage_name, ul.duration_ms, ul.user_id,
+            ul.file_size_bytes, ul.fragment_index, ul.total_fragments,
+            ul.error_details, ul.ip_address, ul.created_at,
             sf.filename
      FROM upload_logs ul
      LEFT JOIN sound_files sf ON sf.file_id = ul.file_id

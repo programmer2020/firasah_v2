@@ -5,18 +5,20 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '../services/authService.js';
+import { getOne } from '../helpers/database.js';
 
 export interface AuthRequest extends Request {
   user?: {
     id: number;
     email: string;
+    role: string;
   };
 }
 
 /**
  * Verify JWT token middleware
  */
-export const authenticate = (
+export const authenticate = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
@@ -41,9 +43,13 @@ export const authenticate = (
       });
     }
 
+    // Fetch role from DB
+    const dbUser = await getOne('SELECT role FROM users WHERE user_id = $1', [payload.user_id]);
+
     req.user = {
       id: payload.user_id,
       email: payload.email,
+      role: dbUser?.role || 'user',
     };
 
     next();
@@ -74,37 +80,24 @@ export const errorHandler = (
 };
 
 /**
- * Require Super Admin middleware
- * Checks if the authenticated user has super_admin role
+ * Require super_admin role
  */
 export const requireSuperAdmin = (
   req: AuthRequest,
   res: Response,
   next: NextFunction
 ) => {
-  if (!req.user) {
-    return res.status(401).json({
-      success: false,
-      message: 'Authentication required',
-    });
-  }
-
-  // TODO: Get user role from database or token
-  // For now, we'll check if user has super_admin role
-  if ((req.user as any).role !== 'super_admin') {
+  if (req.user?.role !== 'super_admin') {
     return res.status(403).json({
       success: false,
       message: 'Super admin access required',
     });
   }
-
   next();
 };
 
 /**
- * Require File Ownership middleware
- * Checks if the authenticated user owns the file or is super admin
- * File ID should be in req.params.fileId
+ * Require file ownership or super_admin role
  */
 export const requireFileOwnership = async (
   req: AuthRequest,
@@ -112,68 +105,40 @@ export const requireFileOwnership = async (
   next: NextFunction
 ) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentication required',
-      });
-    }
+    const fileId = req.params.id || req.params.fileId;
+    if (!fileId) return next();
 
-    const fileId = parseInt(req.params.fileId as string);
-    if (isNaN(fileId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid file ID',
-      });
-    }
+    if (req.user?.role === 'super_admin') return next();
 
-    // Import database helper
-    const { getOne } = await import('../helpers/database.js');
-
-    // Get the file
-    const file = await getOne(
-      'SELECT * FROM sound_files WHERE file_id = $1',
-      [fileId]
-    );
-
+    const file = await getOne('SELECT "createdBy" FROM sound_files WHERE file_id = $1', [fileId]);
     if (!file) {
-      return res.status(404).json({
-        success: false,
-        message: 'File not found',
-      });
+      return res.status(404).json({ success: false, message: 'File not found' });
     }
 
-    // Check ownership or super admin status
-    // Note: We'll need to fetch user role from database
-    const user = await getOne(
-      'SELECT * FROM users WHERE email = $1',
-      [req.user.email]
-    );
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'User not found',
-      });
+    const userEmail = req.user?.email || '';
+    const userId = String(req.user?.id || '');
+    if (file.createdBy !== userEmail && file.createdBy !== userId) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
-    // Allow access if super admin or file owner
-    if (user.role === 'super_admin' || file.createdBy === req.user.email) {
-      next();
-    } else {
-      return res.status(403).json({
-        success: false,
-        message: 'You do not have access to this file',
-      });
-    }
+    next();
   } catch (error) {
-    console.error('Error in requireFileOwnership:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Authorization check failed',
-      error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    return res.status(500).json({ success: false, message: 'Authorization check failed' });
   }
 };
 
-export default { authenticate, errorHandler, requireSuperAdmin, requireFileOwnership };
+/**
+ * Tenant filter helper.
+ * Returns { userId: number | null, isSuperAdmin: boolean }
+ * - super_admin => userId is null (no filter needed)
+ * - normal user => userId = req.user.id
+ */
+export const getTenantFilter = (req: AuthRequest): { userId: number | null; isSuperAdmin: boolean } => {
+  const isSuperAdmin = req.user?.role === 'super_admin';
+  return {
+    userId: isSuperAdmin ? null : (req.user?.id ?? null),
+    isSuperAdmin,
+  };
+};
+
+export default { authenticate, errorHandler, requireSuperAdmin, requireFileOwnership, getTenantFilter };

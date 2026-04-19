@@ -14,6 +14,7 @@ interface UserCredentials {
   email: string;
   password: string;
   name?: string;
+  role?: string;
 }
 
 interface JWTPayload {
@@ -108,11 +109,16 @@ export const registerUser = async (credentials: UserCredentials) => {
     // Ensure sequence is aligned with current max(user_id) after migrations/imports
     await syncUsersIdSequence();
 
+    // Validate role
+    const validRoles = ['user', 'super_admin'];
+    const role = validRoles.includes(credentials.role || '') ? credentials.role : 'user';
+
     // Create user
     const createUser = () => insert('users', {
       email: credentials.email,
       password: hashedPassword,
       name: credentials.name || 'Unknown User',
+      role,
       created_at: new Date(),
       updated_at: new Date(),
     });
@@ -173,7 +179,7 @@ export const loginUser = async (email: string, password: string) => {
     // Remove password from response
     const { password: _, ...userWithoutPassword } = user;
     return {
-      user: userWithoutPassword,
+      user: { ...userWithoutPassword, role: user.role || 'user' },
       token,
     };
   } catch (error) {
@@ -236,7 +242,7 @@ export const getUserById = async (userId: number) => {
     }
 
     const { password, ...userWithoutPassword } = user;
-    return userWithoutPassword;
+    return { ...userWithoutPassword, role: user.role || 'user' };
   } catch (error) {
     console.error('Get User By ID Error:', error);
     throw error;

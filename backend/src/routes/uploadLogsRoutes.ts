@@ -19,7 +19,7 @@ const router = Router();
  * Returns the most recent N log entries across all files.
  * Query params: ?limit=100
  */
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', authenticate, async (req: Request, res: Response) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 100, 500);
     const logs = await getRecentLogs(limit);
@@ -36,7 +36,7 @@ router.get('/', async (req: Request, res: Response) => {
  * GET /api/upload-logs/summary
  * Returns a per-file summary (last event, error count, etc.)
  */
-router.get('/summary', async (req: Request, res: Response) => {
+router.get('/summary', authenticate, async (req: Request, res: Response) => {
   try {
     const summary = await getUploadSummary();
     res.json({ success: true, count: summary.length, data: summary });
@@ -52,7 +52,7 @@ router.get('/summary', async (req: Request, res: Response) => {
  * GET /api/upload-logs/:fileId
  * Returns all logs for a specific file in chronological order.
  */
-router.get('/:fileId', async (req: Request, res: Response) => {
+router.get('/:fileId', authenticate, async (req: Request, res: Response) => {
   try {
     const fileId = parseInt(req.params.fileId as string);
     if (isNaN(fileId)) {

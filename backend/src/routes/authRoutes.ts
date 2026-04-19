@@ -70,7 +70,7 @@ const router = Router();
  */
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { email, password, name } = req.body;
+    const { email, password, name, role } = req.body;
 
     // Validate input
     if (!email || !password) {
@@ -80,11 +80,12 @@ router.post('/register', async (req: Request, res: Response) => {
       });
     }
 
-    // Register user
+    // Register user (role is always 'user' for self-registration)
     const user = await registerUser({
       email,
       password,
       name: name || undefined,
+      role: 'user',
     });
 
     res.status(201).json({
@@ -382,7 +383,7 @@ router.post(
  * GET /api/auth/logins/stats
  * Get count of login events for a date range
  */
-router.get('/logins/stats', async (req: Request, res: Response) => {
+router.get('/logins/stats', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { startDate, endDate } = req.query;
 

@@ -17,6 +17,13 @@ import Schedule from './pages/Schedule';
 import EvaluationDashboard from './pages/EvaluationDashboard';
 import WorkerJobs from './pages/WorkerJobs';
 import TeacherDashboard from './pages/TeacherDashboard';
+import Clips from './pages/Clips';
+import Patterns from './pages/Patterns';
+import Highlights from './pages/Highlights';
+import AdminUpload from './pages/AdminUpload';
+import NewAnalysis from './pages/NewAnalysis';
+import Settings from './pages/Settings';
+import Support from './pages/Support';
 import ThemeTest from './components/ThemeTest';
 import './App.css';
 
@@ -76,6 +83,13 @@ function AppRoutes() {
       <Route path="/schedule" element={<ProtectedRoute element={<Schedule />} />} />
       <Route path="/evaluations" element={<ProtectedRoute element={<EvaluationDashboard />} />} />
       <Route path="/worker-jobs" element={<ProtectedRoute element={<WorkerJobs />} />} />
+      <Route path="/clips" element={<ProtectedRoute element={<Clips />} />} />
+      <Route path="/patterns" element={<ProtectedRoute element={<Patterns />} />} />
+      <Route path="/highlights" element={<ProtectedRoute element={<Highlights />} />} />
+      <Route path="/admin-upload" element={<ProtectedRoute element={<AdminUpload />} />} />
+      <Route path="/new-analysis" element={<ProtectedRoute element={<NewAnalysis />} />} />
+      <Route path="/settings" element={<ProtectedRoute element={<Settings />} />} />
+      <Route path="/support" element={<ProtectedRoute element={<Support />} />} />
 
       {/* 404 Route */}
       <Route path="*" element={<Navigate to="/" replace />} />

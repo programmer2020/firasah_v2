@@ -4,6 +4,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { authenticate, AuthRequest, getTenantFilter } from '../middleware/auth.js';
 import {
   getAllEvidences,
   getEvidenceById,
@@ -41,9 +42,10 @@ const router = Router();
  *                   items:
  *                     $ref: '#/components/schemas/Evidence'
  */
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const evidences = await getAllEvidences();
+    const { userId } = getTenantFilter(req);
+    const evidences = await getAllEvidences(userId);
     res.status(200).json({
       success: true,
       message: 'Evidences retrieved successfully',
@@ -76,7 +78,7 @@ router.get('/', async (req: Request, res: Response) => {
  *       404:
  *         description: Evidence not found
  */
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     const evidence = await getEvidenceById(parseInt(id));
@@ -134,7 +136,7 @@ router.get('/:id', async (req: Request, res: Response) => {
  *       201:
  *         description: Evidence created successfully
  */
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { kpi_id, lecture_id, start_time, end_time } = req.body;
 
@@ -188,7 +190,7 @@ router.post('/', async (req: Request, res: Response) => {
  *       200:
  *         description: Evidence updated successfully
  */
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     const data = req.body;
@@ -234,7 +236,7 @@ router.put('/:id', async (req: Request, res: Response) => {
  *       200:
  *         description: Evidence deleted successfully
  */
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
 
@@ -279,7 +281,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
  *       200:
  *         description: Evidences retrieved successfully
  */
-router.get('/kpi/:kpiId', async (req: Request, res: Response) => {
+router.get('/kpi/:kpiId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const kpiId = req.params.kpiId as string;
     const evidences = await getEvidencesByKPI(parseInt(kpiId));
@@ -314,7 +316,7 @@ router.get('/kpi/:kpiId', async (req: Request, res: Response) => {
  *       200:
  *         description: Evidences retrieved successfully
  */
-router.get('/file/:fileId', async (req: Request, res: Response) => {
+router.get('/file/:fileId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const fileId = req.params.fileId as string;
     const evidences = await getEvidencesByFile(parseInt(fileId));
@@ -350,7 +352,7 @@ router.get('/file/:fileId', async (req: Request, res: Response) => {
  *       200:
  *         description: Evidence extracted and saved successfully
  */
-router.post('/extract/:lectureId', async (req: Request, res: Response) => {
+router.post('/extract/:lectureId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const lectureId = parseInt(req.params.lectureId as string);
 

@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';
-import { getApiUrl } from '../config/apiConfig';
+import api from '../services/api';
 
-// Color palette for multiple section lines
-const SECTION_COLORS = [
+// Color palette for multiple class lines
+const CLASS_COLORS = [
   '#06b6d4', // cyan
   '#22c55e', // green
   '#8b5cf6', // violet
@@ -14,35 +14,43 @@ const SECTION_COLORS = [
   '#6366f1', // indigo
 ];
 
-const WatermarkChart = () => {
+const WatermarkChart = ({ filters = {} }) => {
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
-  const [chartData, setChartData] = useState({ week_labels: [], sections: [] });
+  const [chartData, setChartData] = useState({ week_labels: [], classes: [] });
+
+  // Build query string from filters
+  const buildFilterParams = () => {
+    const params = new URLSearchParams();
+    if (filters.subject) params.append('subject_id', filters.subject);
+    if (filters.grade) params.append('grade_id', filters.grade);
+    if (filters.week) {
+      const weekNum = parseInt(filters.week.replace('Week ', ''), 10);
+      if (!isNaN(weekNum)) params.append('week_num', weekNum);
+    }
+    if (filters.kpiStatus === 'high') {
+      params.append('min_score', '75');
+    } else if (filters.kpiStatus === 'needs_improvement') {
+      params.append('max_score', '50');
+    }
+    return params.toString();
+  };
 
   // Fetch real data
   useEffect(() => {
     const fetchData = async () => {
       try {
-        console.log('📈 Fetching section progress data...');
-        const response = await fetch(getApiUrl('/api/dashboard/section-progress'), {
-          method: 'GET',
-          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-          credentials: 'include',
-        });
-
-        if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
-
-        const json = await response.json();
-        console.log('✅ Section progress data:', json);
-        setChartData(json.data || { week_labels: [], sections: [] });
+        const qs = buildFilterParams();
+        const response = await api.get(`/api/dashboard/section-progress${qs ? `?${qs}` : ''}`);
+        setChartData(response.data.data || { week_labels: [], classes: [] });
       } catch (error) {
-        console.error('❌ Failed to fetch section progress:', error);
-        setChartData({ week_labels: [], sections: [] });
+        console.error('Failed to fetch class progress:', error);
+        setChartData({ week_labels: [], classes: [] });
       }
     };
 
     fetchData();
-  }, []);
+  }, [filters]);
 
   // Render chart when data changes
   useEffect(() => {
@@ -52,19 +60,20 @@ const WatermarkChart = () => {
       chartInstanceRef.current = echarts.init(chartRef.current);
     }
 
-    const { week_labels, sections } = chartData;
+    const week_labels = chartData.week_labels || [];
+    const classes = chartData.classes || chartData.sections || [];
 
-    const series = sections.map((sec, idx) => ({
-      name: `Section ${sec.section_name}`,
+    const series = classes.map((cls, idx) => ({
+      name: cls.class_name || cls.section_name || `Class ${idx + 1}`,
       type: 'line',
       smooth: true,
-      data: sec.scores.map((s) => (s !== null ? s : 0)),
+      data: cls.scores.map((s) => (s !== null ? s : 0)),
       lineStyle: {
-        color: SECTION_COLORS[idx % SECTION_COLORS.length],
+        color: CLASS_COLORS[idx % CLASS_COLORS.length],
         width: 3,
       },
       itemStyle: {
-        color: SECTION_COLORS[idx % SECTION_COLORS.length],
+        color: CLASS_COLORS[idx % CLASS_COLORS.length],
       },
       areaStyle:
         idx === 0
@@ -73,8 +82,8 @@ const WatermarkChart = () => {
                 type: 'linear',
                 x: 0, y: 0, x2: 0, y2: 1,
                 colorStops: [
-                  { offset: 0, color: `${SECTION_COLORS[0]}66` },
-                  { offset: 1, color: `${SECTION_COLORS[0]}0D` },
+                  { offset: 0, color: `${CLASS_COLORS[0]}66` },
+                  { offset: 1, color: `${CLASS_COLORS[0]}0D` },
                 ],
               },
             }
@@ -93,7 +102,7 @@ const WatermarkChart = () => {
       legend: {
         top: 20,
         right: 20,
-        data: sections.map((sec) => `Section ${sec.section_name}`),
+        data: classes.map((cls, idx) => cls.class_name || cls.section_name || `Class ${idx + 1}`),
         textStyle: { color: '#666', fontSize: 12 },
       },
       grid: {
@@ -152,7 +161,7 @@ const WatermarkChart = () => {
     <div className="rounded-2xl border border-[rgba(0,76,58,0.08)] bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
       <div className="mb-6">
         <h3 className="font-headline text-xl font-bold text-gray-900">Class Performance</h3>
-        <p className="text-sm text-gray-500 mt-1">Weekly Section Performance Over Last 8 Weeks</p>
+        <p className="text-sm text-gray-500 mt-1">Weekly Class Performance Over Last 8 Weeks</p>
       </div>
       <div ref={chartRef} style={{ width: '100%', height: '320px' }} />
     </div>

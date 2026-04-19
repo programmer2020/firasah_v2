@@ -3,15 +3,19 @@
  * Single optimized endpoint for dashboard KPI cards
  * Uses materialized views for lecture/teacher/upload metrics
  * and login_events for user sessions
- * 
- * Data Isolation:
- * - For regular users: only data related to their uploaded files
- * - For super_admin users: all data across the system
  */
 
 import { Router, Request, Response } from 'express';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
-import { getMany, getOne } from '../helpers/database.js';
+import { spawn } from 'child_process';
+import path from 'path';
+import fs from 'fs';
+import ffmpegStatic from 'ffmpeg-static';
+import { authenticate, AuthRequest, getTenantFilter } from '../middleware/auth.js';
+import { getMany, getOne, executeQuery } from '../helpers/database.js';
+import { evaluateSpeechAgainstKPIs } from '../services/evaluationsService.js';
+
+// Resolve the bundled ffmpeg binary path (falls back to PATH if static is missing)
+const FFMPEG_PATH: string = (ffmpegStatic as unknown as string) || 'ffmpeg';
 
 const router = Router();
 
@@ -27,18 +31,9 @@ const router = Router();
  *   subject_id, teacher_id, kpi_id, domain_id, section_id, grade_id
  *
  * Each metric returns current_value, previous_value, mom_percent_change
- * 
- * Data Isolation:
- * - Regular users: only data from their uploaded files
- * - Super admin: all data
  */
 router.get('/kpi-cards', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    // Check user role
-    const user = await getOne('SELECT * FROM users WHERE email = $1', [req.user?.email]);
-    const isSuperAdmin = user?.role === 'super_admin';
-    const userEmail = req.user?.email;
-
     const {
       subject_id,
       teacher_id,
@@ -46,10 +41,15 @@ router.get('/kpi-cards', authenticate, async (req: AuthRequest, res: Response) =
       domain_id,
       section_id,
       grade_id,
+      week_num,
+      min_score,
+      max_score,
     } = req.query;
 
     // Convert to int or null
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
+    const pf = (v: any) => (v ? parseFloat(String(v)) : null);
+    const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
       p(subject_id),  // $1
       p(teacher_id),  // $2
@@ -57,97 +57,117 @@ router.get('/kpi-cards', authenticate, async (req: AuthRequest, res: Response) =
       p(domain_id),   // $4
       p(section_id),  // $5
       p(grade_id),    // $6
-      isSuperAdmin ? null : userEmail,  // $7 - for user filtering
+      ownerFilter,    // $7
     ];
-
-    // For regular users, add WHERE clause to filter only their data
-    const userFilter = isSuperAdmin ? '' : `AND dfl.created_by = $7`;
-    const uploadFilter = isSuperAdmin ? '' : `AND sf.createdBy = $7`;
 
     const sql = `
       WITH date_params AS (
         SELECT
-          DATE_TRUNC('month', CURRENT_DATE)::date   AS current_month_start,
-          DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')::date AS prev_month_start
+          CURRENT_DATE AS today,
+          DATE_TRUNC('month', CURRENT_DATE)::date AS current_month_start,
+          DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')::date AS prev_month_start,
+          -- Expose $3 (kpi_id) and $4 (domain_id) here so Postgres can infer their types.
+          -- They are kept in the param signature for API stability but don't filter the raw-table counts below.
+          $3::int AS _kpi_filter_noop,
+          $4::int AS _domain_filter_noop
       ),
 
-      -- 1) Lectures: count distinct lecture_id from materialized view
+      -- Lectures: distinct lecture_id per month from the raw lecture+sound_files join.
+      -- Filters on subject/teacher/section/grade come via section_time_slots (nullable join,
+      -- only applied when the corresponding filter param is non-null).
       lecture_count AS (
         SELECT
           'Lectures' AS metric,
-          COUNT(DISTINCT lecture_id)
-            FILTER (WHERE DATE_TRUNC('month', dfl.created_at)::date = dp.current_month_start)
-            AS current_value,
-          COUNT(DISTINCT lecture_id)
-            FILTER (WHERE DATE_TRUNC('month', dfl.created_at)::date = dp.prev_month_start)
-            AS previous_value
-        FROM dashboard_fact_lectures dfl, date_params dp
-        WHERE ($1::int IS NULL OR dfl.subject_id  = $1)
-          AND ($2::int IS NULL OR dfl.teacher_id  = $2)
-          AND ($3::int IS NULL OR dfl.kpi_id      = $3)
-          AND ($4::int IS NULL OR dfl.domain_id   = $4)
-          AND ($5::int IS NULL OR dfl.section_id  = $5)
-          AND ($6::int IS NULL OR dfl.grade_id    = $6)
-          ${userFilter}
+          COUNT(DISTINCT l.lecture_id)
+            FILTER (WHERE DATE_TRUNC('month', sf.created_at)::date = dp.current_month_start)
+            ::numeric AS current_value,
+          COUNT(DISTINCT l.lecture_id)
+            FILTER (WHERE DATE_TRUNC('month', sf.created_at)::date = dp.prev_month_start)
+            ::numeric AS previous_value
+        FROM lecture l
+        INNER JOIN sound_files sf ON l.file_id = sf.file_id
+        LEFT JOIN section_time_slots st ON l.time_slot_id = st.time_slot_id
+        LEFT JOIN classes c ON st.class_id = c.class_id
+        CROSS JOIN date_params dp
+        WHERE ($1::int IS NULL OR st.subject_id = $1)
+          AND ($2::int IS NULL OR st.teacher_id = $2)
+          AND ($5::int IS NULL OR c.section_id  = $5)
+          AND ($6::int IS NULL OR c.grade_id    = $6)
+          AND ($7::int IS NULL OR sf.user_id    = $7)
       ),
 
-      -- 2) Teachers: total count from teachers table (all registered teachers)
-      --    Not from MV — MV only has teachers with evaluated lectures
+      -- Teachers: distinct teacher_id across lectures in the month.
+      -- Requires a valid time_slot (teacher_id lives on section_time_slots), so INNER JOIN.
       teacher_count AS (
         SELECT
           'Teachers' AS metric,
-          COUNT(*)::bigint AS current_value,
-          COUNT(*)::bigint AS previous_value
-        FROM teachers
+          COUNT(DISTINCT st.teacher_id)
+            FILTER (WHERE DATE_TRUNC('month', sf.created_at)::date = dp.current_month_start)
+            ::numeric AS current_value,
+          COUNT(DISTINCT st.teacher_id)
+            FILTER (WHERE DATE_TRUNC('month', sf.created_at)::date = dp.prev_month_start)
+            ::numeric AS previous_value
+        FROM lecture l
+        INNER JOIN sound_files sf ON l.file_id = sf.file_id
+        INNER JOIN section_time_slots st ON l.time_slot_id = st.time_slot_id
+        LEFT JOIN classes c ON st.class_id = c.class_id
+        CROSS JOIN date_params dp
+        WHERE ($1::int IS NULL OR st.subject_id = $1)
+          AND ($5::int IS NULL OR c.section_id  = $5)
+          AND ($6::int IS NULL OR c.grade_id    = $6)
+          AND ($7::int IS NULL OR sf.user_id    = $7)
       ),
 
-      -- 3) Upload Hours: SUM(fragments.duration) joined through sound_files
-      --    (not in the MV, so we query the source tables directly)
+      -- Upload Hours: total audio hours per month.
+      -- Sum DISTINCT lecture.duration per file (one lecture per file ideally), then /3600 → hours.
+      -- Using a sub-aggregation avoids the JOIN duplication (multiple time_slots per file).
+      file_durations AS (
+        SELECT
+          sf.file_id,
+          sf.user_id,
+          DATE_TRUNC('month', sf.created_at)::date AS month,
+          -- Take the maximum lecture duration per file (they all should match, but MAX is safe)
+          COALESCE(MAX(CAST(l.duration AS numeric)), 0) AS duration_sec
+        FROM sound_files sf
+        LEFT JOIN lecture l ON l.file_id = sf.file_id
+        GROUP BY sf.file_id, sf.user_id, DATE_TRUNC('month', sf.created_at)::date
+      ),
       upload_count AS (
         SELECT
           'Upload Hours' AS metric,
           COALESCE(
-            ROUND(
-              SUM(CAST(f.duration AS DECIMAL))
-                FILTER (WHERE DATE_TRUNC('month', sf.created_at)::date = dp.current_month_start)
-              / 3600
-            , 0),
+            ROUND(SUM(fd.duration_sec) FILTER (WHERE fd.month = dp.current_month_start) / 3600.0, 1),
             0
           ) AS current_value,
           COALESCE(
-            ROUND(
-              SUM(CAST(f.duration AS DECIMAL))
-                FILTER (WHERE DATE_TRUNC('month', sf.created_at)::date = dp.prev_month_start)
-              / 3600
-            , 0),
+            ROUND(SUM(fd.duration_sec) FILTER (WHERE fd.month = dp.prev_month_start) / 3600.0, 1),
             0
           ) AS previous_value
-        FROM fragments f
-        INNER JOIN sound_files sf ON f.file_id = sf.file_id,
-        date_params dp
-        WHERE 1=1 ${uploadFilter}
+        FROM file_durations fd
+        CROSS JOIN date_params dp
+        WHERE ($7::int IS NULL OR fd.user_id = $7)
       ),
 
-      -- 4) User Sessions: count login events (each login = 1 session)
-      --    Not DISTINCT — every login counts as a separate session
+      -- User Sessions: count login events for the current user this month.
       user_count AS (
         SELECT
           'User Sessions' AS metric,
           COUNT(*)
             FILTER (WHERE DATE_TRUNC('month', le.login_timestamp)::date = dp.current_month_start)
-            AS current_value,
+            ::numeric AS current_value,
           COUNT(*)
             FILTER (WHERE DATE_TRUNC('month', le.login_timestamp)::date = dp.prev_month_start)
-            AS previous_value
-        FROM login_events le, date_params dp
-        WHERE le.login_timestamp >= dp.prev_month_start
-          ${isSuperAdmin ? '' : 'AND le.email = $7'}
+            ::numeric AS previous_value
+        FROM login_events le
+        CROSS JOIN date_params dp
+        WHERE ($7::int IS NULL OR le.user_id = $7)
       )
 
       SELECT
         metric,
-        current_value::int,
-        previous_value::int,
+        -- All metrics carry at most one decimal place (Upload Hours has decimals; others are whole numbers)
+        current_value,
+        previous_value,
         ROUND(
           (CASE
             WHEN previous_value = 0 THEN NULL
@@ -210,33 +230,37 @@ router.get('/kpi-cards', authenticate, async (req: AuthRequest, res: Response) =
  *
  * Response: array of { domain_id, domain_name, weeks: [w1, w2, ..., w8] }
  *   week_1 = most recent week, week_8 = oldest
- * 
- * Data Isolation:
- * - Regular users: only data from their uploaded files
- * - Super admin: all data
  */
 router.get('/domains-weeks', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    // Check user role
-    const user = await getOne('SELECT * FROM users WHERE email = $1', [req.user?.email]);
-    const isSuperAdmin = user?.role === 'super_admin';
-    const userEmail = req.user?.email;
-
-    const { subject_id, teacher_id, kpi_id, section_id, grade_id } = req.query;
+    const { subject_id, teacher_id, kpi_id, section_id, grade_id, week_num, min_score, max_score } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
+    const pf = (v: any) => (v ? parseFloat(String(v)) : null);
+    const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
       p(subject_id),  // $1
       p(teacher_id),  // $2
       p(kpi_id),      // $3
       p(section_id),  // $4
       p(grade_id),    // $5
-      isSuperAdmin ? null : userEmail,  // $6 - for user filtering
+      ownerFilter,    // $6
+      p(week_num),    // $7
+      pf(min_score),  // $8
+      pf(max_score),  // $9
     ];
 
-    const userFilter = isSuperAdmin ? '' : `AND dfl.created_by = $6`;
-
     const sql = `
+      WITH target_week AS (
+        SELECT week_start AS ws FROM (
+          SELECT DISTINCT week_start,
+                 DENSE_RANK() OVER (ORDER BY week_start DESC) AS rn
+          FROM dashboard_fact_lectures
+          WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
+            AND week_start <= CURRENT_DATE
+        ) w WHERE rn = $7::int
+        LIMIT 1
+      )
       SELECT
         domain_id,
         domain_name,
@@ -250,22 +274,26 @@ router.get('/domains-weeks', authenticate, async (req: AuthRequest, res: Respons
         MAX(CASE WHEN week_num = 8 THEN avg_score END) AS week_8
       FROM (
         SELECT
-          domain_id,
-          domain_name,
-          week_start,
-          DENSE_RANK() OVER (ORDER BY week_start DESC) AS week_num,
-          ROUND(AVG(score)::numeric, 1) AS avg_score
+          dfl.domain_id,
+          dfl.domain_name,
+          dfl.week_start,
+          DENSE_RANK() OVER (ORDER BY dfl.week_start DESC) AS week_num,
+          ROUND(AVG(dfl.score)::numeric, 1) AS avg_score
         FROM dashboard_fact_lectures dfl
-        WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
-          AND week_start <= CURRENT_DATE::date
-          AND score IS NOT NULL
+        LEFT JOIN sound_files sf_owner ON dfl.file_id = sf_owner.file_id
+        WHERE dfl.week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
+          AND dfl.week_start <= CURRENT_DATE::date
+          AND dfl.score IS NOT NULL
           AND ($1::int IS NULL OR dfl.subject_id = $1)
           AND ($2::int IS NULL OR dfl.teacher_id = $2)
           AND ($3::int IS NULL OR dfl.kpi_id     = $3)
           AND ($4::int IS NULL OR dfl.section_id = $4)
           AND ($5::int IS NULL OR dfl.grade_id   = $5)
-          ${userFilter}
-        GROUP BY domain_id, domain_name, week_start
+          AND ($6::int IS NULL OR sf_owner.user_id = $6)
+          AND ($7::int IS NULL OR dfl.week_start = (SELECT ws FROM target_week))
+          AND ($8::float IS NULL OR dfl.score >= $8)
+          AND ($9::float IS NULL OR dfl.score <= $9)
+        GROUP BY dfl.domain_id, dfl.domain_name, dfl.week_start
       ) weekly_avg
       WHERE week_num <= 8
       GROUP BY domain_id, domain_name
@@ -320,32 +348,36 @@ router.get('/domains-weeks', authenticate, async (req: AuthRequest, res: Respons
  *   teacher_id, domain_id, section_id, grade_id
  *
  * Response: { subjects: [{id, name}], domains: [{domain_id, domain_name, scores: {subject_id: avg_score}}] }
- * 
- * Data Isolation:
- * - Regular users: only data from their uploaded files
- * - Super admin: all data
  */
 router.get('/domains-subjects', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    // Check user role
-    const user = await getOne('SELECT * FROM users WHERE email = $1', [req.user?.email]);
-    const isSuperAdmin = user?.role === 'super_admin';
-    const userEmail = req.user?.email;
-
-    const { teacher_id, domain_id, section_id, grade_id } = req.query;
+    const { teacher_id, domain_id, section_id, grade_id, week_num, min_score, max_score } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
+    const pf = (v: any) => (v ? parseFloat(String(v)) : null);
+    const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
       p(teacher_id),  // $1
       p(domain_id),   // $2
       p(section_id),  // $3
       p(grade_id),    // $4
-      isSuperAdmin ? null : userEmail,  // $5 - for user filtering
+      ownerFilter,    // $5
+      p(week_num),    // $6
+      pf(min_score),  // $7
+      pf(max_score),  // $8
     ];
 
-    const userFilter = isSuperAdmin ? '' : `AND dfl.created_by = $5`;
-
     const sql = `
+      WITH target_week AS (
+        SELECT week_start AS ws FROM (
+          SELECT DISTINCT week_start,
+                 DENSE_RANK() OVER (ORDER BY week_start DESC) AS rn
+          FROM dashboard_fact_lectures
+          WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
+            AND week_start <= CURRENT_DATE
+        ) w WHERE rn = $6::int
+        LIMIT 1
+      )
       SELECT
         domain_id,
         domain_name,
@@ -355,20 +387,24 @@ router.get('/domains-subjects', authenticate, async (req: AuthRequest, res: Resp
         ) AS subjects_data
       FROM (
         SELECT
-          domain_id,
-          domain_name,
-          subject_id,
-          subject_name,
-          ROUND(AVG(score)::numeric, 1) AS avg_score
+          dfl.domain_id,
+          dfl.domain_name,
+          dfl.subject_id,
+          dfl.subject_name,
+          ROUND(AVG(dfl.score)::numeric, 1) AS avg_score
         FROM dashboard_fact_lectures dfl
-        WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
-          AND score IS NOT NULL
+        LEFT JOIN sound_files sf_owner ON dfl.file_id = sf_owner.file_id
+        WHERE dfl.week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
+          AND dfl.score IS NOT NULL
           AND ($1::int IS NULL OR dfl.teacher_id = $1)
           AND ($2::int IS NULL OR dfl.domain_id  = $2)
           AND ($3::int IS NULL OR dfl.section_id = $3)
           AND ($4::int IS NULL OR dfl.grade_id   = $4)
-          ${userFilter}
-        GROUP BY domain_id, domain_name, subject_id, subject_name
+          AND ($5::int IS NULL OR sf_owner.user_id = $5)
+          AND ($6::int IS NULL OR dfl.week_start = (SELECT ws FROM target_week))
+          AND ($7::float IS NULL OR dfl.score >= $7)
+          AND ($8::float IS NULL OR dfl.score <= $8)
+        GROUP BY dfl.domain_id, dfl.domain_name, dfl.subject_id, dfl.subject_name
       ) kpi_subject_scores
       GROUP BY domain_id, domain_name
       ORDER BY domain_id;
@@ -443,48 +479,56 @@ router.get('/domains-subjects', authenticate, async (req: AuthRequest, res: Resp
  * Optional query filters: subject_id, kpi_id, domain_id, section_id, grade_id
  *
  * Response: { weeks: [ { week_start, week_label, avg_score, lecture_count } ] }
- * 
- * Data Isolation:
- * - Regular users: only data from their uploaded files
- * - Super admin: all data
  */
 router.get('/teacher-performance', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    // Check user role
-    const user = await getOne('SELECT * FROM users WHERE email = $1', [req.user?.email]);
-    const isSuperAdmin = user?.role === 'super_admin';
-    const userEmail = req.user?.email;
-
-    const { subject_id, kpi_id, domain_id, section_id, grade_id } = req.query;
+    const { subject_id, kpi_id, domain_id, section_id, grade_id, week_num, min_score, max_score } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
+    const pf = (v: any) => (v ? parseFloat(String(v)) : null);
+    const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
       p(subject_id),  // $1
       p(kpi_id),      // $2
       p(domain_id),   // $3
       p(section_id),  // $4
       p(grade_id),    // $5
-      isSuperAdmin ? null : userEmail,  // $6 - for user filtering
+      ownerFilter,    // $6
+      p(week_num),    // $7
+      pf(min_score),  // $8
+      pf(max_score),  // $9
     ];
 
-    const userFilter = isSuperAdmin ? '' : `AND dfl.created_by = $6`;
-
     const sql = `
+      WITH target_week AS (
+        SELECT week_start AS ws FROM (
+          SELECT DISTINCT week_start,
+                 DENSE_RANK() OVER (ORDER BY week_start DESC) AS rn
+          FROM dashboard_fact_lectures
+          WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
+            AND week_start <= CURRENT_DATE
+        ) w WHERE rn = $7::int
+        LIMIT 1
+      )
       SELECT
-        week_start,
-        ROUND(AVG(score)::numeric, 1) AS avg_score,
-        COUNT(DISTINCT lecture_id)     AS lecture_count
+        dfl.week_start,
+        ROUND(AVG(dfl.score)::numeric, 1) AS avg_score,
+        COUNT(DISTINCT dfl.lecture_id)     AS lecture_count
       FROM dashboard_fact_lectures dfl
-      WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
-        AND score IS NOT NULL
+      LEFT JOIN sound_files sf_owner ON dfl.file_id = sf_owner.file_id
+      WHERE dfl.week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
+        AND dfl.score IS NOT NULL
         AND ($1::int IS NULL OR dfl.subject_id = $1)
         AND ($2::int IS NULL OR dfl.kpi_id     = $2)
         AND ($3::int IS NULL OR dfl.domain_id  = $3)
         AND ($4::int IS NULL OR dfl.section_id = $4)
         AND ($5::int IS NULL OR dfl.grade_id   = $5)
-        ${userFilter}
-      GROUP BY week_start
-      ORDER BY week_start;
+        AND ($6::int IS NULL OR sf_owner.user_id = $6)
+        AND ($7::int IS NULL OR dfl.week_start = (SELECT ws FROM target_week))
+        AND ($8::float IS NULL OR dfl.score >= $8)
+        AND ($9::float IS NULL OR dfl.score <= $9)
+      GROUP BY dfl.week_start
+      ORDER BY dfl.week_start;
     `;
 
     const rows = await getMany(sql, params);
@@ -516,41 +560,46 @@ router.get('/teacher-performance', authenticate, async (req: AuthRequest, res: R
  * Optional query filters: subject_id, teacher_id, kpi_id, domain_id, grade_id
  *
  * Response: { week_labels: ["W1",...], sections: [{ section_id, section_name, scores: [s1,...] }] }
- * 
- * Data Isolation:
- * - Regular users: only data from their uploaded files
- * - Super admin: all data
  */
 router.get('/section-progress', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    // Check user role
-    const user = await getOne('SELECT * FROM users WHERE email = $1', [req.user?.email]);
-    const isSuperAdmin = user?.role === 'super_admin';
-    const userEmail = req.user?.email;
-
-    const { subject_id, teacher_id, kpi_id, domain_id, grade_id } = req.query;
+    const { subject_id, teacher_id, kpi_id, domain_id, grade_id, week_num, min_score, max_score } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
+    const pf = (v: any) => (v ? parseFloat(String(v)) : null);
+    const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
       p(subject_id),  // $1
       p(teacher_id),  // $2
       p(kpi_id),      // $3
       p(domain_id),   // $4
       p(grade_id),    // $5
-      isSuperAdmin ? null : userEmail,  // $6 - for user filtering
+      ownerFilter,    // $6
+      p(week_num),    // $7
+      pf(min_score),  // $8
+      pf(max_score),  // $9
     ];
 
-    const userFilter = isSuperAdmin ? '' : `AND dfl.created_by = $6`;
-
     const sql = `
+      WITH target_week AS (
+        SELECT week_start AS ws FROM (
+          SELECT DISTINCT week_start,
+                 DENSE_RANK() OVER (ORDER BY week_start DESC) AS rn
+          FROM dashboard_fact_lectures
+          WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
+            AND week_start <= CURRENT_DATE
+        ) w WHERE rn = $7::int
+        LIMIT 1
+      )
       SELECT
-        dfl.section_id,
-        sec.section_name,
+        dfl.class_id,
+        cls.class_name,
         dfl.week_start,
         ROUND(AVG(dfl.score)::numeric, 1) AS avg_score,
         COUNT(DISTINCT dfl.lecture_id)     AS lecture_count
       FROM dashboard_fact_lectures dfl
-      JOIN sections sec ON dfl.section_id = sec.section_id
+      JOIN classes cls ON dfl.class_id = cls.class_id
+      LEFT JOIN sound_files sf_owner ON dfl.file_id = sf_owner.file_id
       WHERE dfl.week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
         AND dfl.score IS NOT NULL
         AND ($1::int IS NULL OR dfl.subject_id = $1)
@@ -558,9 +607,12 @@ router.get('/section-progress', authenticate, async (req: AuthRequest, res: Resp
         AND ($3::int IS NULL OR dfl.kpi_id     = $3)
         AND ($4::int IS NULL OR dfl.domain_id  = $4)
         AND ($5::int IS NULL OR dfl.grade_id   = $5)
-        ${userFilter}
-      GROUP BY dfl.section_id, sec.section_name, dfl.week_start
-      ORDER BY dfl.section_id, dfl.week_start;
+        AND ($6::int IS NULL OR sf_owner.user_id = $6)
+        AND ($7::int IS NULL OR dfl.week_start = (SELECT ws FROM target_week))
+        AND ($8::float IS NULL OR dfl.score >= $8)
+        AND ($9::float IS NULL OR dfl.score <= $9)
+      GROUP BY dfl.class_id, cls.class_name, dfl.week_start
+      ORDER BY dfl.class_id, dfl.week_start;
     `;
 
     const rows = await getMany(sql, params);
@@ -573,26 +625,26 @@ router.get('/section-progress', authenticate, async (req: AuthRequest, res: Resp
     const weekStarts = Array.from(weekSet).sort();
     const weekLabels = weekStarts.map((_, i) => `W${i + 1}`);
 
-    // Group by section
-    const sectionMap: Record<number, { section_name: string; scoresByWeek: Record<string, number> }> = {};
+    // Group by class
+    const classMap: Record<number, { class_name: string; scoresByWeek: Record<string, number> }> = {};
     for (const row of rows) {
-      const sid = row.section_id;
-      if (!sectionMap[sid]) {
-        sectionMap[sid] = { section_name: row.section_name, scoresByWeek: {} };
+      const cid = row.class_id;
+      if (!classMap[cid]) {
+        classMap[cid] = { class_name: row.class_name, scoresByWeek: {} };
       }
-      sectionMap[sid].scoresByWeek[String(row.week_start)] = Number(row.avg_score);
+      classMap[cid].scoresByWeek[String(row.week_start)] = Number(row.avg_score);
     }
 
-    // Build sections array with scores aligned to weekStarts
-    const sections = Object.entries(sectionMap).map(([sid, info]) => ({
-      section_id: Number(sid),
-      section_name: info.section_name,
+    // Build classes array with scores aligned to weekStarts
+    const classes = Object.entries(classMap).map(([cid, info]) => ({
+      class_id: Number(cid),
+      class_name: info.class_name,
       scores: weekStarts.map((ws) => info.scoresByWeek[ws] ?? null),
     }));
 
     res.status(200).json({
       success: true,
-      data: { week_labels: weekLabels, sections },
+      data: { week_labels: weekLabels, classes },
     });
   } catch (error: any) {
     console.error('Dashboard Section-Progress Error:', error);
@@ -610,34 +662,39 @@ router.get('/section-progress', authenticate, async (req: AuthRequest, res: Resp
  * Uses dashboard_fact_evidences MV.
  *
  * Optional query filters: subject_id, teacher_id, kpi_id, domain_id, section_id, grade_id
- * 
- * Data Isolation:
- * - Regular users: only data from their uploaded files
- * - Super admin: all data
  */
 router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    // Check user role
-    const user = await getOne('SELECT * FROM users WHERE email = $1', [req.user?.email]);
-    const isSuperAdmin = user?.role === 'super_admin';
-    const userEmail = req.user?.email;
-
-    const { subject_id, teacher_id, kpi_id, domain_id, section_id, grade_id } = req.query;
+    const { subject_id, teacher_id, kpi_id, domain_id, section_id, grade_id, week_num, min_score, max_score, min_confidence } = req.query;
 
     const p = (v: any) => (v ? parseInt(String(v), 10) : null);
+    const pf = (v: any) => (v ? parseFloat(String(v)) : null);
+    const { userId: ownerFilter } = getTenantFilter(req);
     const params = [
-      p(subject_id),  // $1
-      p(teacher_id),  // $2
-      p(kpi_id),      // $3
-      p(domain_id),   // $4
-      p(section_id),  // $5
-      p(grade_id),    // $6
-      isSuperAdmin ? null : userEmail,  // $7 - for user filtering
+      p(subject_id),      // $1
+      p(teacher_id),      // $2
+      p(kpi_id),          // $3
+      p(domain_id),       // $4
+      p(section_id),      // $5
+      p(grade_id),        // $6
+      ownerFilter,        // $7
+      p(week_num),        // $8
+      pf(min_score),      // $9
+      pf(max_score),      // $10
+      pf(min_confidence), // $11
     ];
 
-    const userFilter = isSuperAdmin ? '' : `AND dfe.created_by = $7`;
-
     const sql = `
+      WITH target_week AS (
+        SELECT week_start AS ws FROM (
+          SELECT DISTINCT week_start,
+                 DENSE_RANK() OVER (ORDER BY week_start DESC) AS rn
+          FROM dashboard_fact_lectures
+          WHERE week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
+            AND week_start <= CURRENT_DATE
+        ) w WHERE rn = $8::int
+        LIMIT 1
+      )
       SELECT
         rank,
         kpi_id,
@@ -646,6 +703,7 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
         teacher_name,
         section_id,
         section_name,
+        class_name,
         ROUND(score::numeric, 1) AS kpi_score,
         confidence,
         evidence_id,
@@ -654,7 +712,10 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
         filename,
         start_time,
         end_time,
-        created_at
+        created_at,
+        facts,
+        interpretation,
+        limitations
       FROM (
         SELECT
           ROW_NUMBER() OVER (ORDER BY dfe.confidence DESC NULLS LAST) AS rank,
@@ -664,6 +725,7 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
           dfe.teacher_name,
           dfe.section_id,
           dfe.section_name,
+          cls.class_name,
           dfe.score,
           dfe.confidence,
           dfe.evidence_id,
@@ -672,8 +734,14 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
           dfe.filename,
           dfe.start_time,
           dfe.end_time,
-          dfe.created_at
+          dfe.created_at,
+          ev.facts,
+          ev.interpretation,
+          ev.limitations
         FROM dashboard_fact_evidences dfe
+        LEFT JOIN evidences ev ON dfe.evidence_id = ev.evidence_id
+        LEFT JOIN classes cls ON dfe.section_id = cls.section_id AND dfe.grade_id = cls.grade_id
+        LEFT JOIN sound_files sf_owner ON dfe.file_id = sf_owner.file_id
         WHERE dfe.week_start >= (CURRENT_DATE - INTERVAL '8 weeks')::date
           AND dfe.confidence IS NOT NULL
           AND ($1::int IS NULL OR dfe.subject_id = $1)
@@ -682,7 +750,11 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
           AND ($4::int IS NULL OR dfe.domain_id  = $4)
           AND ($5::int IS NULL OR dfe.section_id = $5)
           AND ($6::int IS NULL OR dfe.grade_id   = $6)
-          ${userFilter}
+          AND ($7::int IS NULL OR sf_owner.user_id = $7)
+          AND ($8::int IS NULL OR dfe.week_start = (SELECT ws FROM target_week))
+          AND ($9::float IS NULL OR dfe.score >= $9)
+          AND ($10::float IS NULL OR dfe.score <= $10)
+          AND ($11::float IS NULL OR dfe.confidence > $11)
       ) ranked_evidences
       WHERE rank <= 10
       ORDER BY rank;
@@ -696,6 +768,7 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
       kpi_name: r.kpi_name,
       teacher_name: r.teacher_name,
       section_name: r.section_name,
+      class_name: r.class_name || r.section_name,
       confidence: Number(r.confidence),
       kpi_score: r.kpi_score !== null ? Number(r.kpi_score) : null,
       evidence_id: r.evidence_id,
@@ -704,6 +777,10 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
       filename: r.filename,
       start_time: r.start_time,
       end_time: r.end_time,
+      created_at: r.created_at || null,
+      facts: r.facts || null,
+      interpretation: r.interpretation || null,
+      limitations: r.limitations || null,
     }));
 
     res.status(200).json({ success: true, data });
@@ -714,6 +791,229 @@ router.get('/top-evidences', authenticate, async (req: AuthRequest, res: Respons
       message: 'Failed to fetch top evidences',
       error: error.message,
     });
+  }
+});
+
+/**
+ * GET /api/dashboard/filter-options
+ * Returns available filter options for the dashboard dropdowns.
+ * Response: { subjects: [{id, name}], grades: [{id, name}], sections: [{id, name}] }
+ */
+router.get('/filter-options', authenticate, async (_req: AuthRequest, res: Response) => {
+  try {
+    const [subjectRows, gradeRows, sectionRows] = await Promise.all([
+      getMany('SELECT subject_id AS id, subject_name AS name FROM subjects ORDER BY subject_id'),
+      getMany('SELECT grade_id AS id, grade_name AS name FROM grades ORDER BY grade_id'),
+      getMany('SELECT section_id AS id, section_name AS name FROM sections ORDER BY section_id'),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        subjects: subjectRows,
+        grades: gradeRows,
+        sections: sectionRows,
+      },
+    });
+  } catch (error: any) {
+    console.error('Dashboard Filter-Options Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch filter options',
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/dashboard/re-evaluate
+ * Re-runs KPI evaluation on all existing fragments to update evidence times.
+ */
+router.post('/re-evaluate', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    // Delete old evidences
+    await executeQuery('DELETE FROM evidences', []);
+    console.log('[Re-evaluate] Cleared old evidences');
+
+    // Get all fragments with transcripts
+    const frags = await getMany(
+      `SELECT f.fragment_id, f.lecture_id, f.transcript, f.start_time, f.end_time
+       FROM fragments f
+       WHERE f.transcript IS NOT NULL AND f.transcript != '[transcription_pending]'
+       ORDER BY f.lecture_id, f.fragment_order`,
+      []
+    );
+
+    let totalEvidences = 0;
+    for (const frag of frags) {
+      const fragStart = Number(frag.start_time ?? 0);
+      const fragEnd = Number(frag.end_time ?? 0);
+      if (!frag.transcript?.trim() || !frag.lecture_id) continue;
+
+      console.log(`[Re-evaluate] Evaluating lecture_id=${frag.lecture_id}, fragment ${fragStart}s-${fragEnd}s...`);
+      const evals = await evaluateSpeechAgainstKPIs(
+        frag.transcript, frag.lecture_id,
+        undefined, undefined,
+        fragStart, fragEnd
+      );
+      const created = evals.filter(e => e.status !== 'Insufficient').length;
+      totalEvidences += created;
+      console.log(`[Re-evaluate] lecture_id=${frag.lecture_id} [${fragStart}s-${fragEnd}s]: ${created} evidence(s)`);
+    }
+
+    // Refresh MVs
+    await executeQuery('REFRESH MATERIALIZED VIEW dashboard_fact_evidences', []);
+    await executeQuery('REFRESH MATERIALIZED VIEW dashboard_fact_lectures', []);
+
+    res.status(200).json({
+      success: true,
+      message: `Re-evaluation complete: ${frags.length} fragments processed, ${totalEvidences} evidences created`,
+    });
+  } catch (error: any) {
+    console.error('Re-evaluate Error:', error);
+    res.status(500).json({ success: false, message: 'Re-evaluation failed', error: error.message });
+  }
+});
+
+/**
+ * GET /api/dashboard/evidences/:evidence_id/clip
+ * Streams a short audio clip (only the segment from start_time to end_time)
+ * for the given evidence. Uses ffmpeg to extract the slice on the fly.
+ */
+router.get('/evidences/:evidence_id/clip', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const evidenceId = parseInt(String(req.params.evidence_id), 10);
+    if (!evidenceId || Number.isNaN(evidenceId)) {
+      return res.status(400).json({ success: false, message: 'Invalid evidence_id' });
+    }
+
+    const sql = `
+      SELECT
+        e.start_time AS ev_start,
+        e.end_time   AS ev_end,
+        ts.start_time AS slot_start,
+        sf.filepath,
+        sf.filename
+      FROM evidences e
+      JOIN lecture l ON e.lecture_id = l.lecture_id
+      LEFT JOIN section_time_slots ts ON l.time_slot_id = ts.time_slot_id
+      LEFT JOIN sound_files sf ON l.file_id = sf.file_id
+      WHERE e.evidence_id = $1
+      LIMIT 1
+    `;
+    const row = await getOne(sql, [evidenceId]);
+    if (!row) {
+      return res.status(404).json({ success: false, message: 'Evidence not found' });
+    }
+    if (!row.filepath) {
+      return res.status(404).json({ success: false, message: 'Audio file not linked to evidence' });
+    }
+    if (!row.ev_start || !row.ev_end) {
+      return res.status(400).json({ success: false, message: 'Evidence has no time range' });
+    }
+
+    const toSec = (t: string): number => {
+      const [h, m, s] = String(t).split(':').map(Number);
+      return (h || 0) * 3600 + (m || 0) * 60 + (s || 0);
+    };
+    const slotStart = row.slot_start ? toSec(row.slot_start) : 0;
+    const evStart = toSec(row.ev_start);
+    const evEnd = toSec(row.ev_end);
+    let offsetSec = evStart - slotStart;
+    if (offsetSec < 0) offsetSec += 24 * 3600; // wrap across midnight
+    let durationSec = evEnd - evStart;
+    if (durationSec <= 0) durationSec += 24 * 3600;
+    durationSec = Math.max(1, Math.min(durationSec, 600)); // cap at 10 min
+
+    // Resolve absolute audio path. filepath is stored with OS-specific separators
+    // (e.g. "uploads\\audio\\foo.mp3"). Normalize before joining.
+    const normalizedRelative = String(row.filepath).replace(/\\/g, path.sep).replace(/\//g, path.sep);
+    let audioPath = path.isAbsolute(normalizedRelative)
+      ? normalizedRelative
+      : path.join(process.cwd(), normalizedRelative);
+
+    // If the audio file is missing at the resolved path, try the original cwd
+    // (the upload may have been created by a different worktree/process).
+    if (!fs.existsSync(audioPath)) {
+      const alt = path.join(process.cwd(), 'uploads', 'audio', path.basename(normalizedRelative));
+      if (fs.existsSync(alt)) {
+        audioPath = alt;
+      } else {
+        console.error(`[evidence-clip ${evidenceId}] Audio missing: ${audioPath}`);
+        return res.status(404).json({ success: false, message: 'Audio file missing on disk' });
+      }
+    }
+
+    // If this is a video container, prefer the pre-converted mp3 sibling (if any).
+    const videoExts = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
+    if (videoExts.includes(path.extname(audioPath).toLowerCase())) {
+      const mp3Sibling = audioPath.replace(path.extname(audioPath), '.mp3');
+      if (fs.existsSync(mp3Sibling)) audioPath = mp3Sibling;
+    }
+
+    // Ensure we have a runnable ffmpeg binary.
+    if (!FFMPEG_PATH || (FFMPEG_PATH !== 'ffmpeg' && !fs.existsSync(FFMPEG_PATH))) {
+      console.error(`[evidence-clip ${evidenceId}] ffmpeg binary not found at: ${FFMPEG_PATH}`);
+      return res.status(500).json({ success: false, message: 'ffmpeg binary not available on server' });
+    }
+
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Accept-Ranges', 'none');
+
+    const ffArgs = [
+      '-ss', String(offsetSec),
+      '-t', String(durationSec),
+      '-i', audioPath,
+      '-vn',
+      '-f', 'mp3',
+      '-acodec', 'libmp3lame',
+      '-ab', '128k',
+      '-ar', '44100',
+      '-ac', '2',
+      '-loglevel', 'error',
+      'pipe:1',
+    ];
+
+    const ff = spawn(FFMPEG_PATH, ffArgs, { windowsHide: true });
+    let stderrBuf = '';
+    let responded = false;
+
+    ff.stdout.pipe(res, { end: false });
+    ff.stderr.on('data', (chunk) => {
+      stderrBuf += chunk.toString();
+    });
+    ff.on('error', (err) => {
+      console.error(`[evidence-clip ${evidenceId}] ffmpeg spawn error:`, err, 'binary:', FFMPEG_PATH);
+      if (!res.headersSent) {
+        responded = true;
+        res.status(500).json({ success: false, message: 'Failed to start ffmpeg', error: err.message });
+      } else if (!responded) {
+        responded = true;
+        res.end();
+      }
+    });
+    ff.on('close', (code) => {
+      if (code !== 0 && !res.headersSent) {
+        responded = true;
+        console.error(`[evidence-clip ${evidenceId}] ffmpeg exited with code ${code}. stderr: ${stderrBuf}`);
+        return res.status(500).json({ success: false, message: 'ffmpeg exited with error', code, stderr: stderrBuf.slice(-400) });
+      }
+      if (!responded) {
+        responded = true;
+        res.end();
+      }
+    });
+    req.on('close', () => {
+      try { ff.kill('SIGKILL'); } catch {}
+    });
+  } catch (error: any) {
+    console.error('Evidence Clip Error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Failed to generate clip', error: error.message });
+    } else {
+      res.end();
+    }
   }
 });
 

@@ -12,7 +12,16 @@ export interface Teacher {
   teacher_phone?: string;
 }
 
-export const getAllTeachers = async () => {
+export const getAllTeachers = async (userId?: number | null) => {
+  if (userId) {
+    const query = `
+      SELECT teacher_id, school_id, teacher_name, teacher_email, teacher_phone
+      FROM teachers
+      WHERE user_id = $1
+      ORDER BY teacher_name
+    `;
+    return await getMany(query, [userId]);
+  }
   const query = `
     SELECT teacher_id, school_id, teacher_name, teacher_email, teacher_phone
     FROM teachers
@@ -30,14 +39,14 @@ export const getTeacherById = async (teacherId: number) => {
   return await getOne(query, [teacherId]);
 };
 
-export const createTeacher = async (teacher: Teacher) => {
+export const createTeacher = async (teacher: Teacher, userId?: number) => {
   const { school_id, teacher_name, teacher_email, teacher_phone } = teacher;
   const query = `
-    INSERT INTO teachers (school_id, teacher_name, teacher_email, teacher_phone)
-    VALUES ($1, $2, $3, $4)
+    INSERT INTO teachers (school_id, teacher_name, teacher_email, teacher_phone, user_id)
+    VALUES ($1, $2, $3, $4, $5)
     RETURNING teacher_id, school_id, teacher_name, teacher_email, teacher_phone
   `;
-  const result = await executeQuery(query, [school_id, teacher_name, teacher_email, teacher_phone]);
+  const result = await executeQuery(query, [school_id, teacher_name, teacher_email, teacher_phone, userId || null]);
   return result.rows[0];
 };
 

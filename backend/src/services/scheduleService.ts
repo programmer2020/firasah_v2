@@ -8,7 +8,19 @@ import { getMany, getOne, insert, executeQuery } from '../helpers/database.js';
 
 // ── Lookups ─────────────────────────────────────────────
 
-export const getAllClasses = async () => {
+export const getAllClasses = async (userId?: number | null) => {
+  if (userId) {
+    const query = `
+      SELECT c.class_id, c.class_name, c.grade_id, c.section_id,
+             g.grade_name, s.section_name
+      FROM classes c
+      JOIN grades g ON c.grade_id = g.grade_id
+      JOIN sections s ON c.section_id = s.section_id
+      WHERE c.user_id = $1
+      ORDER BY g.grade_level ASC, s.section_name ASC
+    `;
+    return await getMany(query, [userId]);
+  }
   const query = `
     SELECT c.class_id, c.class_name, c.grade_id, c.section_id,
            g.grade_name, s.section_name
@@ -20,7 +32,16 @@ export const getAllClasses = async () => {
   return await getMany(query);
 };
 
-export const getAllTeachers = async () => {
+export const getAllTeachers = async (userId?: number | null) => {
+  if (userId) {
+    const query = `
+      SELECT teacher_id, teacher_name, teacher_email
+      FROM teachers
+      WHERE user_id = $1
+      ORDER BY teacher_name ASC
+    `;
+    return await getMany(query, [userId]);
+  }
   const query = `
     SELECT teacher_id, teacher_name, teacher_email
     FROM teachers
@@ -29,7 +50,16 @@ export const getAllTeachers = async () => {
   return await getMany(query);
 };
 
-export const getAllSubjects = async () => {
+export const getAllSubjects = async (userId?: number | null) => {
+  if (userId) {
+    const query = `
+      SELECT subject_id, subject_name
+      FROM subjects
+      WHERE user_id = $1
+      ORDER BY subject_name ASC
+    `;
+    return await getMany(query, [userId]);
+  }
   const query = `
     SELECT subject_id, subject_name
     FROM subjects
@@ -62,6 +92,7 @@ export const createTimeSlot = async (data: {
   end_time: string;
   subject_id: number;
   teacher_id?: number | null;
+  user_id?: number | null;
 }) => {
   return await insert('section_time_slots', {
     class_id: data.class_id,
@@ -70,6 +101,7 @@ export const createTimeSlot = async (data: {
     end_time: data.end_time,
     subject_id: data.subject_id,
     teacher_id: data.teacher_id ?? null,
+    user_id: data.user_id ?? null,
   });
 };
 

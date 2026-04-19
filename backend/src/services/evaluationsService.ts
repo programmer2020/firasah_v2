@@ -5,7 +5,7 @@
  */
 
 import OpenAI from 'openai';
-import { getOne, getMany, insert, update, deleteRecord } from '../helpers/database.js';
+import { getOne, getMany, insert, update, deleteRecord, executeQuery } from '../helpers/database.js';
 
 /* Lazy initialization of OpenAI client */
 let openai: OpenAI | null = null;
@@ -53,9 +53,9 @@ function computeScore(avgConfidence: number, evidenceCount: number): number {
 }
 
 /**
- * Get all lecture_kpi records
+ * Get all lecture_kpi records (optionally filtered by user_id via sound_files)
  */
-export const getAllEvaluations = async () => {
+export const getAllEvaluations = async (userId?: number | null) => {
   try {
     const query = `
       SELECT
@@ -75,9 +75,10 @@ export const getAllEvaluations = async () => {
       LEFT JOIN kpis k ON lk.kpi_id = k.kpi_id
       LEFT JOIN lecture l ON lk.lecture_id = l.lecture_id
       LEFT JOIN sound_files s ON l.file_id = s.file_id
+      ${userId ? 'WHERE s.user_id = $1' : ''}
       ORDER BY lk.created_at DESC
     `;
-    return await getMany(query);
+    return await getMany(query, userId ? [userId] : []);
   } catch (error) {
     console.error('Error fetching evaluations:', error);
     throw error;
@@ -479,8 +480,14 @@ export const evaluateSpeechAgainstKPIs = async (
       return `${kpi.kpi_code}: ${kpi.kpi_name}\n   التفاصيل: ${kpi.kpi_description}`;
     }).join('\n\n');
 
+    const fragmentDurationSec = (fragmentEndSeconds != null && fragmentStartSeconds != null)
+      ? fragmentEndSeconds - fragmentStartSeconds
+      : null;
+
     const userPrompt = `**نص الحوار الصفي المراد تقييمه:**
 "${speechText}"
+
+${fragmentDurationSec ? `**مدة هذا المقطع الصوتي:** ${fragmentDurationSec} ثانية (من الثانية 0 إلى الثانية ${fragmentDurationSec})` : ''}
 
 ---
 
@@ -500,10 +507,12 @@ ${kpiReference}
   "Status": "Strong" أو "Emerging" أو "Limited" أو "Insufficient",
   "Confidence": عدد من 0-100,
   "Evidence Count": عدد الأدلة (0-3),
-  "Facts": "وصف موضوعي من النص",
+  "Facts": "اقتبس الجملة أو الجمل الفعلية من النص التي تمثل الدليل",
   "Interpretation": "المعنى (إذا Status لم يكن Insufficient)",
   "Limitations": "قيود التقييم (اختياري)",
-  "Justification": "الشرح الكامل بالعربية"
+  "Justification": "الشرح الكامل بالعربية"${fragmentDurationSec ? `,
+  "evidence_start_sec": رقم تقريبي (من 0 إلى ${fragmentDurationSec}) للثانية التي يبدأ عندها الدليل في المقطع الصوتي بناءً على موضع النص في الحوار,
+  "evidence_end_sec": رقم تقريبي (من 0 إلى ${fragmentDurationSec}) للثانية التي ينتهي عندها الدليل` : ''}
 }`;
 
     console.log(`[Evaluation] Sending to OpenAI with model: gpt-4o`);
@@ -515,14 +524,24 @@ ${kpiReference}
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.2,
-      max_tokens: 4000,
+      max_tokens: 8000, // Raised from 4000: 29 KPIs × ~500 tokens per eval was truncating responses mid-JSON
       response_format: { type: 'json_object' },
     });
 
     console.log(`[Evaluation] OpenAI response received`);
 
     const responseText = response.choices[0]?.message?.content?.trim() || '';
-    console.log(`[Evaluation] Response length: ${responseText.length} chars`);
+    const finishReason = response.choices[0]?.finish_reason;
+    console.log(`[Evaluation] Response length: ${responseText.length} chars, finish_reason=${finishReason}`);
+
+    // If OpenAI hit the token ceiling, the JSON will be truncated. Surface this as a
+    // retriable error so the caller's retry loop can make another attempt (non-deterministic
+    // output usually fits on the next try) instead of silently returning 0 evaluations.
+    if (finishReason === 'length') {
+      const err: any = new Error(`OpenAI response truncated (finish_reason=length, ${responseText.length} chars)`);
+      err.status = 500; // mark as retriable
+      throw err;
+    }
 
     let evaluations: any[] = [];
     try {
@@ -536,8 +555,13 @@ ${kpiReference}
         evaluations = arrayKey ? parsed[arrayKey] : [];
       }
     } catch (e) {
+      // Throw instead of returning [] so the caller's retry loop can retry. Parse errors
+      // are almost always caused by truncation or transient OpenAI formatting glitches that
+      // resolve on a fresh call.
       console.error(`[Evaluation] Failed to parse JSON response:`, (e as any).message);
-      return [];
+      const err: any = new Error(`OpenAI JSON parse failed: ${(e as any).message}`);
+      err.status = 500; // mark as retriable
+      throw err;
     }
 
     if (!Array.isArray(evaluations) || evaluations.length === 0) {
@@ -594,6 +618,35 @@ ${kpiReference}
           try {
             console.log(`[Evaluation] Storing evidence for KPI ${kpiCode} (status: ${determinedStatus}, confidence: ${confidence}%)`);
 
+            // Calculate precise evidence time from AI-returned offsets
+            let evidenceStartTime = slotStartTime;
+            let evidenceEndTime = slotEndTime;
+
+            const aiStartSec = evaluation.evidence_start_sec;
+            const aiEndSec = evaluation.evidence_end_sec;
+
+            if (aiStartSec != null && aiEndSec != null && fragmentStartSeconds != null) {
+              // Get the base schedule start time
+              try {
+                const baseQuery = `
+                  SELECT ts.start_time
+                  FROM lecture l
+                  LEFT JOIN section_time_slots ts ON l.time_slot_id = ts.time_slot_id
+                  WHERE l.lecture_id = $1
+                  LIMIT 1
+                `;
+                const baseRecord = await getOne(baseQuery, [lectureId]);
+                if (baseRecord?.start_time) {
+                  const baseStart = baseRecord.start_time;
+                  const clampedStart = Math.max(0, Number(aiStartSec) || 0);
+                  const clampedEnd = Math.max(clampedStart, Number(aiEndSec) || 0);
+                  evidenceStartTime = addSecondsToTime(baseStart, fragmentStartSeconds + clampedStart);
+                  evidenceEndTime = addSecondsToTime(baseStart, fragmentStartSeconds + clampedEnd);
+                  console.log(`[Evaluation] Precise evidence time: ${evidenceStartTime} - ${evidenceEndTime} (offset ${clampedStart}s-${clampedEnd}s in fragment)`);
+                }
+              } catch (_) {}
+            }
+
             const evidence = await insert('evidences', {
               kpi_id: kpiRecord.kpi_id,
               lecture_id: lectureId,
@@ -602,8 +655,8 @@ ${kpiReference}
               interpretation: interpretation || null,
               limitations: limitations || null,
               confidence: Math.min(100, Math.max(0, Number(confidence) || 0)),
-              start_time: slotStartTime,
-              end_time: slotEndTime,
+              start_time: evidenceStartTime,
+              end_time: evidenceEndTime,
               created_at: now,
               updated_at: now,
             });
@@ -621,6 +674,33 @@ ${kpiReference}
     }
 
     console.log(`[Evaluation] Evaluation complete: ${results.length} KPIs processed, ${results.filter(r => r.status !== 'Insufficient').length} evidence records created`);
+
+    // Aggregate evidences into lecture_kpi
+    try {
+      const aggregated = await getMany(
+        `SELECT kpi_id, COUNT(*) as evidence_count, ROUND(AVG(confidence)::numeric, 2) as avg_confidence
+         FROM evidences WHERE lecture_id = $1 AND status != 'Insufficient'
+         GROUP BY kpi_id`,
+        [lectureId]
+      );
+      for (const row of aggregated) {
+        const evCount = Number(row.evidence_count) || 0;
+        const avgConf = Number(row.avg_confidence) || 0;
+        const score = computeScore(avgConf, evCount);
+        const mark = computeMark(evCount);
+        await executeQuery(
+          `INSERT INTO lecture_kpi (lecture_id, kpi_id, evidence_count, avg_confidence, score, mark, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+           ON CONFLICT (lecture_id, kpi_id)
+           DO UPDATE SET evidence_count = $3, avg_confidence = $4, score = $5, mark = $6, updated_at = NOW()`,
+          [lectureId, row.kpi_id, evCount, avgConf, score, mark]
+        );
+      }
+      console.log(`[Evaluation] lecture_kpi updated: ${aggregated.length} KPI(s) for lecture_id=${lectureId}`);
+    } catch (aggErr) {
+      console.error(`[Evaluation] Failed to aggregate lecture_kpi:`, aggErr);
+    }
+
     return results;
   } catch (err) {
     console.error(`[Evaluation] Fatal evaluation error:`, err);

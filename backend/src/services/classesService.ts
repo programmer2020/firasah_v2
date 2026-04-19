@@ -11,7 +11,11 @@ export interface Class {
   class_name?: string;
 }
 
-export const getAllClasses = async () => {
+export const getAllClasses = async (userId?: number | null) => {
+  if (userId) {
+    const query = `SELECT class_id, grade_id, section_id, class_name FROM classes WHERE user_id = $1`;
+    return await getMany(query, [userId]);
+  }
   const query = `SELECT class_id, grade_id, section_id, class_name FROM classes`;
   return await getMany(query);
 };
@@ -21,10 +25,10 @@ export const getClassById = async (classId: number) => {
   return await getOne(query, [classId]);
 };
 
-export const createClass = async (cls: Class) => {
+export const createClass = async (cls: Class, userId?: number) => {
   const { grade_id, section_id, class_name } = cls;
-  const query = `INSERT INTO classes (grade_id, section_id, class_name) VALUES ($1, $2, $3) RETURNING *`;
-  const result = await executeQuery(query, [grade_id, section_id, class_name]);
+  const query = `INSERT INTO classes (grade_id, section_id, class_name, user_id) VALUES ($1, $2, $3, $4) RETURNING *`;
+  const result = await executeQuery(query, [grade_id, section_id, class_name, userId || null]);
   return result.rows[0];
 };
 

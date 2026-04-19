@@ -4,7 +4,7 @@
  */
 
 import express, { Request, Response } from 'express';
-import { authenticate, AuthRequest, requireFileOwnership, requireSuperAdmin } from '../middleware/auth.js';
+import { authenticate, requireFileOwnership, requireSuperAdmin, AuthRequest } from '../middleware/auth.js';
 import {
   getFragmentsByFileId,
   getFragmentsByLectureId,
@@ -24,7 +24,6 @@ const router = express.Router();
 /**
  * GET /api/fragments/file/:fileId
  * Get all fragments for a sound file
- * Requires file ownership or super admin status
  */
 router.get('/file/:fileId', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
   try {
@@ -85,7 +84,6 @@ router.get('/timeslot/:timeSlotId', authenticate, async (req: AuthRequest, res: 
 /**
  * GET /api/fragments/stats/:fileId
  * Get fragment statistics for a file
- * Requires file ownership or super admin status
  */
 router.get('/stats/:fileId', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
   try {
@@ -105,7 +103,6 @@ router.get('/stats/:fileId', authenticate, requireFileOwnership, async (req: Aut
 /**
  * POST /api/fragments/process/:fileId
  * Process a sound file into fragments
- * Requires file ownership or super admin status
  * Query params: lectureId (optional), timeSlotId (optional)
  */
 router.post('/process/:fileId', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
@@ -140,7 +137,7 @@ router.post('/process/:fileId', authenticate, requireFileOwnership, async (req: 
 /**
  * POST /api/fragments/process-all
  * Process all sound files into fragments
- * This is a super-admin-only operation
+ * This is an admin-only operation
  */
 router.post('/process-all', authenticate, requireSuperAdmin, async (req: AuthRequest, res: Response) => {
   try {
@@ -222,7 +219,6 @@ router.post('/process-all', authenticate, requireSuperAdmin, async (req: AuthReq
 /**
  * DELETE /api/fragments/file/:fileId
  * Delete all fragments for a file
- * Requires file ownership or super admin status
  */
 router.delete('/file/:fileId', authenticate, requireFileOwnership, async (req: AuthRequest, res: Response) => {
   try {

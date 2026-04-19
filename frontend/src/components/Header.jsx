@@ -83,14 +83,6 @@ const Header = ({ onOpenSidebar }) => {
 
         <div className="flex items-center gap-4 sm:gap-6">
           <div className="flex items-center gap-4 text-[#62746d]">
-            <button type="button" className="hidden transition hover:text-[var(--dashboard-primary)] md:inline-flex" aria-label="Notifications">
-              <BellIcon />
-            </button>
-            <button type="button" className="hidden transition hover:text-[var(--dashboard-primary)] md:inline-flex" aria-label="Settings">
-              <SettingsIcon />
-            </button>
-            <div className="hidden h-8 w-px bg-[rgba(98,116,109,0.2)] md:block" />
-
             <div className="relative">
               <button
                 type="button"

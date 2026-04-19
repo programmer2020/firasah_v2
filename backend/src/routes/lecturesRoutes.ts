@@ -4,6 +4,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { authenticate, AuthRequest, getTenantFilter } from '../middleware/auth.js';
 import { getMany } from '../helpers/database.js';
 
 const router = Router();
@@ -32,7 +33,7 @@ const router = Router();
  *       200:
  *         description: Lectures retrieved successfully
  */
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { startDate, endDate } = req.query;
 
@@ -53,12 +54,16 @@ router.get('/', async (req: Request, res: Response) => {
       });
     }
 
+    const { userId } = getTenantFilter(req);
+
     const lectures = await getMany(
-      `SELECT lecture_id, file_id, created_at
-       FROM lecture
-       WHERE created_at >= $1 AND created_at < $2
-       ORDER BY created_at DESC`,
-      [start.toISOString(), end.toISOString()]
+      `SELECT l.lecture_id, l.file_id, l.created_at
+       FROM lecture l
+       ${userId ? 'INNER JOIN sound_files sf ON l.file_id = sf.file_id' : ''}
+       WHERE l.created_at >= $1 AND l.created_at < $2
+       ${userId ? 'AND sf.user_id = $3' : ''}
+       ORDER BY l.created_at DESC`,
+      userId ? [start.toISOString(), end.toISOString(), userId] : [start.toISOString(), end.toISOString()]
     );
 
     res.status(200).json({

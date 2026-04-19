@@ -4,7 +4,7 @@ import WatermarkChart from './WatermarkChart';
 import MixedChart from './MixedChart';
 import ProtectedLayout from '../components/ProtectedLayout';
 import { useAuth } from '../context/AuthContext';
-import { getApiUrl } from '../config/apiConfig';
+import api from '../services/api';
 import './TeacherDashboard.css';
 
 const TeacherDashboard = () => {
@@ -38,13 +38,45 @@ const TeacherDashboard = () => {
   const [loading, setLoading] = useState(true);
 
   const [filters, setFilters] = useState({
-    subject: 'All',
-    week: 'All',
-    grade: 'All',
-    kpi: 'All',
+    subject: '',
+    week: '',
+    grade: '',
+    kpiStatus: '',
   });
 
-  const [tempFilters, setTempFilters] = useState(filters);
+  // Filter dropdown options from DB
+  const [filterOptions, setFilterOptions] = useState({ subjects: [], grades: [], sections: [] });
+
+  // Fetch filter options on mount
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        const response = await api.get('/api/dashboard/filter-options');
+        setFilterOptions(response.data.data || { subjects: [], grades: [], sections: [] });
+      } catch (error) {
+        console.error('❌ Failed to fetch filter options:', error);
+      }
+    };
+    fetchFilterOptions();
+  }, []);
+
+  // Build query string from active filters
+  const buildFilterParams = (overrides = {}) => {
+    const active = { ...filters, ...overrides };
+    const params = new URLSearchParams();
+    if (active.subject) params.append('subject_id', active.subject);
+    if (active.grade) params.append('grade_id', active.grade);
+    if (active.week) {
+      const weekNum = parseInt(active.week.replace('Week ', ''), 10);
+      if (!isNaN(weekNum)) params.append('week_num', weekNum);
+    }
+    if (active.kpiStatus === 'high') {
+      params.append('min_score', '75');
+    } else if (active.kpiStatus === 'needs_improvement') {
+      params.append('max_score', '50');
+    }
+    return params.toString();
+  };
 
   // Fetch all 4 KPI card metrics in a single API call
   useEffect(() => {
@@ -53,21 +85,12 @@ const TeacherDashboard = () => {
         setLoading(true);
         console.log('📊 Fetching all KPI card stats from single endpoint...');
 
-        const url = getApiUrl('/api/dashboard/kpi-cards');
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-          credentials: 'include',
-        });
+        const qs = buildFilterParams();
+        const url = `/api/dashboard/kpi-cards${qs ? `?${qs}` : ''}`;
+        const response = await api.get(url);
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`KPI cards fetch failed: ${response.status} ${errorText}`);
-        }
-
-        const json = await response.json();
-        console.log('✅ KPI cards data:', json);
-        const cards = json.data || {};
+        console.log('✅ KPI cards data:', response.data);
+        const cards = response.data.data || {};
 
         // Helper: build stat object from a card entry
         const toStat = (entry) => {
@@ -97,28 +120,19 @@ const TeacherDashboard = () => {
     };
 
     fetchKpiCards();
-  }, []);
+  }, [filters]);
 
   // Fetch domains with real week scores from dashboard materialized view
   useEffect(() => {
     const fetchDomainsWeeks = async () => {
       try {
         console.log('📚 Fetching domains-weeks heatmap data...');
-        const response = await fetch(getApiUrl('/api/dashboard/domains-weeks'), {
-          method: 'GET',
-          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-          credentials: 'include',
-        });
+        const qs = buildFilterParams();
+        const response = await api.get(`/api/dashboard/domains-weeks${qs ? `?${qs}` : ''}`);
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Domains-weeks fetch failed: ${response.status} ${errorText}`);
-        }
+        console.log('✅ Domains-weeks data:', response.data);
 
-        const json = await response.json();
-        console.log('✅ Domains-weeks data:', json);
-
-        const domainsWithWeeks = (json.data || []).map((d) => ({
+        const domainsWithWeeks = (response.data.data || []).map((d) => ({
           name: d.domain_name,
           domainCode: `D${d.domain_id}`,
           weeks: (d.weeks || []).map((v) => (v !== null ? v : 0)),
@@ -144,27 +158,19 @@ const TeacherDashboard = () => {
     };
 
     fetchDomainsWeeks();
-  }, []);
+  }, [filters]);
 
   const handleFilterChange = (key, value) => {
-    setTempFilters({ ...tempFilters, [key]: value });
-  };
-
-  const handleApplyFilters = () => {
-    setFilters(tempFilters);
-    setShowFilterPanel(false);
+    setFilters(prev => ({ ...prev, [key]: value }));
   };
 
   const handleResetFilters = () => {
-    const defaultFilters = {
-      subject: 'Math',
-      week: 'Week 8',
-      grade: 'Grade 10',
-      kpi: 'Active KPI',
-    };
-    setTempFilters(defaultFilters);
-    setFilters(defaultFilters);
-    setShowFilterPanel(false);
+    setFilters({
+      subject: '',
+      week: '',
+      grade: '',
+      kpiStatus: '',
+    });
   };
 
   console.log('🔄 TeacherDashboard rendering with lectureStats:', lectureStats);
@@ -290,21 +296,12 @@ const TeacherDashboard = () => {
     const fetchDomainsSubjects = async () => {
       try {
         console.log('📖 Fetching domains-subjects heatmap data...');
-        const response = await fetch(getApiUrl('/api/dashboard/domains-subjects'), {
-          method: 'GET',
-          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-          credentials: 'include',
-        });
+        const qs = buildFilterParams();
+        const response = await api.get(`/api/dashboard/domains-subjects${qs ? `?${qs}` : ''}`);
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Domains-subjects fetch failed: ${response.status} ${errorText}`);
-        }
+        console.log('✅ Domains-subjects data:', response.data);
 
-        const json = await response.json();
-        console.log('✅ Domains-subjects data:', json);
-
-        const { subjects: subList, domains: domList } = json.data || {};
+        const { subjects: subList, domains: domList } = response.data.data || {};
 
         setSubjects((subList || []).map((s) => ({ id: s.id, name: s.name })));
 
@@ -323,26 +320,106 @@ const TeacherDashboard = () => {
     };
 
     fetchDomainsSubjects();
-  }, []);
+  }, [filters]);
 
   // Top 10 high-confidence evidence samples from real data
   const [topEvidences, setTopEvidences] = useState([]);
+  const [expandedEvidence, setExpandedEvidence] = useState(null);
+  const [hoveredEvidence, setHoveredEvidence] = useState(null);
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [playingEvidenceId, setPlayingEvidenceId] = useState(null);
+  const [loadingEvidenceId, setLoadingEvidenceId] = useState(null);
+  const hoverTimerRef = React.useRef(null);
+  const audioRef = React.useRef(null);
+  const audioUrlRef = React.useRef(null);
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+        audioUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  const handlePlayEvidence = async (evidenceId) => {
+    // Toggle off if already playing this evidence
+    if (playingEvidenceId === evidenceId) {
+      audioRef.current?.pause();
+      setPlayingEvidenceId(null);
+      return;
+    }
+
+    // Stop previous playback
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+    }
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
+
+    setLoadingEvidenceId(evidenceId);
+    try {
+      const token = localStorage.getItem('authToken');
+      const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/^[\s=]+/, '') ||
+        (import.meta.env.DEV ? 'http://localhost:5000' : '');
+      const resp = await fetch(`${baseUrl}/api/dashboard/evidences/${evidenceId}/clip`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!resp.ok) {
+        let msg = `HTTP ${resp.status}`;
+        try {
+          const body = await resp.json();
+          if (body?.message) msg = body.message;
+        } catch {
+          const txt = await resp.text().catch(() => '');
+          if (txt) msg = txt.slice(0, 200);
+        }
+        throw new Error(msg);
+      }
+      const blob = await resp.blob();
+      if (!blob || blob.size === 0) {
+        throw new Error('المقطع الصوتي فارغ. تحقق من توفر الملف الأصلي.');
+      }
+      const url = URL.createObjectURL(blob);
+      audioUrlRef.current = url;
+
+      if (!audioRef.current) audioRef.current = new Audio();
+      audioRef.current.src = url;
+      audioRef.current.onended = () => setPlayingEvidenceId(null);
+      audioRef.current.onerror = () => {
+        console.error('Audio playback error');
+        setPlayingEvidenceId(null);
+      };
+      await audioRef.current.play();
+      setPlayingEvidenceId(evidenceId);
+    } catch (err) {
+      console.error('❌ Failed to play evidence clip:', err);
+      setPlayingEvidenceId(null);
+      alert(`تعذر تشغيل المقطع الصوتي: ${err?.message || 'حدث خطأ غير متوقع'}`);
+    } finally {
+      setLoadingEvidenceId(null);
+    }
+  };
 
   useEffect(() => {
     const fetchTopEvidences = async () => {
       try {
         console.log('🏆 Fetching top evidences...');
-        const response = await fetch(getApiUrl('/api/dashboard/top-evidences'), {
-          method: 'GET',
-          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-          credentials: 'include',
-        });
+        const qs = buildFilterParams();
+        const params = new URLSearchParams(qs);
+        params.append('min_confidence', '75');
+        const response = await api.get(`/api/dashboard/top-evidences?${params.toString()}`);
 
-        if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
-
-        const json = await response.json();
-        console.log('✅ Top evidences:', json);
-        setTopEvidences(json.data || []);
+        console.log('✅ Top evidences:', response.data);
+        setTopEvidences(response.data.data || []);
       } catch (error) {
         console.error('❌ Failed to fetch top evidences:', error);
         setTopEvidences([]);
@@ -350,14 +427,24 @@ const TeacherDashboard = () => {
     };
 
     fetchTopEvidences();
-  }, []);
+  }, [filters]);
 
   const heatmapDomains = domains;
   const heatmapWeekLabels = (heatmapDomains[0]?.weeks || Array.from({ length: 8 }, () => 0)).map((_, index) => `W${index + 1}`);
   const heatmapSubjects = subjects;
   const subjectHeatmapMatrix = domainSubjectMatrix;
-  const heatmapCellSize = 120;
-  const heatmapLabelColumnWidth = 360;
+  const heatmapLabelColumnWidth = 220;
+
+  // Parse selected week index (0-based) from filters.week like "Week 3" -> 2
+  const selectedWeekIdx = filters.week ? parseInt(filters.week.replace('Week ', ''), 10) - 1 : null;
+
+  // Filter evidences by KPI status (client-side score threshold filter)
+  const filteredEvidences = topEvidences.filter((ev) => {
+    if (!filters.kpiStatus) return true;
+    if (filters.kpiStatus === 'high') return ev.confidence >= 75;
+    if (filters.kpiStatus === 'needs_improvement') return ev.confidence < 50;
+    return true;
+  });
 
   const getHeatmapTone = (value) => {
     if (value >= 90) {
@@ -410,7 +497,7 @@ const TeacherDashboard = () => {
 
   return (
     <ProtectedLayout>
-      <div className="mx-auto flex max-w-[1500px] flex-col gap-2">
+      <div className="flex flex-col gap-2">
         {/* Welcome Section */}
         <section className="welcome-section border border-[rgba(0,76,58,0.08)] rounded-2xl bg-white px-6 py-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
           <h2 className="font-headline mb-0 text-5xl font-bold text-[var(--dashboard-primary)]">
@@ -422,48 +509,40 @@ const TeacherDashboard = () => {
         <section className="shrink-0 border border-[rgba(0,76,58,0.08)] rounded-2xl bg-white shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
           <div className="dashboard-panel dashboard-ghost-top h-auto px-8 py-7">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <p className="font-dashboard-mono text-[10px] uppercase tracking-[0.28em] text-[#7e8f89]">
-                  Dashboard Filters
-                </p>
-              </div>
-
               <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowFilterPanel(!showFilterPanel)}
+                  className="inline-flex items-center gap-2 rounded-full bg-[var(--dashboard-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                >
+                  <span>🔍</span>
+                  <span>{showFilterPanel ? 'Hide Filters' : 'Filters'}</span>
+                </button>
                 <button
                   onClick={handleResetFilters}
                   className="rounded-xl border border-[rgba(0,76,58,0.16)] px-4 py-2 text-sm font-semibold text-[#24433b] transition hover:bg-[rgba(238,243,239,0.88)]"
                 >
                   Reset
                 </button>
-                <button
-                  onClick={handleApplyFilters}
-                  className="rounded-xl bg-[var(--dashboard-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-                >
-                  Apply
-                </button>
-                <button
-                  onClick={() => setShowFilterPanel(!showFilterPanel)}
-                  className="inline-flex items-center gap-2 self-start rounded-full bg-[var(--dashboard-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-                >
-                  <span>🔍</span>
-                  <span>{showFilterPanel ? 'Hide Filters' : 'Filters'}</span>
-                </button>
               </div>
+
+              <p className="font-dashboard-mono text-[10px] uppercase tracking-[0.28em] text-[#7e8f89]">
+                Dashboard Filters
+              </p>
             </div>
 
             {!showFilterPanel && (
               <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-[rgba(0,76,58,0.08)] pt-5">
                 <span className="rounded-full bg-[rgba(238,243,239,0.88)] px-3 py-1.5 text-xs font-medium text-[#24433b]">
-                  Subject: {filters.subject}
+                  Subject: {filters.subject ? filterOptions.subjects.find(s => String(s.id) === filters.subject)?.name || filters.subject : 'All'}
                 </span>
                 <span className="rounded-full bg-[rgba(238,243,239,0.88)] px-3 py-1.5 text-xs font-medium text-[#24433b]">
-                  {filters.week}
+                  Week: {filters.week || 'All'}
                 </span>
                 <span className="rounded-full bg-[rgba(238,243,239,0.88)] px-3 py-1.5 text-xs font-medium text-[#24433b]">
-                  {filters.grade}
+                  Grade: {filters.grade ? filterOptions.grades.find(g => String(g.id) === filters.grade)?.name || filters.grade : 'All'}
                 </span>
                 <span className="rounded-full bg-[rgba(238,243,239,0.88)] px-3 py-1.5 text-xs font-medium text-[#24433b]">
-                  {filters.kpi}
+                  KPI Status: {filters.kpiStatus || 'All'}
                 </span>
               </div>
             )}
@@ -476,15 +555,14 @@ const TeacherDashboard = () => {
                       Subject
                     </label>
                     <select
-                      value={tempFilters.subject}
+                      value={filters.subject}
                       onChange={(e) => handleFilterChange('subject', e.target.value)}
                       className="w-full rounded-xl border border-[rgba(0,76,58,0.12)] bg-white px-3 py-2 text-sm text-[#172b26] outline-none transition focus:border-[var(--dashboard-primary)] focus:ring-2 focus:ring-[rgba(0,96,73,0.12)]"
                     >
-                      <option>All</option>
-                      <option>Math</option>
-                      <option>Science</option>
-                      <option>English</option>
-                      <option>History</option>
+                      <option value="">All</option>
+                      {filterOptions.subjects.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -493,19 +571,14 @@ const TeacherDashboard = () => {
                       Week
                     </label>
                     <select
-                      value={tempFilters.week}
+                      value={filters.week}
                       onChange={(e) => handleFilterChange('week', e.target.value)}
                       className="w-full rounded-xl border border-[rgba(0,76,58,0.12)] bg-white px-3 py-2 text-sm text-[#172b26] outline-none transition focus:border-[var(--dashboard-primary)] focus:ring-2 focus:ring-[rgba(0,96,73,0.12)]"
                     >
-                      <option>All</option>
-                      <option>Week 1</option>
-                      <option>Week 2</option>
-                      <option>Week 3</option>
-                      <option>Week 4</option>
-                      <option>Week 5</option>
-                      <option>Week 6</option>
-                      <option>Week 7</option>
-                      <option>Week 8</option>
+                      <option value="">All</option>
+                      {Array.from({ length: 8 }, (_, i) => (
+                        <option key={i + 1} value={`Week ${i + 1}`}>Week {i + 1}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -514,16 +587,14 @@ const TeacherDashboard = () => {
                       Grade
                     </label>
                     <select
-                      value={tempFilters.grade}
+                      value={filters.grade}
                       onChange={(e) => handleFilterChange('grade', e.target.value)}
                       className="w-full rounded-xl border border-[rgba(0,76,58,0.12)] bg-white px-3 py-2 text-sm text-[#172b26] outline-none transition focus:border-[var(--dashboard-primary)] focus:ring-2 focus:ring-[rgba(0,96,73,0.12)]"
                     >
-                      <option>All</option>
-                      <option>Grade 8</option>
-                      <option>Grade 9</option>
-                      <option>Grade 10</option>
-                      <option>Grade 11</option>
-                      <option>Grade 12</option>
+                      <option value="">All</option>
+                      {filterOptions.grades.map((g) => (
+                        <option key={g.id} value={g.id}>{g.name}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -532,15 +603,13 @@ const TeacherDashboard = () => {
                       KPI Status
                     </label>
                     <select
-                      value={tempFilters.kpi}
-                      onChange={(e) => handleFilterChange('kpi', e.target.value)}
+                      value={filters.kpiStatus}
+                      onChange={(e) => handleFilterChange('kpiStatus', e.target.value)}
                       className="w-full rounded-xl border border-[rgba(0,76,58,0.12)] bg-white px-3 py-2 text-sm text-[#172b26] outline-none transition focus:border-[var(--dashboard-primary)] focus:ring-2 focus:ring-[rgba(0,96,73,0.12)]"
                     >
-                      <option>All</option>
-                      <option>Active KPI</option>
-                      <option>All KPIs</option>
-                      <option>High Performers</option>
-                      <option>Needs Improvement</option>
+                      <option value="">All</option>
+                      <option value="high">High Performers (75+)</option>
+                      <option value="needs_improvement">Needs Improvement (&lt;50)</option>
                     </select>
                   </div>
                 </div>
@@ -588,17 +657,16 @@ const TeacherDashboard = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto pb-4">
-            <div className="w-max min-w-full">
+          <div className="pb-4">
               <div
-                className="grid items-center gap-3"
-                style={{ gridTemplateColumns: `${heatmapLabelColumnWidth}px repeat(${heatmapWeekLabels.length}, ${heatmapCellSize}px)` }}
+                className="grid items-center gap-2"
+                style={{ gridTemplateColumns: `${heatmapLabelColumnWidth}px repeat(${heatmapWeekLabels.length}, 1fr)` }}
               >
                 <div />
-                {heatmapWeekLabels.map((label) => (
+                {heatmapWeekLabels.map((label, idx) => (
                   <span
                     key={label}
-                    className="text-center font-dashboard-mono text-[10px] font-bold uppercase tracking-[0.22em] text-[#6c7a71]"
+                    className={`text-center font-dashboard-mono text-[10px] font-bold uppercase tracking-[0.22em] ${selectedWeekIdx !== null && selectedWeekIdx !== idx ? 'text-[#c0c8c4]' : 'text-[#6c7a71]'}`}
                   >
                     {label}
                   </span>
@@ -606,9 +674,9 @@ const TeacherDashboard = () => {
 
                 {heatmapDomains.map((domain) => (
                   <React.Fragment key={domain.domainCode || domain.name}>
-                    <div className="pr-4">
+                    <div className="pr-3">
                       <p
-                        className="whitespace-nowrap text-sm font-semibold leading-5 text-[#191c1e]"
+                        className="text-xs font-semibold leading-4 text-[#191c1e]"
                         title={domain.name}
                       >
                         {domain.name}
@@ -617,11 +685,12 @@ const TeacherDashboard = () => {
 
                     {domain.weeks.map((value, weekIdx) => {
                       const tone = getHeatmapTone(value);
+                      const isDimmed = selectedWeekIdx !== null && selectedWeekIdx !== weekIdx;
 
                       return (
                         <div
                           key={`${domain.domainCode || domain.name}-week-${weekIdx}`}
-                          className="aspect-square rounded-xl border transition-transform duration-200 hover:scale-[1.03]"
+                          className={`rounded-xl border py-4 transition-all duration-200 hover:scale-[1.03] ${isDimmed ? 'opacity-25' : ''}`}
                           style={{
                             backgroundColor: tone.bg,
                             borderColor: tone.border,
@@ -629,8 +698,8 @@ const TeacherDashboard = () => {
                           }}
                           title={`${domain.name} - Week ${weekIdx + 1}: ${value}%`}
                         >
-                          <div className="flex h-full items-center justify-center">
-                            <span className="font-headline text-base font-bold">{value}%</span>
+                          <div className="flex items-center justify-center">
+                            <span className="font-headline text-sm font-bold">{value}%</span>
                           </div>
                         </div>
                       );
@@ -638,7 +707,6 @@ const TeacherDashboard = () => {
                   </React.Fragment>
                 ))}
               </div>
-            </div>
           </div>
 
           <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-[rgba(187,202,191,0.3)] pt-6">
@@ -682,17 +750,16 @@ const TeacherDashboard = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto pb-4">
-            <div className="w-max min-w-full">
+          <div className="pb-4">
               <div
-                className="grid items-center gap-3"
-                style={{ gridTemplateColumns: `${heatmapLabelColumnWidth}px repeat(${heatmapSubjects.length}, ${heatmapCellSize}px)` }}
+                className="grid items-center gap-2"
+                style={{ gridTemplateColumns: `${heatmapLabelColumnWidth}px repeat(${heatmapSubjects.length}, 1fr)` }}
               >
                 <div />
                 {heatmapSubjects.map((subject) => (
                   <span
                     key={subject.id || subject.name}
-                    className="whitespace-nowrap px-1 text-center font-dashboard-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#6c7a71]"
+                    className="px-1 text-center font-dashboard-mono text-[9px] font-bold uppercase tracking-[0.08em] text-[#6c7a71] leading-3"
                   >
                     {subject.name}
                   </span>
@@ -700,9 +767,9 @@ const TeacherDashboard = () => {
 
                 {heatmapDomains.map((domain, domainIdx) => (
                   <React.Fragment key={`${domain.domainCode || domain.name}-subject-row`}>
-                    <div className="pr-4">
+                    <div className="pr-3">
                       <p
-                        className="whitespace-nowrap text-sm font-semibold leading-5 text-[#191c1e]"
+                        className="text-xs font-semibold leading-4 text-[#191c1e]"
                         title={domain.name}
                       >
                         {domain.name}
@@ -715,7 +782,7 @@ const TeacherDashboard = () => {
                       return (
                         <div
                           key={`${domain.domainCode || domain.name}-subject-${subjectIdx}`}
-                          className="aspect-square rounded-xl border transition-transform duration-200 hover:scale-[1.03]"
+                          className="rounded-xl border py-3 transition-transform duration-200 hover:scale-[1.03]"
                           style={{
                             backgroundColor: tone.bg,
                             borderColor: tone.border,
@@ -723,9 +790,9 @@ const TeacherDashboard = () => {
                           }}
                           title={`${domain.name} - ${heatmapSubjects[subjectIdx]?.name}: ${value}%`}
                         >
-                          <div className="flex h-full flex-col items-center justify-center text-center">
-                            <span className="font-headline text-sm font-bold leading-none">{value}%</span>
-                            <span className="mt-0.5 text-[8px] font-semibold uppercase leading-none tracking-[0.08em] opacity-80">
+                          <div className="flex flex-col items-center justify-center text-center">
+                            <span className="font-headline text-xs font-bold leading-none">{value}%</span>
+                            <span className="mt-0.5 text-[7px] font-semibold uppercase leading-none tracking-[0.08em] opacity-80">
                               {tone.label}
                             </span>
                           </div>
@@ -735,7 +802,6 @@ const TeacherDashboard = () => {
                   </React.Fragment>
                 ))}
               </div>
-            </div>
           </div>
 
           <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-[rgba(187,202,191,0.3)] pt-6">
@@ -762,22 +828,25 @@ const TeacherDashboard = () => {
       {/* Charts Section — side by side */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         {/* Teacher Performance Metrics */}
-        <MixedChart />
+        <MixedChart filters={filters} />
         {/* Class Performance */}
-        <WatermarkChart />
+        <WatermarkChart filters={filters} />
       </section>
 
       {/* Evidence Samples Table */}
       <section className="border border-[rgba(0,76,58,0.08)] rounded-2xl bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
         <div className="mb-3">
           <h2 className="font-headline text-xl font-bold" style={{color: '#005239'}}>High-Confidence KPI Samples</h2>
-          <p className="text-sm" style={{color: '#006d4a'}}>Top 10 AI-verified performance highlights</p>
+          <p className="text-sm" style={{color: '#006d4a'}}>
+            Top 10 AI-verified performance highlights
+          </p>
         </div>
         <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead style={{ background: 'linear-gradient(135deg, #006d4a 0%, #005239 100%)' }}>
                 <tr>
+                  <th className="w-10 px-3 py-4"></th>
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-emerald-100">
                     Rank
                   </th>
@@ -796,21 +865,44 @@ const TeacherDashboard = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {topEvidences.length === 0 && (
+                {filteredEvidences.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-gray-400">No evidence data available yet</td>
+                    <td colSpan={6} className="px-6 py-8 text-center text-gray-400">No evidence data available yet</td>
                   </tr>
                 )}
-                {topEvidences.map((evidence, idx) => (
+                {filteredEvidences.map((evidence, idx) => {
+                  const isExpanded = expandedEvidence === (evidence.evidence_id || idx);
+                  const hasDetails = evidence.facts || evidence.interpretation;
+                  return (
+                  <React.Fragment key={evidence.evidence_id || idx}>
                   <tr
-                    key={evidence.evidence_id || idx}
-                    className={`${idx % 2 === 0 ? 'bg-white' : 'bg-[#f3f5f4]'} transition-colors hover:bg-gray-50`}
+                    className={`${idx % 2 === 0 ? 'bg-white' : 'bg-[#f3f5f4]'} transition-colors hover:bg-gray-50 ${hasDetails ? 'cursor-pointer' : ''}`}
+                    onClick={() => hasDetails && setExpandedEvidence(isExpanded ? null : (evidence.evidence_id || idx))}
+                    onMouseEnter={(e) => {
+                      if (evidence.facts) {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setTooltipPos({ x: rect.left + rect.width / 2, y: rect.bottom });
+                        hoverTimerRef.current = setTimeout(() => setHoveredEvidence(idx), 3000);
+                      }
+                    }}
+                    onMouseLeave={() => {
+                      clearTimeout(hoverTimerRef.current);
+                      setHoveredEvidence(null);
+                    }}
                   >
+                    <td className="px-3 py-5 text-center">
+                      {hasDetails && (
+                        <span className={`inline-block transition-transform duration-200 text-gray-500 ${isExpanded ? 'rotate-90' : ''}`}>
+                          ▶
+                        </span>
+                      )}
+                    </td>
                     <td className="px-6 py-5 font-headline font-bold text-gray-900">#{String(evidence.rank).padStart(2, '0')}</td>
                     <td className="px-6 py-5">
                       <div className="flex flex-col">
                         <span className="font-semibold text-gray-900">{evidence.kpi_name}</span>
-                        <span className="text-xs text-gray-600">Section {evidence.section_name}</span>
+                        <span className="text-xs text-gray-600">{evidence.class_name || evidence.section_name}</span>
+                        {evidence.created_at && <span className="text-xs text-gray-400">{new Date(evidence.created_at).toLocaleDateString('en-GB')}</span>}
                       </div>
                     </td>
                     <td className="px-6 py-5 font-medium text-gray-700">{evidence.teacher_name}</td>
@@ -825,13 +917,60 @@ const TeacherDashboard = () => {
                       </span>
                     </td>
                   </tr>
-                ))}
+                  {isExpanded && (
+                    <tr className={idx % 2 === 0 ? 'bg-white' : 'bg-[#f3f5f4]'}>
+                      <td colSpan={6} className="px-6 pb-5">
+                        <div className="ml-10 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4 space-y-3">
+                          {evidence.facts && (
+                            <div>
+                              <h4 className="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-1">Facts</h4>
+                              <p className="text-sm text-gray-700 leading-relaxed">{evidence.facts}</p>
+                            </div>
+                          )}
+                          {evidence.interpretation && (
+                            <div>
+                              <h4 className="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-1">Interpretation</h4>
+                              <p className="text-sm text-gray-700 leading-relaxed">{evidence.interpretation}</p>
+                            </div>
+                          )}
+
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
       </section>
       </div>
+
+      {/* Evidence Tooltip - rendered outside table to avoid overflow clipping */}
+      {hoveredEvidence !== null && (() => {
+        const ev = filteredEvidences[hoveredEvidence];
+        if (!ev || !ev.facts) return null;
+        return (
+          <div
+            className="pointer-events-none fixed z-[9999] w-[500px] max-w-[90vw]"
+            style={{ left: tooltipPos.x, top: tooltipPos.y + 8, transform: 'translateX(-50%)' }}
+          >
+            <div className="mx-auto h-2 w-2 rotate-45 border-t border-l border-emerald-200 bg-white -mb-1 relative z-10"></div>
+            <div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-2xl text-right" dir="rtl">
+              <p className="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-1">Evidence</p>
+              <p className="text-sm text-gray-700 leading-relaxed">{ev.facts}</p>
+              {ev.interpretation && (
+                <>
+                  <p className="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-1 mt-2">Interpretation</p>
+                  <p className="text-sm text-gray-700 leading-relaxed">{ev.interpretation}</p>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </ProtectedLayout>
   );
 };

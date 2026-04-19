@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import api from '../services/api';
 
 // Helper to generate random color
 function getColor(idx) {
@@ -18,13 +19,8 @@ export default function SectionOverallScoreChart() {
   useEffect(() => {
     const fetchSections = async () => {
       try {
-        const res = await fetch('/api/sections', {
-          method: 'GET',
-          headers: { 'Accept': 'application/json' },
-          credentials: 'include',
-        });
-        const data = await res.json();
-        const sectionList = (data.data || []).map(s => s.section_name);
+        const res = await api.get('/api/sections');
+        const sectionList = (res.data.data || []).map(s => s.section_name);
         setSections(sectionList);
         // Generate random demo data for each section (8 weeks)
         setSectionData(sectionList.map(() => weeks.map(() => Math.floor(Math.random() * 41) + 60)));

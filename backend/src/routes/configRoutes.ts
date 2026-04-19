@@ -4,6 +4,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { authenticate, AuthRequest, requireSuperAdmin } from '../middleware/auth.js';
 import { switchDatabase, getDatabaseStatus } from '../config/database-manager.js';
 import { runEvaluationAggregationWorker } from '../services/evaluationAggregationWorker.js';
 import {
@@ -19,7 +20,7 @@ const router = Router();
  * POST /api/config/database
  * Switch between Neon and Local database
  */
-router.post('/database', async (req: Request, res: Response) => {
+router.post('/database', authenticate, requireSuperAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const { useNeon } = req.body;
 
@@ -76,7 +77,7 @@ router.post('/database', async (req: Request, res: Response) => {
  * GET /api/config/database/status
  * Get current database status
  */
-router.get('/database/status', (req: Request, res: Response) => {
+router.get('/database/status', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const status = getDatabaseStatus();
     return res.json({
@@ -96,7 +97,7 @@ router.get('/database/status', (req: Request, res: Response) => {
  * GET /api/config/worker/status
  * Read manual worker and pg_cron job status for current selected database.
  */
-router.get('/worker/status', async (req: Request, res: Response) => {
+router.get('/worker/status', authenticate, requireSuperAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const database = getDatabaseStatus();
     const worker = await getEvaluationScheduleStatus();
@@ -123,7 +124,7 @@ router.get('/worker/status', async (req: Request, res: Response) => {
  * POST /api/config/worker/run
  * Trigger one aggregation run immediately.
  */
-router.post('/worker/run', async (req: Request, res: Response) => {
+router.post('/worker/run', authenticate, requireSuperAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const result = await runEvaluationAggregationWorker();
     return res.json({
@@ -145,7 +146,7 @@ router.post('/worker/run', async (req: Request, res: Response) => {
  * POST /api/config/worker/schedule/enable
  * Enable pg_cron schedule (default every 12 hours).
  */
-router.post('/worker/schedule/enable', async (req: Request, res: Response) => {
+router.post('/worker/schedule/enable', authenticate, requireSuperAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const requestedSchedule =
       typeof req.body?.schedule === 'string' ? req.body.schedule.trim() : '';
@@ -173,7 +174,7 @@ router.post('/worker/schedule/enable', async (req: Request, res: Response) => {
  * POST /api/config/worker/schedule/disable
  * Disable pg_cron schedule for this worker.
  */
-router.post('/worker/schedule/disable', async (req: Request, res: Response) => {
+router.post('/worker/schedule/disable', authenticate, requireSuperAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const worker = await disableEvaluationSchedule();
     return res.json({
